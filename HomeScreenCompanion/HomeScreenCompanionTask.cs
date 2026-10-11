@@ -95,6 +95,7 @@ namespace HomeScreenCompanion
             public string? ErrorMessage;
             public int ListCount;
             public int MatchCount;
+            public string? LimitShort;   // "9 of 10": the run put fewer titles in than Limit
             public bool EnableTag;
             public int TagsAdded;
             public int TagsRemoved;
@@ -860,6 +861,10 @@ namespace HomeScreenCompanion
                                 }
                             }
                             OrderByPopularity(tagConfig, matchedLocalItems, effectiveLimit);
+                            if (!dryRun)
+                                RankWeekAgo(tagName, tagConfig, itemsToScan.Where(i => i.LocationType == LocationType.FileSystem && !blacklist.Contains(i.GetProviderId("Imdb") ?? "")),
+                                    i => ItemMatchesMediaInfo(i, tagConfig, debug, seriesEpisodeCache, personCache, userDataCache, mediaInfoCache.TryGetValue(i.InternalId, out var wci) ? wci : (CachedMediaInfo?)null,
+                                        preloadedUsers, seriesLastPlayedCache, collectionMembershipCache, seriesEpisodeNamesCache), effectiveLimit);
                             gs.ListCount = itemsToScan.Count;
                             if (TagConfigTargetsEpisodes(tagConfig))
                             {
@@ -1025,6 +1030,7 @@ namespace HomeScreenCompanion
                         foreach (var id in collectionOutputItems.Select(i => i.Id)) allOutputIds.Add(id);
                         if (!IsNextWatch(tagConfig)) gs.MatchCount = allOutputIds.Count;
                         matchCount += allOutputIds.Count;
+                        if (!dryRun && !gs.BoxSetHse) RecordLastRun(new[] { (tagConfig, TitleCount(matchedLocalItems)) }, gs);
 
                         // Collect rank order so top-list .strm files can be numbered in list order.
                         // Accumulated across all flat entries of the tag; written once after the loop.
@@ -2198,6 +2204,7 @@ namespace HomeScreenCompanion
             // (Full run clears the entire cache first; single run must do a targeted removal.)
             if (_preview == null) TagCacheManager.Instance.RemoveTagFromAllEntries(tagName);
             var matchedLocalItems = new List<BaseItem>();
+            var _srcTitles = new Dictionary<TagConfig, int>();   // per URL / local source of the group
             List<BaseItem> tagOutputItems = matchedLocalItems;
             List<BaseItem> collectionOutputItems = matchedLocalItems;
             int _listCount = 0;
@@ -2254,6 +2261,7 @@ namespace HomeScreenCompanion
                                 _preview?.Missing.Add(new PreviewMissingTitle(extItem.Name, null, extItem.Imdb));
                             }
                         }
+                        _srcTitles[src] = _srcMatched;
                         _log.Debug($"  {src.Url}  →  {items.Count} items in {fetchTimer.ElapsedMilliseconds} ms  ·  {_srcMatched} matched by IMDb id  ·  {gs.MissingItems.Count - _srcMissingBefore} not in library  ·  {_srcBlacklisted} blacklisted");
                     }
                 }
@@ -2297,6 +2305,7 @@ namespace HomeScreenCompanion
                             srcMatched = srcMatched.Take(srcLimit).ToList();
                         foreach (var m in srcMatched)
                             if (!matchedLocalItems.Contains(m)) matchedLocalItems.Add(m);
+                        _srcTitles[src] = TitleCount(srcMatched);
                         _log.Debug($"  '{src.LocalSourceId}'  →  {children.Count} items, {srcMatched.Count} usable movies/series");
                     }
 
@@ -2374,6 +2383,10 @@ namespace HomeScreenCompanion
                             _popDays.HasValue ? matchedLocalItems.ToDictionary(i => i.Id, i => ViewersOf(i, _popDays.Value)) : null);
                         return (true, "");
                     }
+                    if (!dryRun)
+                        RankWeekAgo(tagName, tagConfig, _itemsToScan.Where(i => i.LocationType == LocationType.FileSystem && !blacklist.Contains(i.GetProviderId("Imdb") ?? "")),
+                            i => ItemMatchesMediaInfo(i, tagConfig, debug, seriesEpisodeCache, personCache, userDataCache, mediaInfoCache.TryGetValue(i.InternalId, out var wci) ? wci : (CachedMediaInfo?)null,
+                                preloadedUsers, seriesLastPlayedCache, collectionMembershipCache, seriesEpisodeNamesCache), effectiveLimit);
                     if (debug)
                     {
                         _log.Debug($"  Scanned {_itemsToScan.Count:N0} items in {groupTimer.ElapsedMilliseconds} ms  ·  {matchedLocalItems.Count} matched");
@@ -2553,6 +2566,11 @@ namespace HomeScreenCompanion
                 foreach (var _id in collectionOutputItems.Select(i => i.Id)) _outIds.Add(_id);
                 if (!IsNextWatch(tagConfig)) gs.MatchCount = _outIds.Count;
             }
+            // Several URLs / local sources: each has its own Limit and count.
+            if (_preview == null && !dryRun && !gs.BoxSetHse)
+                RecordLastRun(groupEntries.Count > 1
+                    ? groupEntries.Select(t => (t, _srcTitles.TryGetValue(t, out var n) ? n : -1))
+                    : new[] { (tagConfig, TitleCount(matchedLocalItems)) }, gs);
             if (gs.MissingItems.Count > 0 && debug)
             {
                 _log.Debug($"  Not in library ({gs.MissingItems.Count}):");
@@ -3029,13 +3047,18 @@ namespace HomeScreenCompanion
         // (PopularityCounter reads each user's watch data once).
         private PopularityCounter? _popularity;
         private List<BaseItem> _popularityScope = new List<BaseItem>();
-        private readonly Dictionary<int, Dictionary<Guid, int>> _viewersByDays = new Dictionary<int, Dictionary<Guid, int>>();
+        private readonly Dictionary<(int Days, int Ago), Dictionary<Guid, int>> _viewersByDays = new Dictionary<(int Days, int Ago), Dictionary<Guid, int>>();
+        // Rank movement: while > 0, the Popular rule is worked out as if today were that many days
+        // earlier. The week-ago ranking of each Popular source, by tag, is saved with the rank file.
+        private int _popularityAgo;
+        private readonly Dictionary<string, List<string>> _weekAgoByTag = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         private void StartPopularity(List<BaseItem> scope)
         {
             _popularity = new PopularityCounter(_libraryManager, _userManager, _userDataManager);
             _popularityScope = scope;
             _viewersByDays.Clear();
+            _weekAgoByTag.Clear();
             _nextWatch = null;
         }
 
@@ -3253,12 +3276,44 @@ namespace HomeScreenCompanion
             return perUser;
         }
 
+        // The settings page does not send LastRunCount / LastRunLimit (runs write them): a save
+        // keeps each source's values (same group, URL and local source).
+        internal static void KeepLastRunCounts(PluginConfiguration? old, PluginConfiguration? saved)
+        {
+            if (old?.Tags == null || saved?.Tags == null) return;
+            string Key(TagConfig t) => GroupKey(t) + "\x1F" + (t.Url ?? "").Trim() + "\x1F" + (t.LocalSourceId ?? "").Trim();
+            var last = new Dictionary<string, TagConfig>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in old.Tags) if (t.LastRunLimit > 0) last[Key(t)] = t;
+            foreach (var t in saved.Tags)
+                if (t.LastRunLimit == 0 && last.TryGetValue(Key(t), out var o)) { t.LastRunCount = o.LastRunCount; t.LastRunLimit = o.LastRunLimit; }
+        }
+
+        // Titles in a source's result: a film's versions count once.
+        private int TitleCount(List<BaseItem> items) =>
+            items.Select(PopularityCounter.FilmKeys(items)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+        // Stores each source's titles against its Limit (the "9 of 10" chip on the group's card;
+        // saved with the run's config save). A source without a Limit, or not counted (-1), is
+        // recorded as having none. Your Next Watch is skipped: its Limit is per user.
+        private static void RecordLastRun(IEnumerable<(TagConfig Source, int Titles)> sources, GroupRunStats gs)
+        {
+            int found = 0, limit = 0;
+            foreach (var (t, n) in sources)
+            {
+                bool counted = t.Limit > 0 && n >= 0 && !IsNextWatch(t);
+                t.LastRunLimit = counted ? t.Limit : 0;
+                t.LastRunCount = counted ? n : 0;
+                if (counted) { found += n; limit += t.Limit; }
+            }
+            if (found < limit) gs.LimitShort = $"{found} of {limit}";
+        }
+
         private int ViewersOf(BaseItem item, int days)
         {
-            if (!_viewersByDays.TryGetValue(days, out var counts))
+            if (!_viewersByDays.TryGetValue((days, _popularityAgo), out var counts))
             {
                 _popularity ??= new PopularityCounter(_libraryManager, _userManager, _userDataManager);
-                _viewersByDays[days] = counts = _popularity.CountViewers(_popularityScope, days, m => _log.Debug("  " + m));
+                _viewersByDays[(days, _popularityAgo)] = counts = _popularity.CountViewers(_popularityScope, days, m => _log.Debug("  " + m), _popularityAgo);
             }
             return counts.TryGetValue(item.Id, out var n) ? n : 0;
         }
@@ -3277,21 +3332,52 @@ namespace HomeScreenCompanion
 
         // A source with a Popular rule lists its matches most viewed first, so Max items keeps the
         // most popular and a top-list built from the tag follows that order. Sorting in place keeps
-        // tagOutputItems/collectionOutputItems (same list) in step.
+        // tagOutputItems/collectionOutputItems (same list) in step. Max items counts films: a film's
+        // versions (separate items, same viewers) share one place and stay together.
         private void OrderByPopularity(TagConfig tagConfig, List<BaseItem> matched, int limit)
         {
             var days = PopularRuleDays(tagConfig);
             if (days == null) return;
-            var ordered = matched
+            var films = matched
                 .OrderByDescending(i => ViewersOf(i, days.Value))
                 .ThenByDescending(i => i.CommunityRating ?? 0)
                 .ThenBy(i => i.SortName, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(PopularityCounter.FilmKeys(_popularityScope))
                 .ToList();
-            if (limit < 10000 && ordered.Count > limit) ordered = ordered.Take(limit).ToList();
+            if (limit < 10000 && films.Count > limit) films = films.Take(limit).ToList();
             matched.Clear();
-            matched.AddRange(ordered);
-            _log.Info($"  Most viewed first ({(days.Value > 0 ? $"last {days.Value} days" : "all time")}): {matched.Count} kept"
-                + (matched.Count > 0 ? " — " + string.Join(", ", matched.Take(10).Select((i, n) => $"{n + 1}. {i.Name} ({ViewersOf(i, days.Value)})")) : ""));
+            matched.AddRange(films.SelectMany(f => f));
+            _log.Info($"  Most viewed first ({(days.Value > 0 ? $"last {days.Value} days" : "all time")}): {films.Count} kept"
+                + (films.Count > 0 ? " — " + string.Join(", ", films.Take(10).Select((f, n) => $"{n + 1}. {f.First().Name} ({ViewersOf(f.First(), days.Value)})")) : ""));
+        }
+
+        // Rank movement for a source with a Popular rule: the same rule worked out as if today were
+        // 7 days earlier — window moved back a week, most viewed first, cut to Max items, the other
+        // rules as they are now. Kept by tag and saved with the rank file for TopListHistory.
+        private void RankWeekAgo(string tagName, TagConfig tagConfig, IEnumerable<BaseItem> candidates, Func<BaseItem, bool> matches, int limit)
+        {
+            var days = PopularRuleDays(tagConfig);
+            if (days == null) return;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            _popularityAgo = 7;
+            try
+            {
+                // Same as OrderByPopularity: Max items counts films (a film's versions share one place).
+                var films = candidates.Where(matches)
+                    .OrderByDescending(i => ViewersOf(i, days.Value))
+                    .ThenByDescending(i => i.CommunityRating ?? 0)
+                    .ThenBy(i => i.SortName, StringComparer.OrdinalIgnoreCase)
+                    .GroupBy(PopularityCounter.FilmKeys(_popularityScope))
+                    .ToList();
+                if (limit < 10000 && films.Count > limit) films = films.Take(limit).ToList();
+                var keys = films.SelectMany(f => f).Select(RankKey).Where(k => !string.IsNullOrEmpty(k)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (!_weekAgoByTag.TryGetValue(tagName, out var list)) _weekAgoByTag[tagName] = keys;
+                else list.AddRange(keys.Where(k => !list.Contains(k, StringComparer.OrdinalIgnoreCase)));
+                _log.Info($"  Rank movement vs 7 days ago: {films.Count} ranked then"
+                    + (films.Count > 0 ? " — " + string.Join(", ", films.Take(10).Select((f, n) => $"{n + 1}. {f.First().Name} ({ViewersOf(f.First(), days.Value)})")) : "")
+                    + $"  ·  {sw.ElapsedMilliseconds} ms");
+            }
+            finally { _popularityAgo = 0; }
         }
 
         // Writes tag_ranks/<tag>.json — the IMDb ids of a tag's matched items in source order,
@@ -3307,6 +3393,7 @@ namespace HomeScreenCompanion
                 if (string.IsNullOrWhiteSpace(rankSafe)) rankSafe = "unknown";
                 var rankFile = Path.Combine(rankDir, rankSafe + ".json");
                 _jsonSerializer.SerializeToFile(imdbIds, rankFile);
+                TopListHistory.SaveWeekAgo(tagName ?? "", _weekAgoByTag.TryGetValue(tagName ?? "", out var weekAgo) ? weekAgo : null, _jsonSerializer);
             }
             catch { }
         }
@@ -5584,6 +5671,7 @@ namespace HomeScreenCompanion
             }
             else if (gs.ListCount > 0)
                 _log.Ok($"List: {gs.ListCount} items  ·  {gs.MatchCount} in your library");
+            if (gs.LimitShort != null) _log.Warn($"Found {gs.LimitShort} (Max items)");
 
             if (gs.EnableTag && !gs.BoxSetHse)
             {

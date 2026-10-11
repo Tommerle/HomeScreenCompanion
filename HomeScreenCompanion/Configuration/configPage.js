@@ -53,6 +53,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             delete x.HomeSectionTracked; delete x.PlaylistMappings;
             delete x.CollectionPosterReplaced; delete x.CollectionBackgroundReplaced;
             delete x.AiLastRunDate; delete x.NextWatchUsersMigrated;
+            delete x.LastRunCount; delete x.LastRunLimit;
             try {
                 var s = JSON.parse(x.HomeSectionSettings || '{}') || {};
                 delete s._queryExcludeViewIds; delete s.ExcludedFolders;
@@ -255,6 +256,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             color: #d9822b;
             background: rgba(217,130,43,0.15);
             border: 1px solid rgba(217,130,43,0.35);
+        }
+
+        .tag-indicator.short {
+            color: #e8a838;
+            background: rgba(232,168,56,0.15);
+            border: 1px solid rgba(232,168,56,0.35);
         }
 
         .tag-indicator.homescreen {
@@ -2557,6 +2564,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         if (_topListTagNames.has(tagName.toLowerCase())) {
             indicatorsHtml += `<span class="tag-indicator toplist"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Top-List</span>`;
         }
+        var lastRuns = tagConfig.LastRuns || [];
+        indicatorsHtml += lastRunChipHtml(lastRuns, lastRuns.map(function (r) { var p = r.k.split('\x1F'); return { Url: p[0], LocalSourceId: p[1], Limit: r.lim }; }));
 
         var initialStyle = isNew ? 'display:block;' : 'display:none;';
         var initialIcon = isNew ? 'expand_less' : 'expand_more';
@@ -2565,7 +2574,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var newClass = isNew ? "just-added" : "";
 
         var html = `
-        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-dirty="false">
+        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-dirty="false">
             <div class="tag-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px; cursor:pointer;">
                 <div style="display:flex; align-items:center;">
                     <div class="header-actions" style="margin-right:15px; display:flex; align-items:center;" onclick="event.stopPropagation()">
@@ -3159,6 +3168,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (_topListTagNames.has((row.dataset.tag || '').toLowerCase())) {
                 html += `<span class="tag-indicator toplist"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Top-List</span>`;
             }
+            try { html += lastRunChipHtml(JSON.parse(decodeURIComponent(row.dataset.lastRuns || '%5B%5D')), rowToFlatTags(row, true)); } catch (e) { }
             container.innerHTML = html;
         }
 
@@ -3184,6 +3194,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     ta.style.overflowY = ta.scrollHeight > 120 ? 'auto' : 'hidden';
                 });
             });
+        });
+
+        // A changed Max items hides the "9 of 10" chip until the next run.
+        row.addEventListener('input', e => {
+            if (/Limit$/.test(e.target.className.split(' ').filter(function (c) { return c.indexOf('txt') === 0; })[0] || '')) updateBadges(row);
         });
 
         row.addEventListener('change', e => {
@@ -5294,6 +5309,24 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
     };
 
+    // "9 of 10" chip: the last run put fewer titles in than the Limit. Each source (URL / local
+    // source) of the card must have a run recorded with its current Limit; sources without a Limit
+    // are left out. Changing a Limit hides the chip until the next run.
+    function lastRunKey(t) { return (t.Url || '') + '\x1F' + (t.LocalSourceId || ''); }
+    function lastRunChipHtml(runs, sources) {
+        var found = 0, limit = 0;
+        for (var i = 0; i < sources.length; i++) {
+            var lim = sources[i].Limit || 0;
+            if (lim <= 0) continue;
+            var key = lastRunKey(sources[i]);
+            var r = (runs || []).filter(function (x) { return x.k === key; })[0];
+            if (!r || r.l !== lim) return '';
+            found += r.c; limit += lim;
+        }
+        if (!limit || found >= limit) return '';
+        return `<span class="tag-indicator short" title="Last run found ${found} of ${limit}"><i class="md-icon" style="font-size:1.1em;">warning</i> ${found} of ${limit}</span>`;
+    }
+
     function groupConfigTags(tags) {
         var grouped = {};
         (tags || []).forEach(t => {
@@ -5337,8 +5370,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     PlaylistUserIds:  t.PlaylistUserIds  || [],
                     PlaylistMappings: t.PlaylistMappings || [],
                     NextWatchUsersMigrated: !!t.NextWatchUsersMigrated,
+                    LastRuns: [],
                 };
             }
+            grouped[key].LastRuns.push({ k: lastRunKey(t), c: t.LastRunCount || 0, l: t.LastRunLimit || 0, lim: t.Limit || 0 });
             // A source saved without a URL / local source yet comes back as one empty row (with its limit).
             if (t.SourceType === 'External') grouped[key].Urls.push({ url: t.Url || '', limit: t.Limit });
             if (t.SourceType === 'LocalCollection' || t.SourceType === 'LocalPlaylist') grouped[key].LocalSources.push({ id: t.LocalSourceId || '', limit: t.Limit });
@@ -7112,7 +7147,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             field('Solid colour', colours('tilebgcolour', [['#16223a', 'Navy'], ['#1e1e22', 'Charcoal'], ['#2a0a0a', 'Dark red'], ['#0f2a16', 'Dark green']]), 'tilebgcolour')) +
                         section('#1 special', field('Rank 1', seg('special', specialOpts()), 'special')) +
                         section('Extras',
-                            field('Rank movement ▲▼ / NEW', seg('move', [[false, 'Off'], [true, 'On']]), 'move', 'Compared with the list\'s previous ranking; shows after the list has been ranked twice.') +
+                            field('Rank movement ▲▼ / NEW', seg('move', [[false, 'Off'], [true, 'On']]), 'move', 'Lists with a Popular rule compare with where each title stood one week ago; other lists compare with the previous run.') +
                             field('', '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:0.9em;"><input type="checkbox" class="artc-chk" data-field="moveeq"' + (state.moveeq ? ' checked' : '') + ' style="margin:0;" /><span>Show = for unchanged</span></label>', 'moveeq', 'Off: only ▲ / ▼ / NEW; a title whose rank did not change gets no chip.') +
                             field('Weeks in the list', seg('weeks', [[false, 'Off'], [true, 'On']]), 'weeks', '"N wks in list" at the bottom of the poster.') +
                             field('Plays', seg('plays', [[false, 'Off'], [true, 'On']]), 'plays', 'All users\' plays of the title (all time).') +

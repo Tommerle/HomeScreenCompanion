@@ -1,6 +1,8 @@
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using System;
 using System.Collections.Generic;
@@ -31,21 +33,24 @@ namespace HomeScreenCompanion
             _userDataManager = userDataManager;
         }
 
-        public Dictionary<Guid, int> CountViewers(List<BaseItem> titles, int days, Action<string> log)
+        // agoDays > 0 counts as if today were that many days earlier (rank movement's "a week ago").
+        public Dictionary<Guid, int> CountViewers(List<BaseItem> titles, int days, Action<string> log, int agoDays = 0)
         {
-            // user-data key → the title it counts for. Shows are counted through their episodes.
-            var target = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-            void Map(BaseItem item, Guid titleId)
+            // user-data key → the film / show it counts for. Shows are counted through their episodes;
+            // a film's versions (separate items) count as one film: IMDb id, else TMDb id, else the item.
+            var target = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            void Map(BaseItem item, string group)
             {
                 var key = KeyOf(item);
-                if (!string.IsNullOrEmpty(key) && !target.ContainsKey(key)) target[key] = titleId;
+                if (!string.IsNullOrEmpty(key) && !target.ContainsKey(key)) target[key] = group;
             }
+            var filmOf = FilmKeys(titles);
 
-            var seriesByInternalId = new Dictionary<long, Guid>();
+            var seriesByInternalId = new Dictionary<long, string>();
             foreach (var title in titles)
             {
-                if (title is Series) seriesByInternalId[title.InternalId] = title.Id;
-                else Map(title, title.Id);
+                if (title is Series) seriesByInternalId[title.InternalId] = filmOf(title);
+                else Map(title, filmOf(title));
             }
             if (seriesByInternalId.Count > 0)
             {
@@ -60,8 +65,9 @@ namespace HomeScreenCompanion
                     if (seriesByInternalId.TryGetValue(ep.SeriesId, out var seriesId)) Map(ep, seriesId);
             }
 
-            var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : (DateTimeOffset?)null;
-            var viewers = new Dictionary<Guid, HashSet<long>>();
+            var until = agoDays > 0 ? DateTimeOffset.UtcNow.AddDays(-agoDays) : (DateTimeOffset?)null;
+            var cutoff = days > 0 ? (until ?? DateTimeOffset.UtcNow).AddDays(-days) : (DateTimeOffset?)null;
+            var viewers = new Dictionary<string, HashSet<long>>(StringComparer.OrdinalIgnoreCase);
             int users = 0, hits = 0;
 
             foreach (var user in _userManager.GetUserList(new UserQuery { IsDisabled = false }))
@@ -69,17 +75,21 @@ namespace HomeScreenCompanion
                 users++;
                 foreach (var record in RecordsOf(user.InternalId))
                 {
-                    if (record.Key == null || !target.TryGetValue(record.Key, out var titleId)) continue;
+                    if (record.Key == null || !target.TryGetValue(record.Key, out var group)) continue;
                     hits++;
                     if (!Counts(record, cutoff)) continue;
-                    if (!viewers.TryGetValue(titleId, out var set)) viewers[titleId] = set = new HashSet<long>();
+                    if (until.HasValue && record.LastPlayedDate.HasValue && record.LastPlayedDate.Value >= until.Value) continue;
+                    if (!viewers.TryGetValue(group, out var set)) viewers[group] = set = new HashSet<long>();
                     set.Add(user.InternalId);
                 }
             }
 
             log($"Popularity: {titles.Count} title(s), {target.Count} watch key(s), {users} user(s), {hits} viewing record(s) matched, {viewers.Count} title(s) watched "
-                + (cutoff.HasValue ? $"in the last {days} day(s)" : "ever"));
-            return viewers.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+                + (cutoff.HasValue ? $"in the last {days} day(s)" : "ever") + (until.HasValue ? $" (as of {agoDays} days ago)" : ""));
+            var result = new Dictionary<Guid, int>();
+            foreach (var title in titles)
+                if (viewers.TryGetValue(filmOf(title), out var set)) result[title.Id] = set.Count;
+            return result;
         }
 
         /// <summary>
@@ -109,6 +119,30 @@ namespace HomeScreenCompanion
                     if (n > 0) plays[id] = (plays.TryGetValue(id, out var v) ? v : 0) + n;
                 }
             return plays;
+        }
+
+        /// <summary>
+        /// The film a movie item belongs to: a film's versions are separate items with the same IMDb
+        /// id (else TMDb id; a version with only a TMDb id joins the film another version links to
+        /// that TMDb id). Anything that is not a movie is its own item.
+        /// </summary>
+        internal static Func<BaseItem, string> FilmKeys(IEnumerable<BaseItem> scope)
+        {
+            var imdbByTmdb = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var m in scope.OfType<Movie>())
+            {
+                string imdb = m.GetProviderId("Imdb"), tmdb = m.GetProviderId("Tmdb");
+                if (!string.IsNullOrEmpty(imdb) && !string.IsNullOrEmpty(tmdb) && !imdbByTmdb.ContainsKey(tmdb)) imdbByTmdb[tmdb] = imdb;
+            }
+            return item =>
+            {
+                if (!(item is Movie)) return item.Id.ToString("N");
+                string imdb = item.GetProviderId("Imdb"), tmdb = item.GetProviderId("Tmdb");
+                if (string.IsNullOrEmpty(imdb) && !string.IsNullOrEmpty(tmdb)) imdbByTmdb.TryGetValue(tmdb, out imdb);
+                return !string.IsNullOrEmpty(imdb) ? "imdb:" + imdb
+                    : !string.IsNullOrEmpty(tmdb) ? "tmdb:" + tmdb
+                    : item.Id.ToString("N");
+            };
         }
 
         // Also used by NextWatchRecommender, so "popular" means the same in both.

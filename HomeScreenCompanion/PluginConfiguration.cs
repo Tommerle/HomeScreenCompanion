@@ -129,6 +129,10 @@ namespace HomeScreenCompanion
         // The collection existed before HSC (Import collection) and was taken over. It is never
         // deleted when the source is removed, disabled or out of schedule: HSC just stops managing it.
         public bool CollectionImported { get; set; } = false;
+        // The last run's titles against Limit, for the "9 of 10" chip on the group's card:
+        // LastRunLimit is the Limit that run had (0 = no run with a limit recorded).
+        public int LastRunCount { get; set; } = 0;
+        public int LastRunLimit { get; set; } = 0;
         // Imported collection: set by the sync once HSC's own poster / background has replaced the
         // collection's original image; from then on "Keep current image" is no longer offered for it.
         public bool CollectionPosterReplaced { get; set; } = false;

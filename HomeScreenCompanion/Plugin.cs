@@ -33,6 +33,7 @@ namespace HomeScreenCompanion
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
+            HomeScreenCompanionTask.KeepLastRunCounts(Configuration, configuration as PluginConfiguration);
             base.UpdateConfiguration(configuration);
             // A save without the "Top lists for TV shows" value (older page) must not undo it.
             if (ShowTopList.ResolveToggle(Configuration)) base.SaveConfiguration();

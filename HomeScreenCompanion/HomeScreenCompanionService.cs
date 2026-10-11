@@ -4100,6 +4100,7 @@ public class HomeScreenCompanionService : IService
             t.HomeSectionTracked = new List<HomeSectionTracking>();
             t.PlaylistMappings   = new List<PlaylistMapping>();
             t.AiLastRunDate      = DateTime.MinValue;
+            t.LastRunCount       = 0; t.LastRunLimit = 0;
             t.LastModified       = DateTime.MinValue;
             // On another server the collection is HSC's own, not one it took over.
             t.CollectionImported = false; t.CollectionPosterReplaced = false; t.CollectionBackgroundReplaced = false;
