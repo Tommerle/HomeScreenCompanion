@@ -44,6 +44,8 @@ namespace HomeScreenCompanion
         {
             if (Plugin.Instance == null) return;
             RunAutoMigration();
+            // "Top lists for TV shows": configs from before the toggle keep their show lists.
+            if (ShowTopList.ResolveToggle(Plugin.Instance.Configuration)) Plugin.Instance.SaveConfiguration();
             TagCacheManager.Instance.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
             TopListCollectionMirror.Initialize(_libraryManager, _collectionManager, _logger);
 

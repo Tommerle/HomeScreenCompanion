@@ -34,6 +34,8 @@ namespace HomeScreenCompanion
         {
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
             base.UpdateConfiguration(configuration);
+            // A save without the "Top lists for TV shows" value (older page) must not undo it.
+            if (ShowTopList.ResolveToggle(Configuration)) base.SaveConfiguration();
             HomeScreenCompanionTask.RecordImportedCollections(Configuration);
             // Toggling the collection mirror adds (or removes) memberships for all existing copies.
             if (Configuration.TopListMirrorCollections != wasMirroring)

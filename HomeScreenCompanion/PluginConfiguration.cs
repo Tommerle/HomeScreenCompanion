@@ -40,6 +40,10 @@ namespace HomeScreenCompanion
         public bool ShowImportCollectionButton { get; set; } = false;
         // Settings > Features (experimental): offers "Keep the list order" on each source's Collection tab.
         public bool RankedCollectionsEnabled { get; set; } = false;
+        // Settings > Features (experimental): top-lists for TV shows (ContentType "Shows", see
+        // ShowTopList). null = not decided yet (configs from before the toggle): on when a show
+        // top-list exists, else off — resolved once at startup (ShowTopList.ResolveToggle).
+        public bool? ShowTopListsEnabled { get; set; } = null;
         // Settings > Features: a "Sort title" box under "Show at the top of Collections".
         public bool CollectionSortTitleEnabled { get; set; } = false;
         public List<TagConfig> Tags { get; set; } = new List<TagConfig>();
@@ -202,6 +206,9 @@ namespace HomeScreenCompanion
         // Shows only: when set, the list is rebuilt on every sync from the series carrying this
         // tag, in the source list's order (tag_ranks). Empty = shows picked by hand.
         public string ShowSourceTag { get; set; } = "";
+        // Shows only: the ranked series (in order) while "Top lists for TV shows" is off. The
+        // list's tags, favourites and rows are removed then; turning it on rebuilds from these.
+        public List<string> ShowParkedSeriesIds { get; set; } = new List<string>();
     }
 
     public class ShowTopListEntry

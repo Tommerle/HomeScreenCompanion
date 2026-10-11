@@ -609,6 +609,7 @@ namespace HomeScreenCompanion
         public bool ShowImportCollectionButton { get; set; }
         public bool RankedCollectionsEnabled { get; set; }
         public bool CollectionSortTitleEnabled { get; set; }
+        public bool? ShowTopListsEnabled { get; set; }
     }
 
     public class BackupApiKeys
@@ -3060,6 +3061,8 @@ public class HomeScreenCompanionService : IService
                 var config = Plugin.Instance?.Configuration;
                 if (config == null)
                     return new PrepareShowTopListResponse { Message = "Plugin configuration not available." };
+                if (!ShowTopList.Enabled(config))
+                    return new PrepareShowTopListResponse { Message = "Top lists for TV shows are turned off (Settings → Advanced Settings → Features)." };
 
                 var listName = (request.ListName ?? "").Trim();
                 var userIds = (request.UserIds ?? new List<string>()).Where(u => !string.IsNullOrWhiteSpace(u))
@@ -3522,7 +3525,8 @@ public class HomeScreenCompanionService : IService
                     ShowCopyPasteButtons      = config.ShowCopyPasteButtons,
                     ShowImportCollectionButton = config.ShowImportCollectionButton,
                     RankedCollectionsEnabled  = config.RankedCollectionsEnabled,
-                    CollectionSortTitleEnabled = config.CollectionSortTitleEnabled
+                    CollectionSortTitleEnabled = config.CollectionSortTitleEnabled,
+                    ShowTopListsEnabled       = ShowTopList.Enabled(config)
                 };
                 file.Sections.Add("Settings");
             }
@@ -3639,6 +3643,7 @@ public class HomeScreenCompanionService : IService
                     config.ShowImportCollectionButton = s.ShowImportCollectionButton;
                     config.RankedCollectionsEnabled  = s.RankedCollectionsEnabled;
                     config.CollectionSortTitleEnabled = s.CollectionSortTitleEnabled;
+                    if (s.ShowTopListsEnabled.HasValue) config.ShowTopListsEnabled = s.ShowTopListsEnabled;
                     response.Applied.Add("Settings");
                 }
 
@@ -3804,11 +3809,14 @@ public class HomeScreenCompanionService : IService
                     }
 
                     config.TopLists = restored;
-                    foreach (var showTl in restored.Where(ShowTopList.IsShowList).ToList())
+                    // With "Top lists for TV shows" off the lists are restored but not built; the
+                    // next sync parks them like any other show list.
+                    foreach (var showTl in restored.Where(ShowTopList.IsShowList).Where(_ => ShowTopList.Enabled(config)).ToList())
                     {
                         try
                         {
                             var ids = (showTl.ShowEntries ?? new List<ShowTopListEntry>()).Select(e => e.SeriesId).ToList();
+                            if (ids.Count == 0) ids = (showTl.ShowParkedSeriesIds ?? new List<string>()).ToList();
                             NewShowTopList().Apply(config, showTl, ResolveSeries(ids));
                         }
                         catch (Exception ex)

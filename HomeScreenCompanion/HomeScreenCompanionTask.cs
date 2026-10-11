@@ -1751,6 +1751,12 @@ namespace HomeScreenCompanion
             }
 
             bool isShow = ShowTopList.IsShowList(tl);
+            if (isShow && !ShowTopList.Enabled(config))
+            {
+                LastRunStatus = "Skipped: top lists for TV shows are off";
+                _log.Skip($"Top-list '{tl.TagName}': skipped — top lists for TV shows are off (Settings → Features)");
+                return (false, "Top lists for TV shows are turned off (Settings → Features).");
+            }
             bool byTag = isShow
                 ? !string.IsNullOrWhiteSpace(tl.ShowSourceTag)
                 : (config.Tags ?? new List<TagConfig>()).Any(t => string.Equals((t.Tag ?? "").Trim(), tl.TagName, StringComparison.OrdinalIgnoreCase));
@@ -3911,54 +3917,76 @@ namespace HomeScreenCompanion
         }
 
         // Where a scheduled home row was when it was removed, per group and user (plugin data file),
-        // so it is put back at that place instead of at the bottom.
-        private Dictionary<string, int>? _rowPositions;
-        private string RowPositionsFile => Path.Combine(Plugin.Instance.DataFolderPath, "home_row_positions.json");
+        // so it is put back at that place instead of at the bottom. Shared (static) with show
+        // top-lists, whose rows are removed while "Top lists for TV shows" is off.
+        private static readonly object _rowPositionsLock = new object();
+        private static Dictionary<string, int>? _rowPositions;
+        private static string RowPositionsFile => Path.Combine(Plugin.Instance!.DataFolderPath, "home_row_positions.json");
 
-        private Dictionary<string, int> RowPositions()
+        private static Dictionary<string, int> RowPositions(IJsonSerializer json)
         {
             if (_rowPositions != null) return _rowPositions;
             try
             {
                 if (File.Exists(RowPositionsFile))
-                    _rowPositions = _jsonSerializer.DeserializeFromFile<Dictionary<string, int>>(RowPositionsFile);
+                    _rowPositions = json.DeserializeFromFile<Dictionary<string, int>>(RowPositionsFile);
             }
             catch { }
             return _rowPositions ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         }
 
-        private void SaveRowPositions()
+        private static void SaveRowPositions(IJsonSerializer json)
         {
-            try { _jsonSerializer.SerializeToFile(RowPositions(), RowPositionsFile); } catch { }
+            try { json.SerializeToFile(RowPositions(json), RowPositionsFile); } catch { }
         }
 
         private void RememberRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+            => RememberRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
+
+        private void RestoreRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+            => RestoreRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
+
+        internal static void RememberRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
         {
             try
             {
                 if (string.IsNullOrEmpty(sectionId) || sectionId.StartsWith("hsc__")) return;
-                var sections = _userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
                 int index = Array.FindIndex(sections, s => s.Id == sectionId);
                 if (index < 0) return;
-                RowPositions()[groupKey + "\u001F" + userId] = index;
-                SaveRowPositions();
+                lock (_rowPositionsLock)
+                {
+                    RowPositions(json)[groupKey + "\u001F" + userId] = index;
+                    SaveRowPositions(json);
+                }
             }
             catch { }
         }
 
-        private void RestoreRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+        internal static void ForgetRowPosition(IJsonSerializer json, string groupKey, string userId)
+        {
+            lock (_rowPositionsLock)
+                if (RowPositions(json).Remove(groupKey + "\u001F" + userId)) SaveRowPositions(json);
+        }
+
+        internal static void RestoreRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
         {
             var key = groupKey + "\u001F" + userId;
-            if (!RowPositions().TryGetValue(key, out var index)) return;
+            int index;
+            lock (_rowPositionsLock)
+                if (!RowPositions(json).TryGetValue(key, out index)) return;
             try
             {
-                var count = (_userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>()).Length;
+                var count = (userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>()).Length;
                 if (count > 0 && index < count - 1)
-                    _userManager.MoveHomeSections(userInternalId, new[] { sectionId }, index, cancellationToken);
+                    userManager.MoveHomeSections(userInternalId, new[] { sectionId }, index, cancellationToken);
             }
             catch { }
-            RowPositions().Remove(key);
-            SaveRowPositions();
+            lock (_rowPositionsLock)
+            {
+                RowPositions(json).Remove(key);
+                SaveRowPositions(json);
+            }
         }
 
         private void DeleteSectionForUser(long userInternalId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken)
@@ -6202,6 +6230,58 @@ namespace HomeScreenCompanion
                 if (onlyTag != null && !string.Equals(tl.TagName, onlyTag, StringComparison.OrdinalIgnoreCase)) continue;
                 if (ShowTopList.IsShowList(tl))
                 {
+                    // Settings > Features "Top lists for TV shows" off: the list is not synced and
+                    // what it created goes, as when it is deleted. It keeps its ranked series.
+                    if (!ShowTopList.Enabled(config))
+                    {
+                        if ((tl.ShowEntries?.Count ?? 0) > 0 || (tl.HomeSectionTracked?.Count ?? 0) > 0)
+                        {
+                            try
+                            {
+                                new ShowTopList(_libraryManager, _userManager, _userDataManager, _httpClient, _jsonSerializer, _logger, _providerManager, _fileSystem)
+                                    .Suspend(tl);
+                                showListsUpdated = true;
+                                _log.Ok($"Show top-list '{tl.TagName}': top lists for TV shows are off — its tags, favourites and rows were removed");
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.Error($"Show top-list '{tl.TagName}': clean-up failed — {ex.Message}");
+                            }
+                        }
+                        else _log.Skip($"Show top-list '{tl.TagName}': skipped — top lists for TV shows are off");
+                        continue;
+                    }
+                    // Turned on again: a hand-picked list is rebuilt from the series it held.
+                    if (string.IsNullOrWhiteSpace(tl.ShowSourceTag) && (tl.ShowParkedSeriesIds?.Count ?? 0) > 0)
+                    {
+                        try
+                        {
+                            var stl = new ShowTopList(_libraryManager, _userManager, _userDataManager, _httpClient, _jsonSerializer, _logger, _providerManager, _fileSystem);
+                            var ranked = stl.ParkedSeries(tl);
+                            var lines = stl.Apply(config, tl, ranked);
+                            showListsUpdated = true;
+                            _log.Ok($"Show top-list '{tl.TagName}': {RunLog.Plural(ranked.Count, "show")} ranked again");
+                            foreach (var line in lines) _log.Debug("    " + line);
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Error($"Show top-list '{tl.TagName}' failed — {ex.Message}");
+                        }
+                    }
+                    // A hand-picked list is not rebuilt by the sync, but its rows are put back for
+                    // target users who lost them (Copy & Sync replaces a user's rows).
+                    else if (string.IsNullOrWhiteSpace(tl.ShowSourceTag) && (tl.ShowEntries?.Count ?? 0) > 0)
+                    {
+                        try
+                        {
+                            new ShowTopList(_userManager, _jsonSerializer, _logger).EnsureRows(tl);
+                            showListsUpdated = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Show top-list '{tl.TagName}': rows could not be checked — {ex.Message}");
+                        }
+                    }
                     // No .strm folder: shows are ranked with tags. Lists fed by a tag are rebuilt
                     // here, right after the tag sync wrote the source order (tag_ranks).
                     if (!dryRun && !string.IsNullOrWhiteSpace(tl.ShowSourceTag))

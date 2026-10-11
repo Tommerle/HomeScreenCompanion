@@ -1,4 +1,4 @@
-<div id="HomeScreenCompanionConfigPage" data-role="page" class="page type-interior pluginConfigurationPage hsc-no-copypaste hsc-no-import hsc-no-ranked hsc-no-sorttitle"
+<div id="HomeScreenCompanionConfigPage" data-role="page" class="page type-interior pluginConfigurationPage hsc-no-copypaste hsc-no-import hsc-no-ranked hsc-no-sorttitle hsc-no-showlists"
      data-require="emby-input,emby-button,emby-checkbox,emby-textarea"
      data-controller="__plugin/HomeScreenCompanionJS">
 
@@ -1423,6 +1423,18 @@
 
                         <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
                             <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkShowTopListsEnabled" />
+                                <span>Top lists for TV shows (experimental)</span>
+                            </label>
+                            <div class="fieldDescription">Offers Shows next to Movies when creating a top-list.</div>
+                            <div class="ranked-collections-warning" style="display:flex; align-items:flex-start; gap:8px; background:rgba(232,168,56,0.1); border:1px solid rgba(232,168,56,0.35); border-radius:4px; padding:10px 12px; font-size:0.85em; line-height:1.5; margin-top:8px;">
+                                <i class="md-icon" style="font-size:1.1em; color:#e8a838; flex-shrink:0; margin-top:1px;">warning</i>
+                                <span><strong>Experimental.</strong> Emby cannot rank shows directly, so for every ranked show HSC creates a tag item with the ranked art and marks it as a favourite for each target user; the row shows those favourite tags. Users' own favourite shows are not changed, but it is a per-user favourite flag, and each user can only have one show top-list. Turning it off removes the tags and their favourite marks on the next sync.</span>
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
+                            <label>
                                 <input is="emby-checkbox" type="checkbox" id="chkHideTopListLibraries" />
                                 <span>Hide HSC libraries</span>
                             </label>
@@ -2192,7 +2204,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">tv</i>
-                    <div><strong>Show top-lists</strong> — Hold up to 10 shows. Each user can have only one show top-list. Clicking a show in the row opens a page with Play, the synopsis and the real series.</div>
+                    <div><strong>Show top-lists (experimental)</strong> — Only offered when <em>Top lists for TV shows</em> is switched on under <em>Features</em> in the <strong>Settings</strong> tab (and saved); otherwise top-lists are Movies only. Hold up to 10 shows. Clicking a show in the row opens a page with Play, the synopsis and the real series. Emby cannot rank shows directly, so for every ranked show HSC creates a tag item with the ranked art and marks it as a favourite for each target user; the row shows those favourite tags. Users' own favourite shows are not changed, but it is a per-user favourite flag, and each user can only have one show top-list. Turning it off removes the tags and their favourite marks on the next sync. Turning it on again brings them back on the next sync.</div>
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="src-card">
@@ -2314,6 +2326,10 @@
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">format_list_numbered</i>
                     <div><strong>Ranked collections — movies only (experimental)</strong> — Off by default. Shows <em>Keep the list order</em> on the Collection tab of every source. For every collection with it ticked, HSC adds a hidden library ("&lt;collection&gt; (ranked)") of small .strm copies of the movies, merges each copy with the real film as an extra version (one entry in search, shared watched status) and fills the collection with the copies, so it opens in list order. Only movies are ranked: shows keep their place after them. Unticking removes the copies and the library. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">Keep the list order</a> under Tags &amp; Collections.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tv</i>
+                    <div><strong>Top lists for TV shows (experimental)</strong> — Off by default (on for configurations that already had a show top-list). Offers <em>Shows</em> next to <em>Movies</em> when creating a top-list. Emby cannot rank shows directly, so for every ranked show HSC creates a tag item with the ranked art and marks it as a favourite for each target user; the row shows those favourite tags. Users' own favourite shows are not changed, but it is a per-user favourite flag, and each user can only have one show top-list. Turning it off removes the tags and their favourite marks on the next sync. Turning it on again brings them back on the next sync.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">visibility_off</i>

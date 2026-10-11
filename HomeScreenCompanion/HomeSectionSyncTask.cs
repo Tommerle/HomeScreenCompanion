@@ -143,6 +143,7 @@ namespace HomeScreenCompanion
                     _log.Debug($"  [{s.SectionType}] \"{s.CustomName ?? s.Name}\"");
 
                 var managed = ManagedRows.Build(config, _libraryManager, _jsonSerializer);
+                var showRows = new ShowTopList(_userManager, _jsonSerializer, _logger);
                 string sourceKey = NormId(config.HomeSyncSourceUserId);
 
                 progress.Report(20);
@@ -182,6 +183,16 @@ namespace HomeScreenCompanion
                             else
                                 _log.Skip($"{targetName}: removed copied '{label}' row (belongs to {ownerName})");
                         }
+                        // Show top-list rows copied earlier to a user the list is not for (an empty row).
+                        foreach (var s in existing?.Sections ?? Array.Empty<ContentSection>())
+                        {
+                            var row = managed.Match(s, null);
+                            if (row != null && row.IsShowList && !row.Targets.Contains(targetKey))
+                                _log.Skip($"{targetName}: removed copied '{s.CustomName ?? s.Name ?? row.Name}' row (show top-list for other users)");
+                            // This user's own show-list row: remember its place, it is put back below.
+                            else if (row?.ShowList != null && row.Targets.Contains(targetKey))
+                                showRows.RememberRowPosition(row.ShowList, targetIdStr, targetInternalId, s.Id);
+                        }
 
                         if (existing?.Sections?.Length > 0)
                         {
@@ -212,6 +223,13 @@ namespace HomeScreenCompanion
                                 }
                                 copy.ParentId = own;
                             }
+                            // A show top-list row shows the viewer's favourite tags: only for its target users.
+                            var showRow = managed.Match(section, sourceKey);
+                            if (showRow != null && showRow.IsShowList && !showRow.Targets.Contains(targetKey))
+                            {
+                                _log.Debug($"  {targetName}: – '{section.CustomName ?? section.Name}' skipped (show top-list for other users)");
+                                continue;
+                            }
                             _log.Debug($"  {targetName}: + [{section.SectionType}] \"{section.CustomName ?? section.Name}\"");
                             _userManager.AddHomeSection(targetInternalId, copy, cancellationToken);
                             totalCopied++;
@@ -227,6 +245,24 @@ namespace HomeScreenCompanion
                     }
 
                     progress.Report(20 + (int)(80.0 * (i + 1) / targetCount));
+                }
+
+                // Show top-lists: their target users keep their row even when the master is not a
+                // target (the copy above replaced every row), back at its place.
+                if (ShowTopList.Enabled(config))
+                {
+                    bool showRowsChanged = false;
+                    foreach (var tl in (config.TopLists ?? new List<TopListHomeSection>()).Where(ShowTopList.IsShowList))
+                    {
+                        if ((tl.ShowEntries?.Count ?? 0) == 0) continue;
+                        try { showRows.EnsureRows(tl); showRowsChanged = true; }
+                        catch (Exception ex) { _log.Warn($"Show top-list '{tl.TagName}': rows could not be restored — {ex.Message}"); }
+                    }
+                    if (showRowsChanged)
+                    {
+                        Plugin.Instance!.SaveConfiguration();
+                        _log.Ok("Show top-list rows checked for their target users");
+                    }
                 }
 
                 if (config.HomeSyncLibraryOrder)
@@ -321,6 +357,8 @@ namespace HomeScreenCompanion
         {
             public string Name = "";
             public bool IsPlaylist;
+            public bool IsShowList; // a show top-list row lists the viewer's favourite tags: targets only
+            public TopListHomeSection? ShowList;
             public HashSet<string> Targets = new HashSet<string>();
             public HashSet<string> TrackedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> Playlists = new Dictionary<string, string>(); // user -> playlist InternalId
@@ -366,7 +404,9 @@ namespace HomeScreenCompanion
                     var settings = Parse(json, tl.HomeSectionSettings);
                     var row = new ManagedRow
                     {
-                        Name = settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn) ? cn : (tl.TagName ?? "")
+                        Name = settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn) ? cn : (tl.TagName ?? ""),
+                        IsShowList = ShowTopList.IsShowList(tl),
+                        ShowList = ShowTopList.IsShowList(tl) ? tl : null
                     };
                     foreach (var u in tl.HomeSectionUserIds ?? new List<string>()) row.Targets.Add(NormId(u));
                     foreach (var t in tl.HomeSectionTracked ?? new List<HomeSectionTracking>())

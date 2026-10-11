@@ -5099,6 +5099,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             ShowImportCollectionButton: view.querySelector('#chkShowImportCollectionButton').checked,
             CollectionSortTitleEnabled: view.querySelector('#chkCollectionSortTitleEnabled').checked,
             RankedCollectionsEnabled: view.querySelector('#chkRankedCollectionsEnabled').checked,
+            ShowTopListsEnabled: view.querySelector('#chkShowTopListsEnabled').checked,
             Tags: flatTags,
             SavedFilters: savedFilters,
             HomeSyncEnabled: hscEnabled ? hscEnabled.checked : (lastHscConfig.HomeSyncEnabled || false),
@@ -5159,6 +5160,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             view.classList.toggle('hsc-no-copypaste', !saved.ShowCopyPasteButtons);
             view.classList.toggle('hsc-no-import', !saved.ShowImportCollectionButton);
             view.classList.toggle('hsc-no-ranked', !saved.RankedCollectionsEnabled);
+            view.classList.toggle('hsc-no-showlists', !saved.ShowTopListsEnabled);
             view.classList.toggle('hsc-no-sorttitle', !saved.CollectionSortTitleEnabled);
         } catch (e) { }
         var warn = view.querySelector('.dry-run-warning');
@@ -7222,6 +7224,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // a show list from such a tag is saved as "<tag> (Shows)" so it doesn't clash with the movie list.
     // prefill: a pasted top-list (Paste top-list) – same fields as existingData plus listName and
     // notices, but the dialog stays a Create dialog.
+    // Settings > Features "Top lists for TV shows" (saved state): off = Movies only when creating.
+    function showListsEnabled() {
+        var v = activeView();
+        return !(v && v.classList.contains('hsc-no-showlists'));
+    }
+
     function showTopListModal(tagName, displayName, onSuccess, existingData, isShows, kinds, prefill) {
         var listName = prefill && prefill.listName ? prefill.listName : (isShows && kinds && kinds.movies ? tagName + ' (Shows)' : tagName);
         var preset = existingData || prefill || null;
@@ -7513,7 +7521,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
                 '<div style="display:flex;align-items:center;gap:14px;">' +
                 '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">' + escHtml(titleText) + '</h3>' +
-                (isEdit || sourceTag || (options && options.prefill) ? '' :
+                (isEdit || sourceTag || (options && options.prefill) || !showListsEnabled() ? '' :
                     '<div class="mtlKindSwitch" style="display:inline-flex;border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2));border-radius:14px;overflow:hidden;font-size:0.8em;">' +
                     ['Movies', 'Shows'].map(function (k) {
                         var on = (k === 'Shows') === isShows;
@@ -8349,7 +8357,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         // A tag that is only on shows makes a show top-list; any other tag a movie top-list.
         function isShowTag(tag) { return (tag.SeriesCount || 0) > 0 && !(tag.MovieCount > 0); }
         function renderStep2() {
-            var tags = tagsData.Tags || [];
+            var showsOn = showListsEnabled();
+            var tags = (tagsData.Tags || []).filter(function (t) { return showsOn || !isShowTag(t); });
             var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
 
             var tagRowsHtml = tags.length === 0
@@ -8406,8 +8415,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var tagInfo = tags.filter(function (t) { return t.Name === tagName; })[0] || {};
                     modal.remove();
                     document.removeEventListener('keydown', onEsc);
-                    showTopListModal(tagName, tagName, onSuccess, null, isShowTag(tagInfo),
-                        { movies: tagInfo.MovieCount > 0, shows: tagInfo.SeriesCount > 0 });
+                    showTopListModal(tagName, tagName, onSuccess, null, showsOn && isShowTag(tagInfo),
+                        { movies: tagInfo.MovieCount > 0, shows: showsOn && tagInfo.SeriesCount > 0 });
                 });
             });
         }
@@ -10589,6 +10598,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelector('#chkShowCopyPasteButtons').checked = config.ShowCopyPasteButtons || false;
                 view.querySelector('#chkShowImportCollectionButton').checked = config.ShowImportCollectionButton || false;
                 view.querySelector('#chkRankedCollectionsEnabled').checked = config.RankedCollectionsEnabled || false;
+                // null = config from before the toggle: on when it already has a show top-list.
+                view.querySelector('#chkShowTopListsEnabled').checked = config.ShowTopListsEnabled != null
+                    ? !!config.ShowTopListsEnabled
+                    : (config.TopLists || []).some(function (t) { return t.ContentType === 'Shows'; });
                 view.querySelector('#chkCollectionSortTitleEnabled').checked = config.CollectionSortTitleEnabled || false;
                 if (view.querySelector('#txtSearchTags')) {
                     view.querySelector('#txtSearchTags').value = '';
