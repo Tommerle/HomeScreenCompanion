@@ -54,6 +54,14 @@ namespace HomeScreenCompanion
         public string ContinueWatchingBumpMode { get; set; } = "AllEpisodes"; // "AllEpisodes" | "NewSeasonsOnly"
         public bool ContinueWatchingBumpAllUsers { get; set; } = false;
         public List<string> ContinueWatchingBumpUserIds { get; set; } = new List<string>();
+
+        // Set once LegacyForkCleanup has run (see there).
+        public bool LegacyForkCleanupDone { get; set; } = false;
+
+        // Legacy, for migration only: settings of the stoep-labs fork (4.2.0.x), read once by
+        // LegacyForkCleanup and then cleared.
+        public bool? ShowTopListsEnabled { get; set; } = null;
+        public bool CollectionSortTitleEnabled { get; set; } = false;
     }
 
     public class TagConfig
@@ -130,6 +138,11 @@ namespace HomeScreenCompanion
         public bool CollectionBackgroundReplaced { get; set; } = false;
         public bool OnlyCollection { get; set; } = false;
 
+        // Legacy, for migration only (stoep-labs fork, see LegacyForkCleanup): "Show at the top of
+        // Collections" and its custom sort title.
+        public bool CollectionSortToTop { get; set; } = false;
+        public string CollectionSortTitle { get; set; } = "";
+
         // Legacy fields — kept for backwards compat, never written by new code
         public bool MediaInfoSeasonMode { get; set; } = false;
         public string MediaInfoTargetType { get; set; } = "";
@@ -198,6 +211,19 @@ namespace HomeScreenCompanion
         public List<HomeSectionTracking> HomeSectionTracked { get; set; } = new List<HomeSectionTracking>();
         // "Movies" (default) or "Shows" — see ShowTopList.
         public string ContentType { get; set; } = "Movies";
+
+        // Legacy, for migration only (stoep-labs fork, see LegacyForkCleanup): the fork's tag-based
+        // show lists.
+        public List<ShowTopListEntry> ShowEntries { get; set; } = new List<ShowTopListEntry>();
+        public string ShowSourceTag { get; set; } = "";
+        public List<string> ShowParkedSeriesIds { get; set; } = new List<string>();
+    }
+
+    // Legacy, for migration only: one ranked series of a fork show list and the tag it was given.
+    public class ShowTopListEntry
+    {
+        public string SeriesId { get; set; } = "";
+        public string TagName { get; set; } = "";
     }
 
     public class HomeSectionTracking

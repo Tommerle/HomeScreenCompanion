@@ -34,6 +34,7 @@ namespace HomeScreenCompanion
         {
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
             HomeScreenCompanionTask.KeepLastRunCounts(Configuration, configuration as PluginConfiguration);
+            LegacyForkCleanup.KeepCleanupDone(Configuration, configuration as PluginConfiguration);
             base.UpdateConfiguration(configuration);
             HomeScreenCompanionTask.RecordImportedCollections(Configuration);
             // Toggling the collection mirror adds (or removes) memberships for all existing copies.
