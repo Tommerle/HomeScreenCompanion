@@ -115,6 +115,15 @@ namespace HomeScreenCompanion
         public bool Queued { get; set; }
     }
 
+    // The settings page's Run menu: starts one of HSC's tasks, also those hidden from Emby's
+    // Scheduled Tasks (IConfigurableScheduledTask.IsHidden).
+    [Route("/HomeScreenCompanion/RunTask", "POST")]
+    [Authenticated(Roles = "Admin")]
+    public class RunTaskRequest : IReturn<RunEntryResponse>
+    {
+        public string Key { get; set; } = "";
+    }
+
     // Run Group on a top-list card: rebuilds just that list (folder, tiles, home sections, collection mirror).
     [Route("/HomeScreenCompanion/TopList/RunOne", "POST")]
     [Authenticated(Roles = "Admin")]
@@ -1104,6 +1113,25 @@ public class HomeScreenCompanionService : IService
             }
             var (success, message) = await task.RunSingleTopListAsync(request.TagName.Trim(), RebuildManualTopList, CancellationToken.None);
             return new RunEntryResponse { Success = success, Message = message };
+        }
+
+        // The tasks the Run menu may start.
+        private static readonly HashSet<string> RunMenuTasks = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "HomeScreenCompanionSyncTask", "HomeSectionSyncTask", "TopListSyncTask", "MergeTopListVersionsTask", "ContinueWatchingBumpTask"
+        };
+
+        public object Post(RunTaskRequest request)
+        {
+            if (!RunMenuTasks.Contains(request.Key ?? ""))
+                return new RunEntryResponse { Success = false, Message = "Unknown task." };
+            var worker = _taskManager.ScheduledTasks.FirstOrDefault(w => w.ScheduledTask.Key == request.Key);
+            if (worker == null)
+                return new RunEntryResponse { Success = false, Message = "Task not found." };
+            if (worker.State == MediaBrowser.Model.Tasks.TaskState.Running)
+                return new RunEntryResponse { Success = true, Message = $"{worker.Name} is already running." };
+            _taskManager.QueueScheduledTask(worker.ScheduledTask, new MediaBrowser.Model.Tasks.TaskOptions());
+            return new RunEntryResponse { Success = true, Message = $"{worker.Name} started." };
         }
 
         private static string QueuedMessage(string holder) =>

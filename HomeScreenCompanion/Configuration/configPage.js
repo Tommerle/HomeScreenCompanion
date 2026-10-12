@@ -10737,17 +10737,21 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             speedDial.classList.remove('open');
             syncMenu.classList.remove('open');
         }
+        // Starts one of HSC's tasks through the plugin, so the tasks hidden from Emby's Scheduled
+        // Tasks (which Emby's own task list may leave out) can be run here too.
+        function startHscTask(key) {
+            var headers = { 'Content-Type': 'application/json' };
+            var token = window.ApiClient.accessToken && window.ApiClient.accessToken();
+            if (token) headers['X-Emby-Token'] = token;
+            return fetch(window.ApiClient.getUrl('HomeScreenCompanion/RunTask'), {
+                method: 'POST', headers: headers, body: JSON.stringify({ Key: key })
+            }).then(function (r) { return r.json(); });
+        }
+
         function runTask(key, label) {
-            window.ApiClient.getScheduledTasks().then(function (tasks) {
-                var t = tasks.find(function (x) { return x.Key === key; });
-                if (t) {
-                    window.ApiClient.startScheduledTask(t.Id).then(function () {
-                        window.Dashboard.alert(label + ' started!');
-                    });
-                } else {
-                    window.Dashboard.alert('Task not found: ' + key);
-                }
-            });
+            startHscTask(key).then(function (res) {
+                window.Dashboard.alert(res && res.Success ? (res.Message || label + ' started!') : 'Could not start ' + label + (res && res.Message ? ': ' + res.Message : ''));
+            }).catch(function (e) { window.Dashboard.alert('Could not start ' + label + ': ' + e.message); });
             closeSpeedDial();
         }
 
@@ -10759,17 +10763,25 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             runTask('HomeSectionSyncTask', 'Home screen sync');
         });
 
+        view.querySelector('#btnDialTopListRows').addEventListener('click', function () {
+            runTask('TopListSyncTask', 'Top-list row sync');
+        });
+
+        view.querySelector('#btnDialMergeVersions').addEventListener('click', function () {
+            runTask('MergeTopListVersionsTask', 'Merge top-list versions');
+        });
+
+        view.querySelector('#btnDialContinueWatching').addEventListener('click', function () {
+            runTask('ContinueWatchingBumpTask', 'Continue Watching bump');
+        });
+
         view.querySelector('#btnDialFullSync').addEventListener('click', function () {
-            window.ApiClient.getScheduledTasks().then(function (tasks) {
-                var tagTask = tasks.find(function (x) { return x.Key === 'HomeScreenCompanionSyncTask'; });
-                var hscTask = tasks.find(function (x) { return x.Key === 'HomeSectionSyncTask'; });
-                var promises = [];
-                if (tagTask) promises.push(window.ApiClient.startScheduledTask(tagTask.Id));
-                if (hscTask) promises.push(window.ApiClient.startScheduledTask(hscTask.Id));
-                Promise.all(promises).then(function () {
-                    window.Dashboard.alert('Full sync started!');
-                });
-            });
+            Promise.all([startHscTask('HomeScreenCompanionSyncTask'), startHscTask('HomeSectionSyncTask')])
+                .then(function (res) {
+                    var failed = res.filter(function (r) { return !r || !r.Success; });
+                    window.Dashboard.alert(failed.length ? 'Could not start the full sync: ' + failed.map(function (r) { return (r && r.Message) || 'unknown error'; }).join('; ') : 'Full sync started!');
+                })
+                .catch(function (e) { window.Dashboard.alert('Could not start the full sync: ' + e.message); });
             closeSpeedDial();
         });
 

@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace HomeScreenCompanion
 {
-    public class MergeTopListVersionsTask : IScheduledTask
+    public class MergeTopListVersionsTask : IScheduledTask, IConfigurableScheduledTask
     {
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
@@ -66,6 +66,11 @@ namespace HomeScreenCompanion
         public string Name => "Merge top-list versions with library";
         public string Description => "Links each top-list .strm item to its corresponding library movie as an alternate version (like 1080p/4K) to prevent UI duplicates, and syncs their collection memberships when that option is on. Run this after a library scan has indexed newly added top-list entries.";
         public string Category => "Home Screen Companion";
+
+        // Not listed in Emby's Scheduled Tasks (copies are merged as Emby adds them; this repair run is in the Run menu). It still runs on its triggers.
+        public bool IsHidden => true;
+        public bool IsEnabled => true;
+        public bool IsLogged => true;
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 

@@ -15,7 +15,7 @@ namespace HomeScreenCompanion
     /// Scheduled catch-up for the Continue Watching bump: re-checks every series that received
     /// episodes recently. Safe to run often — ContinueWatchingBumper is idempotent.
     /// </summary>
-    public class ContinueWatchingBumpTask : IScheduledTask
+    public class ContinueWatchingBumpTask : IScheduledTask, IConfigurableScheduledTask
     {
         private const int LookbackDays = 14;
 
@@ -38,6 +38,11 @@ namespace HomeScreenCompanion
         public string Name => "Continue Watching Bump";
         public string Description => "Moves series you had finished to the front of Continue Watching when new episodes arrive.";
         public string Category => "Home Screen Companion";
+
+        // Not listed in Emby's Scheduled Tasks (new episodes are handled as they arrive; this sweep keeps its interval and is in the Run menu). It still runs on its triggers.
+        public bool IsHidden => true;
+        public bool IsEnabled => true;
+        public bool IsLogged => true;
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {

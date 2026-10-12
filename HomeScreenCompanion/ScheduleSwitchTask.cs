@@ -14,7 +14,7 @@ namespace HomeScreenCompanion
     /// time-of-day schedules (e.g. a 20:00 Spotlight) switch on time instead of at the 04:00 sync.
     /// It only checks the schedules; the sync itself does the switching (overrides, cleanup).
     /// </summary>
-    public class ScheduleSwitchTask : IScheduledTask
+    public class ScheduleSwitchTask : IScheduledTask, IConfigurableScheduledTask
     {
         private readonly ITaskManager _taskManager;
         private readonly ILogger _logger;
@@ -29,6 +29,11 @@ namespace HomeScreenCompanion
         public string Name => "Schedule Switch";
         public string Description => "Runs the Tag & Collection Sync when a source's schedule starts or ends.";
         public string Category => "Home Screen Companion";
+
+        // Not listed in Emby's Scheduled Tasks (the schedule clock: it only starts the Tag & Collection Sync when a schedule starts or ends). It still runs on its triggers.
+        public bool IsHidden => true;
+        public bool IsEnabled => true;
+        public bool IsLogged => true;
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
