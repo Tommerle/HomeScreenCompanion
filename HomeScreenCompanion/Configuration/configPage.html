@@ -171,7 +171,7 @@
             }
         }
 
-        .btn-log-trigger, .btn-bug-trigger, .btn-help-trigger {
+        .btn-log-trigger, .btn-bug-trigger, .btn-help-trigger, .btn-quickstart-trigger {
             background: var(--theme-background-level2) !important;
             color: var(--theme-text-primary) !important;
             padding: 0 12px !important;
@@ -235,6 +235,37 @@
                 background: rgba(82, 181, 75, 0.28) !important;
                 border-color: #52B54B !important;
             }
+
+        /* Quick Start: same pill as Help. */
+        .btn-quickstart-trigger {
+            background: rgba(82, 181, 75, 0.15) !important;
+            border-color: rgba(82, 181, 75, 0.55) !important;
+            color: var(--theme-text-primary) !important;
+            padding: 0 18px !important;
+            height: 40px !important;
+            border-radius: 20px !important;
+            font-size: 0.95em !important;
+            font-weight: 500 !important;
+            gap: 7px !important;
+        }
+
+            .btn-quickstart-trigger:hover {
+                background: rgba(82, 181, 75, 0.28) !important;
+                border-color: #52B54B !important;
+            }
+
+        .qs-checklist { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+        .qs-starter {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid var(--line-color, rgba(255,255,255,0.12));
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .qs-starter-text { flex: 1; min-width: 0; line-height: 1.4; }
+        .qs-starter-text small { display: block; opacity: 0.7; }
 
         .modal-backdrop {
             position: fixed;
@@ -1115,6 +1146,11 @@
                     <span>Help</span>
                 </button>
 
+                <button type="button" is="emby-button" class="btn-quickstart-trigger" id="btnOpenQuickStart" title="Open Quick Start">
+                    <i class="md-icon">rocket_launch</i>
+                    <span>Quick Start</span>
+                </button>
+
                 <button type="button" is="emby-button" class="btn-bug-trigger" id="btnOpenBugReport" title="Report a Bug">
                     <i class="md-icon">bug_report</i>
                     <span>Report bug</span>
@@ -1492,6 +1528,8 @@
                     </button>
                 </div>
 
+                <p id="srcEmptyHint" style="display:none; color:var(--theme-text-secondary); font-size:0.9em; margin:0 0 12px;">No sources yet. <a href="javascript:void(0)" class="help-link hsc-open-quickstart">Quick Start</a></p>
+
                 <div id="tagListContainer"></div>
 
                 <br /><br /><br /><br /><br />
@@ -1672,7 +1710,7 @@
                 <nav style="background:rgba(128,128,128,0.06);border:1px solid var(--line-color);border-radius:6px;padding:10px 16px;margin-bottom:20px;">
                     <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin-bottom:8px;">Contents</div>
                     <ol style="margin:0;padding:0 0 0 18px;column-count:2;column-gap:28px;">
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-1').scrollIntoView({behavior:'smooth'});return false;">Quick Start</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link hsc-open-quickstart">Quick Start</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2').scrollIntoView({behavior:'smooth'});return false;">Source Types</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2b').scrollIntoView({behavior:'smooth'});return false;">Your Next Watch</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-3').scrollIntoView({behavior:'smooth'});return false;">Source Settings</a></li>
@@ -1685,59 +1723,12 @@
                     </ol>
                 </nav>
 
-                <!-- 1. QUICK START -->
+                <!-- 1. QUICK START (its own popup: Quick Start button at the top) -->
                 <div id="help-sec-1" class="help-section" style="margin-top:0;">
                     <i class="md-icon help-section-icon">rocket_launch</i>
                     <span>Quick Start</span>
                 </div>
-                <div class="help-step">
-                    <div class="step-num">1</div>
-                    <div class="step-text">
-                        <strong>Enter API Keys</strong> — go to the <strong>Settings</strong> tab. An API key is a code that lets the plugin access a service on your behalf — think of it as a password for the plugin, not for you personally. Only add keys for the services you plan to use.
-                        <div class="info-box" style="margin-top:8px;">
-                            <div style="margin-bottom:10px;">
-                                <strong>Trakt:</strong> Go to <a href="https://trakt.tv/oauth/applications" target="_blank" class="help-link">trakt.tv/oauth/applications</a> and sign in.
-                                Click <em>New Application</em>, give it any name, and in the <em>Redirect URI</em> field type exactly: <code>http://localhost</code>
-                                (this is just a required placeholder — don't visit that address).
-                                Click Save, then copy the <em>Client ID</em> and paste it here.
-                            </div>
-                            <div style="border-top:1px dashed #444; padding-top:10px; margin-bottom:10px;">
-                                <strong>MDBList:</strong> Go to <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a>,
-                                scroll down to the <em>API Access</em> section, and copy your API key.
-                            </div>
-                            <div style="border-top:1px dashed #444; padding-top:10px; margin-bottom:10px;">
-                                <strong>TMDb:</strong> Go to <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a>,
-                                scroll to <em>API Read Access Token</em>, and copy the long token — not the short API Key above it. Public TMDb lists work without a token.
-                            </div>
-                            <div style="border-top:1px dashed #444; padding-top:10px;">
-                                <strong>OpenAI / Gemini:</strong> Only needed if you want to use the <em>AI created lists</em> source type.
-                                API key fields are hidden by default — tick the <em>Show</em> checkbox next to each field to see what you've entered.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="help-step">
-                    <div class="step-num">2</div>
-                    <div class="step-text"><strong>Add a Source</strong> — open the <strong>Tag &amp; Collection</strong> tab and click <strong>+ Add New Source</strong>. A source is simply the place the plugin fetches its movie list from. Already set one up on another server? Use <strong>Copy</strong> on its card there and <strong>Paste source</strong> here.</div>
-                </div>
-                <div class="help-step">
-                    <div class="step-num">3</div>
-                    <div class="step-text">
-                        <strong>Configure the source</strong> — each source has several tabs:
-                        <ul style="margin:6px 0 0 0;padding-left:18px;line-height:1.8;">
-                            <li><em>Source</em> — choose where to get the list (Trakt URL, MDBList URL, local collection, etc.)</li>
-                            <li><em>Tag</em> — set the tag name that will be applied to matching movies in Emby</li>
-                            <li><em>Collection</em> — optionally also group the movies into an Emby collection</li>
-                            <li><em>Schedule</em> — optionally limit when this source is active (e.g. only in December)</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="help-step" style="margin-bottom:0;">
-                    <div class="step-num">4</div>
-                    <div class="step-text"><strong>Save &amp; Run</strong> — click <strong>Save Settings</strong> at the bottom of the page, then click the <strong>Run</strong> button at the bottom and choose <em>Full sync</em>. The plugin will now fetch the lists, match movies in your library, and apply the tags. Done!</div>
-                </div>
-                <p style="margin:10px 0 0; opacity:0.85;">Left the page without saving? When you come back, your unsaved changes and open sources are put back and a bar at the top says <em>Unsaved changes restored</em> — click <strong>Save Settings</strong> to keep them or <strong>Discard</strong> to go back to the saved settings. If the bar warns that settings changed on the server meanwhile, Save will not overwrite them (see below).</p>
-                <p style="margin:10px 0 0; opacity:0.85;"><strong>Changed elsewhere?</strong> If the settings were changed since you opened the page (another tab, another admin, or a run), <strong>Save Settings</strong> saves nothing and asks you to <em>Reload page</em> (shows the current settings, your unsaved edits here are dropped) or <em>Cancel</em> (keep editing) — so nobody's changes are silently overwritten. A run that only updated its own bookkeeping (tracked home rows, playlist links) does not count.</p>
+                <p style="margin:0 0 10px; line-height:1.6;">The steps from a new source to a row on the home screen, a checklist for when nothing shows up, and starter sources are in <a href="javascript:void(0)" class="help-link hsc-open-quickstart">Quick Start</a> (the button next to Help).</p>
 
                 <!-- 2. SOURCE TYPES -->
                 <div id="help-sec-2" class="help-section">
@@ -2211,8 +2202,6 @@
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">palette</i> Badge style &amp; Max items</div>                <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">palette</i> Badge style &amp; Max items</div>
                         Pick how the rank number looks, for movie and show lists alike: a number badge in one of six colours (<em>Neutral</em>, <em>Slate grey</em>, <em>Emby green</em>, <em>Ocean blue</em>, <em>Soft red</em>, <em>Violet</em>), <em>No number</em>, or <em>Top 10 tile</em>. <em>Top 10 tile</em> draws a big outlined number beside the poster on a flat background in the colour of Emby's dark theme, so the row reads as one strip, like Netflix. On a lighter or black theme the tile edges show faintly. <strong>Max items</strong> limits how many titles the list shows (0 = all). <strong>Card size</strong> works as on the Home Screen tab: <em>Smaller</em> fits more tiles on screen.
                     </div>
@@ -2276,11 +2265,11 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">vpn_key</i>
-                    <div><strong>MDBList API Key</strong> — Required for MDBList sources. Get it from <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a> under <em>API Access</em>. Found under <em>External list settings</em> in the Settings tab.</div>
+                    <div><strong>MDBList API Key</strong> — Needed for private MDBList lists; public lists work without it. Get it from <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a> under <em>API Access</em>. Found under <em>External list settings</em> in the Settings tab.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">movie</i>
-                    <div><strong>TMDb API Read Access Token</strong> — Required when using TMDb API endpoints as a source (e.g. popular movies, top-rated, now-playing). Also works for private TMDb lists. Get your token at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a> — scroll to <em>API Read Access Token</em> and copy the long token (not the short API Key). Found under <em>External list settings</em> in the Settings tab. Note: for public TMDb lists you can paste the URL directly without a token.</div>
+                    <div><strong>TMDb API Read Access Token</strong> — Required when using TMDb API endpoints as a source (e.g. popular movies, top-rated, now-playing). Also works for private TMDb lists. Get your token at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a> — scroll to <em>API Read Access Token</em> and copy the long token (not the short API Key). Needed for every TMDb source, public lists too. Found under <em>External list settings</em> in the Settings tab.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_awesome</i>
@@ -2330,15 +2319,19 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">format_list_numbered</i>
-                    <div><strong>Ranked collections — movies only (experimental)</strong>                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">format_list_numbered</i>
                     <div><strong>Ranked collections — movies only (experimental)</strong> — Off by default. Shows <em>Keep the list order</em> on the Collection tab of every source. For every collection with it ticked, HSC adds a hidden library ("&lt;collection&gt; (ranked)") of small .strm copies of the movies, merges each copy with the real film as an extra version (one entry in search, shared watched status) and fills the collection with the copies, so it opens in list order. Only movies are ranked: shows keep their place after them. Unticking removes the copies and the library. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">Keep the list order</a> under Tags &amp; Collections.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">visibility_off</i>
-                    <div><strong>Hide HSC libraries</strong> — On by default. Keeps                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">visibility_off</i>
                     <div><strong>Hide HSC libraries</strong> — On by default. Keeps the libraries HSC creates — those of movie top-lists and of ranked collections — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">restore</i>
+                    <div><strong>Unsaved changes</strong> — Left the page without saving? When you come back, your unsaved changes and open sources are put back and a bar at the top says <em>Unsaved changes restored</em> — click <strong>Save Settings</strong> to keep them or <strong>Discard</strong> to go back to the saved settings. If the bar warns that settings changed on the server meanwhile, Save will not overwrite them (see below).</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">sync_problem</i>
+                    <div><strong>Changed elsewhere?</strong> If the settings were changed since you opened the page (another tab, another admin, or a run), <strong>Save Settings</strong> saves nothing and asks you to <em>Reload page</em> (shows the current settings, your unsaved edits here are dropped) or <em>Cancel</em> (keep editing) — so nobody's changes are silently overwritten. A run that only updated its own bookkeeping (tracked home rows, playlist links) does not count.</div>
                 </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">save</i>
@@ -2347,6 +2340,72 @@
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
                     <button is="emby-button" type="button" id="btnCloseHelp" class="raised button-submit" style="background:#52B54B; color:white; padding: 0 25px;">Close Guide</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="quickStartModalOverlay" class="modal-backdrop">
+        <div class="modal-content" style="max-width:640px;">
+            <div class="modal-header-bar">
+                <i class="md-icon modal-header-icon">rocket_launch</i>
+                <div>
+                    <h2 class="modal-header-title">Quick Start</h2>
+                    <span style="opacity:0.9; font-size:0.9em;">From a list to a row on the home screen</span>
+                </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseQuickStart" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
+            </div>
+            <div class="modal-body-scroll">
+
+                <div class="help-step">
+                    <div class="step-num">1</div>
+                    <div class="step-text"><strong>Pick a source</strong> — on the <strong>Tag &amp; Collection</strong> tab click <strong>+ Add New Source</strong> and choose a <em>Source Type</em>: an <em>External List (Trakt/MDBList/TMDb)</em> URL, a <em>Local Media Information (Smart Playlist)</em> filter on your own library, a local collection or playlist, and more. API keys go on the <strong>Settings</strong> tab, only for the lists that need one: Trakt, TMDb and private MDBList lists. Public MDBList lists and local sources need none.</div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">2</div>
+                    <div class="step-text"><strong>Show it on the home screen</strong> — in the source, open the <strong>Home Screen</strong> tab, tick <strong>Add as home screen section</strong>, tick the users under <strong>Target Users</strong> and pick the look under <strong>Section Settings</strong> (<em>View Type</em>, <em>Image Type</em>, <em>Card Size</em>).</div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">3</div>
+                    <div class="step-text"><strong>Save and run</strong> — click <strong>Save Settings</strong>, then <strong>Run</strong> → <em>Full sync</em>.</div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">4</div>
+                    <div class="step-text"><strong>Nothing on the home screen?</strong>
+                        <ul class="qs-checklist">
+                            <li><em>Add as home screen section</em> is ticked on the source's <em>Home Screen</em> tab.</li>
+                            <li>The user is ticked under <em>Target Users</em>.</li>
+                            <li>A run finished after you saved: see <em>Last run</em> at the top, or <strong>Logs</strong>.</li>
+                            <li><em>Copy &amp; Sync</em> (Home Screen tab) replaces its target users' rows with the source user's: tick that source user on the row too.</li>
+                            <li>Refresh the Emby app, or sign out and in again: apps keep the old home screen until then.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <i class="md-icon help-section-icon">bolt</i>
+                    <span>Starter sources</span>
+                </div>
+                <p style="margin:0 0 12px; line-height:1.6; opacity:0.85;">Each adds a source with a home screen row for all users and opens it. No API key needed. Nothing changes until you click <strong>Save Settings</strong>.</p>
+                <div class="qs-starter">
+                    <i class="md-icon help-feat-icon">local_fire_department</i>
+                    <div class="qs-starter-text"><strong>Popular on this server</strong><small>Smart Playlist: the 20 movies most users watched in the last 30 days</small></div>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="popular"><span>Add</span></button>
+                </div>
+                <div class="qs-starter">
+                    <i class="md-icon help-feat-icon">fiber_new</i>
+                    <div class="qs-starter-text"><strong>Recently added movies</strong><small>Smart Playlist: movies added in the last 30 days, newest first</small></div>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="recent"><span>Add</span></button>
+                </div>
+                <div class="qs-starter" style="margin-bottom:0;">
+                    <i class="md-icon help-feat-icon">trending_up</i>
+                    <div class="qs-starter-text"><strong>Most watched this week</strong><small>Public MDBList list: the week's most watched movies, the ones in your library</small></div>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="trending"><span>Add</span></button>
+                </div>
+
+                <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
+                    <button is="emby-button" type="button" id="btnCloseQuickStart" class="raised button-submit" style="background:#52B54B; color:white; padding: 0 25px;">Close</button>
                 </div>
 
             </div>

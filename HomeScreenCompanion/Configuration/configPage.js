@@ -8984,22 +8984,68 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             isValid: function (p) { return Array.isArray(p.Tags); },
             path: 'HomeScreenCompanion/Source/Import',
             bodyKey: 'SourceJson',
-            onResult: function (result, modal) {
-                var groups = groupConfigTags(result.Tags || []);
-                var keys = Object.keys(groups);
-                if (keys.length === 0) throw new Error('The pasted source is empty.');
-                var config = groups[keys[0]];
-                config.HomeSectionTracked = [];
-                config.PlaylistMappings = [];
-                config.LastModified = new Date().toISOString();
-                if (sourceNameTaken(view, config)) markAsCopy(config);
-                renderTagGroup(config, view.querySelector('#tagListContainer'), true, undefined, true);
-                applyFilters(view);
-                setTimeout(checkFormState, 0);
-                showSourceResult(modal, 'Source added: ' + String(config.Name || config.Tag).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
-                    'It is not saved yet – check the new card at the top and click <strong>Save</strong>.', result.Notices || []);
-            }
+            onResult: function (result, modal) { addImportedSource(view, result, modal); }
         });
+    }
+
+    // Adds an imported source (Paste source, Quick Start starters) as a new unsaved card at the
+    // top. prepare(config) may change it before the card is drawn. Returns the new card.
+    function addImportedSource(view, result, modal, prepare) {
+        var groups = groupConfigTags(result.Tags || []);
+        var keys = Object.keys(groups);
+        if (keys.length === 0) throw new Error('The pasted source is empty.');
+        var config = groups[keys[0]];
+        config.HomeSectionTracked = [];
+        config.PlaylistMappings = [];
+        config.LastModified = new Date().toISOString();
+        if (prepare) prepare(config);
+        if (sourceNameTaken(view, config)) markAsCopy(config);
+        var container = view.querySelector('#tagListContainer');
+        renderTagGroup(config, container, true, undefined, true);
+        applyFilters(view);
+        setTimeout(checkFormState, 0);
+        showSourceResult(modal, 'Source added: ' + String(config.Name || config.Tag).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+            'It is not saved yet – check the new card at the top and click <strong>Save</strong>.', result.Notices || []);
+        return container.firstElementChild;
+    }
+
+    // Quick Start starter sources: built-in copied sources (no API key needed), added through the
+    // same import as Paste source – so they work with the Copy & paste buttons switched off. Each
+    // gets a home screen row (tag based) for all users; the users are filled in after the import.
+    function starterHomeSettings(name, extra) {
+        var s = { SectionType: 'items', ItemTypes: JSON.stringify(['Movie']), CustomName: name };
+        Object.keys(extra || {}).forEach(function (k) { s[k] = extra[k]; });
+        return JSON.stringify(s);
+    }
+    var QUICK_STARTERS = {
+        popular: {
+            Name: 'Popular on this server', Tag: 'Popular on this server', SourceType: 'MediaInfo', Limit: 20,
+            MediaInfoFilters: [{ Operator: 'AND', GroupOperator: 'AND', Criteria: ['MediaType:Movie', 'Popular:30:>=:1'] }],
+            HomeSectionSettings: starterHomeSettings('Popular on this server')
+        },
+        recent: {
+            Name: 'Recently added movies', Tag: 'Recently added movies', SourceType: 'MediaInfo', Limit: 0,
+            MediaInfoFilters: [{ Operator: 'AND', GroupOperator: 'AND', Criteria: ['MediaType:Movie', 'DateAdded:<=:30'] }],
+            HomeSectionSettings: starterHomeSettings('Recently added movies', { SortBy: 'DateCreated,SortName', SortOrder: 'Descending' })
+        },
+        trending: {
+            Name: 'Most watched this week', Tag: 'Most watched this week', SourceType: 'External', Limit: 0,
+            Url: 'https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week',
+            HomeSectionSettings: starterHomeSettings('Most watched this week')
+        }
+    };
+
+    function addStarterSource(view, key) {
+        var starter = QUICK_STARTERS[key];
+        if (!starter) return Promise.reject(new Error('Unknown starter source.'));
+        var tag = { Active: true, EnableTag: true, EnableHomeSection: true, HomeSectionLibraryId: 'auto', HomeSectionUserIds: [] };
+        Object.keys(starter).forEach(function (k) { tag[k] = starter[k]; });
+        var text = JSON.stringify({ 'hsc-source': 1, Tags: [tag] });
+        return Promise.all([importPasteText({ path: 'HomeScreenCompanion/Source/Import', bodyKey: 'SourceJson' }, text), getHseUsers()])
+            .then(function (res) {
+                var userIds = (res[1] || []).map(function (u) { return u.Id; });
+                return addImportedSource(view, res[0], null, function (config) { config.HomeSectionUserIds = userIds; });
+            });
     }
 
     // Import collection: existing Emby collections (made by another plugin or by hand) become Manual
@@ -9496,7 +9542,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             function renderTopListRows(items) {
                 if (items.length === 0) {
-                    return '<div id="tlRowsList"><p style="color:var(--theme-text-secondary);font-size:0.9em;font-style:italic;padding:20px 0;">No top-lists created yet. Click <strong>+ Create New</strong> to get started.</p></div>';
+                    return '<div id="tlRowsList"><p style="color:var(--theme-text-secondary);font-size:0.9em;font-style:italic;padding:20px 0;">No top-lists created yet. Click <strong>+ Create New</strong> to get started. <a href="javascript:void(0)" class="help-link hsc-open-quickstart">Quick Start</a></p></div>';
                 }
                 var labelStyle = 'font-size:0.78em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:2px;';
                 var rows = items.map(function (item) {
@@ -10179,6 +10225,31 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelector('#btnOpenHelp').addEventListener('click', () => helpOverlay.classList.add('modal-visible'));
                 view.querySelector('#btnCloseHelp').addEventListener('click', () => helpOverlay.classList.remove('modal-visible'));
                 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpOverlay.classList.remove('modal-visible'); });
+
+                // Quick Start: opens only from its button and the "Quick Start" links (never by itself).
+                var quickStartOverlay = view.querySelector('#quickStartModalOverlay');
+                view.querySelector('#btnOpenQuickStart').addEventListener('click', () => quickStartOverlay.classList.add('modal-visible'));
+                view.querySelector('#btnCloseQuickStart').addEventListener('click', () => quickStartOverlay.classList.remove('modal-visible'));
+                quickStartOverlay.addEventListener('click', e => { if (e.target === quickStartOverlay) quickStartOverlay.classList.remove('modal-visible'); });
+                view.addEventListener('click', e => {
+                    if (!e.target.closest('.hsc-open-quickstart')) return;
+                    e.preventDefault();
+                    helpOverlay.classList.remove('modal-visible');
+                    quickStartOverlay.classList.add('modal-visible');
+                });
+                quickStartOverlay.querySelectorAll('.btnAddStarter').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        btn.disabled = true;
+                        addStarterSource(view, btn.getAttribute('data-starter'))
+                            .then(function (row) {
+                                quickStartOverlay.classList.remove('modal-visible');
+                                showPageTab('TagCollection');
+                                if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            })
+                            .catch(function (err) { window.Dashboard.alert('Could not add the source: ' + (err.message || err)); })
+                            .finally(function () { btn.disabled = false; });
+                    });
+                });
 
                 view.querySelector('#btnOpenBugReport').addEventListener('click', () => bugOverlay.classList.add('modal-visible'));
                 view.querySelector('#btnCloseBugReport').addEventListener('click', () => bugOverlay.classList.remove('modal-visible'));
@@ -10883,6 +10954,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 keys.forEach((k, i) => renderTagGroup(grouped[k], container, false, i));
 
                 if (keys.length === 0) renderTagGroup({ Tag: '', Urls: [{ url: '', limit: 0 }], Active: true }, container, false, 0);
+                var srcEmptyHint = view.querySelector('#srcEmptyHint');
+                if (srcEmptyHint) srcEmptyHint.style.display = keys.length === 0 ? '' : 'none';
 
                 var savedSort = localStorage.getItem('HomeScreenCompanion_SortBy') || 'Manual';
                 sortRows(container, savedSort);
