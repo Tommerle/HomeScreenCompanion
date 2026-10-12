@@ -42,12 +42,12 @@ namespace HomeScreenCompanion
         }
 
         // Every config save (the settings page and the server's own saves) can change which
-        // titles carry a badge on their real poster.
+        // titles carry a badge on their real poster (during a sync: rebuilt once it has finished).
         public override void SaveConfiguration()
         {
             base.SaveConfiguration();
             HomeScreenCompanionTask.RecordImportedCollections(Configuration);
-            RealPosterBadges.QueueRebuild();
+            RealPosterBadges.ConfigSaved();
         }
 
         public IEnumerable<PluginPageInfo> GetPages()

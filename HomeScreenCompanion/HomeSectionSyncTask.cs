@@ -142,7 +142,7 @@ namespace HomeScreenCompanion
                 foreach (var s in sourceSections.Sections)
                     _log.Debug($"  [{s.SectionType}] \"{s.CustomName ?? s.Name}\"");
 
-                var managed = ManagedRows.Build(config, _libraryManager, _jsonSerializer);
+                var managed = ManagedRows.Build(config, _libraryManager);
                 string sourceKey = NormId(config.HomeSyncSourceUserId);
 
                 progress.Report(20);
@@ -314,42 +314,28 @@ namespace HomeScreenCompanion
         private string UserName(string normId)
             => Guid.TryParse(normId, out var g) ? (_userManager.GetUserById(g)?.Name ?? normId) : normId;
 
-        // Home rows HSC manages itself (a source's or top list's own row, with its own target
-        // users; per-user playlist rows such as Your Next Watch). Copy & Sync must never hand one
-        // user's row to users it is not for.
+        // Per-user playlist rows HSC manages (e.g. Your Next Watch): one playlist per user from a
+        // source. Copy & Sync must never hand one user's playlist row to another user.
         private sealed class ManagedRow
         {
             public string Name = "";
-            public bool IsPlaylist;
-            public HashSet<string> Targets = new HashSet<string>();
-            public HashSet<string> TrackedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> Playlists = new Dictionary<string, string>(); // user -> playlist InternalId
             public string? PlaylistFor(string user) => Playlists.TryGetValue(user, out var p) ? p : null;
         }
 
         private sealed class ManagedRows
         {
-            public readonly List<ManagedRow> Rows = new List<ManagedRow>();
             public readonly Dictionary<string, string> PlaylistOwners = new Dictionary<string, string>(); // playlist InternalId -> user
             private readonly Dictionary<string, ManagedRow> _byPlaylist = new Dictionary<string, ManagedRow>();
 
-            public static ManagedRows Build(PluginConfiguration config, ILibraryManager libraryManager, IJsonSerializer json)
+            public static ManagedRows Build(PluginConfiguration config, ILibraryManager libraryManager)
             {
                 var m = new ManagedRows();
                 foreach (var tc in config.Tags ?? new List<TagConfig>())
                 {
-                    var settings = Parse(json, tc.HomeSectionSettings);
-                    settings.TryGetValue("SectionType", out var st);
-                    if (string.IsNullOrEmpty(st))
-                        st = (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
-                            : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
-                    var row = new ManagedRow { IsPlaylist = st == "playlist" };
-                    row.Name = settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn) ? cn
-                        : !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : (tc.Tag ?? "");
-                    foreach (var u in tc.HomeSectionUserIds ?? new List<string>()) row.Targets.Add(NormId(u));
-                    foreach (var t in tc.HomeSectionTracked ?? new List<HomeSectionTracking>())
-                        if (!string.IsNullOrEmpty(t.SectionId) && !t.SectionId.StartsWith("hsc__")) row.TrackedIds.Add(t.SectionId);
-                    foreach (var pm in tc.PlaylistMappings ?? new List<PlaylistMapping>())
+                    if (tc.PlaylistMappings == null || tc.PlaylistMappings.Count == 0) continue;
+                    var row = new ManagedRow { Name = !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : (tc.Tag ?? "") };
+                    foreach (var pm in tc.PlaylistMappings)
                     {
                         if (!Guid.TryParse(pm.PlaylistId, out var g)) continue;
                         var pl = libraryManager.GetItemById(g);
@@ -359,56 +345,13 @@ namespace HomeScreenCompanion
                         m.PlaylistOwners[iid] = NormId(pm.UserId);
                         m._byPlaylist[iid] = row;
                     }
-                    if (tc.EnableHomeSection || row.Playlists.Count > 0) m.Rows.Add(row);
-                }
-                foreach (var tl in config.TopLists ?? new List<TopListHomeSection>())
-                {
-                    var settings = Parse(json, tl.HomeSectionSettings);
-                    var row = new ManagedRow
-                    {
-                        Name = settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn) ? cn : (tl.TagName ?? "")
-                    };
-                    foreach (var u in tl.HomeSectionUserIds ?? new List<string>()) row.Targets.Add(NormId(u));
-                    foreach (var t in tl.HomeSectionTracked ?? new List<HomeSectionTracking>())
-                        if (!string.IsNullOrEmpty(t.SectionId) && !t.SectionId.StartsWith("hsc__")) row.TrackedIds.Add(t.SectionId);
-                    m.Rows.Add(row);
                 }
                 return m;
             }
 
-            // The HSC row a home section belongs to: a playlist row by the playlist it shows, else
-            // the row tracked under this section id, else (HSC's own fallback) the row's name.
             // A per-user HSC playlist row: the section shows one of HSC's per-user playlists.
             public ManagedRow? PlaylistRow(ContentSection s)
                 => !string.IsNullOrEmpty(s.ParentId) && _byPlaylist.TryGetValue(s.ParentId, out var pr) ? pr : null;
-
-            public ManagedRow? Match(ContentSection s, string? ownerKey)
-            {
-                if (string.Equals(s.SectionType, "playlist", StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrEmpty(s.ParentId) && _byPlaylist.TryGetValue(s.ParentId, out var pr))
-                    return pr;
-                if (!string.IsNullOrEmpty(s.Id))
-                {
-                    var tr = Rows.FirstOrDefault(r => r.TrackedIds.Contains(s.Id));
-                    if (tr != null) return tr;
-                }
-                var name = s.CustomName;
-                if (string.IsNullOrWhiteSpace(name)) return null;
-                return Rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Name)
-                    && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)
-                    && (!r.IsPlaylist || string.Equals(s.SectionType, "playlist", StringComparison.OrdinalIgnoreCase)));
-            }
-
-            private static Dictionary<string, string> Parse(IJsonSerializer json, string? s)
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(s) && s != "{}")
-                        return new Dictionary<string, string>(json.DeserializeFromString<Dictionary<string, string>>(s) ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
-                }
-                catch { }
-                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            }
         }
 
         private static ContentSection CopySection(ContentSection source)

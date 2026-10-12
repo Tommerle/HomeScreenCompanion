@@ -68,6 +68,22 @@ namespace HomeScreenCompanion
             }
         }
 
+        private static int _pendingAfterRun;
+
+        /// <summary>A config save: rebuilds shortly, or once the running sync has finished (a sync
+        /// saves the config many times, and each rebuild loads every movie).</summary>
+        internal static void ConfigSaved()
+        {
+            Interlocked.Exchange(ref _pendingAfterRun, 1);
+            if (!RunGate.Busy) RunFinished();
+        }
+
+        /// <summary>Called when RunGate is released: the rebuild config saves during the run asked for.</summary>
+        internal static void RunFinished()
+        {
+            if (Interlocked.Exchange(ref _pendingAfterRun, 0) == 1) QueueRebuild();
+        }
+
         /// <summary>"label|size[|{"pos":..}]" from a list's settings, or null when the option is off.</summary>
         internal static (string Label, string Size, string Corner)? OptionOf(string? value)
         {

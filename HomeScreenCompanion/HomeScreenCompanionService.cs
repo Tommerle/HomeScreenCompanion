@@ -449,6 +449,7 @@ namespace HomeScreenCompanion
     {
         public bool Success { get; set; }
         public int UpdatedSections { get; set; }
+        public bool Queued { get; set; }
         public string Message { get; set; } = "";
     }
 
@@ -1865,10 +1866,14 @@ public class HomeScreenCompanionService : IService
             return null;
         }
 
+        private const int PerTagQueryLimit = 100;
+
         public object Get(GetManagedTagsRequest request)
         {
             // One small query per tag (Emby filters by tag id), instead of loading every item on
             // the server and reading its tags: same result, but seconds faster on big libraries.
+            // With many tags (e.g. TMDb keywords imported as tags) the queries add up, so above
+            // PerTagQueryLimit every item is loaded once and its tags are read instead.
             var tagItems = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Tag" },
@@ -1898,22 +1903,24 @@ public class HomeScreenCompanionService : IService
             var tagMovieKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
             var tagSeriesIds = new Dictionary<string, HashSet<long>>(StringComparer.OrdinalIgnoreCase);
             var tagTypes = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var tagItem in tagItems)
+
+            // The items carrying a tag (tagId set), or every tagged item (tagId null).
+            List<BaseItem> ItemsWithTag(long? tagId)
             {
-                var tag = tagItem.Name;
-                if (string.IsNullOrWhiteSpace(tag)) continue;
-                var items = _libraryManager.GetItemList(new InternalItemsQuery
+                var query = new InternalItemsQuery
                 {
                     Recursive = true,
                     IsVirtualItem = false,
-                    TagIds = new[] { tagItem.InternalId },
                     IncludeItemTypes = new[] { "Movie", "Series", "Episode", "Season", "Audio", "MusicVideo", "MusicAlbum", "MusicArtist", "Book", "Game", "Trailer", "Video", "Person", "BoxSet", "Photo", "PhotoAlbum", "Playlist", "Recording", "Studio" }
-                }).ToList();
+                };
+                if (tagId.HasValue) query.TagIds = new[] { tagId.Value };
+                var items = _libraryManager.GetItemList(query).ToList();
                 if (allExtraTypes != null && extraTypesProp != null)
                 {
                     try
                     {
-                        var extraQuery = new InternalItemsQuery { Recursive = true, IsVirtualItem = false, TagIds = new[] { tagItem.InternalId } };
+                        var extraQuery = new InternalItemsQuery { Recursive = true, IsVirtualItem = false };
+                        if (tagId.HasValue) extraQuery.TagIds = new[] { tagId.Value };
                         extraTypesProp.SetValue(extraQuery, allExtraTypes);
                         var seenIds = new HashSet<Guid>(items.Select(i => i.Id));
                         foreach (var extra in _libraryManager.GetItemList(extraQuery))
@@ -1921,36 +1928,51 @@ public class HomeScreenCompanionService : IService
                     }
                     catch { }
                 }
+                return items;
+            }
 
-                foreach (var item in items)
+            if (tagItems.Length <= PerTagQueryLimit)
+            {
+                foreach (var tagItem in tagItems)
+                    if (!string.IsNullOrWhiteSpace(tagItem.Name))
+                        foreach (var item in ItemsWithTag(tagItem.InternalId)) CountTag(tagItem.Name, item);
+            }
+            else
+            {
+                foreach (var item in ItemsWithTag(null))
+                    if (item.Tags != null)
+                        foreach (var tag in item.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase))
+                            CountTag(tag, item);
+            }
+
+            void CountTag(string tag, BaseItem item)
+            {
+                // Show top-lists can be built from a tag on series, seasons or episodes.
+                long seriesId = ShowTopList.IsCopy(item) ? 0
+                    : item is MediaBrowser.Controller.Entities.TV.Series ? item.InternalId
+                    : (item as MediaBrowser.Controller.Entities.TV.Season)?.SeriesId
+                      ?? (item as MediaBrowser.Controller.Entities.TV.Episode)?.SeriesId ?? 0;
+                tagCount.TryGetValue(tag, out var c);
+                tagCount[tag] = c + 1;
+                if (item is MediaBrowser.Controller.Entities.Movies.Movie)
                 {
-                    // Show top-lists can be built from a tag on series, seasons or episodes.
-                    long seriesId = ShowTopList.IsCopy(item) ? 0
-                        : item is MediaBrowser.Controller.Entities.TV.Series ? item.InternalId
-                        : (item as MediaBrowser.Controller.Entities.TV.Season)?.SeriesId
-                          ?? (item as MediaBrowser.Controller.Entities.TV.Episode)?.SeriesId ?? 0;
-                    tagCount.TryGetValue(tag, out var c);
-                    tagCount[tag] = c + 1;
-                    if (item is MediaBrowser.Controller.Entities.Movies.Movie)
-                    {
-                        var imdb = item.GetProviderId("Imdb");
-                        var movieKey = !string.IsNullOrEmpty(imdb)
-                            ? imdb
-                            : (item.Name ?? "") + "_" + (item.ProductionYear?.ToString() ?? "");
-                        if (!tagMovieKeys.TryGetValue(tag, out var seen))
-                            tagMovieKeys[tag] = seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        seen.Add(movieKey);
-                    }
-                    if (seriesId > 0)
-                    {
-                        if (!tagSeriesIds.TryGetValue(tag, out var seriesSet))
-                            tagSeriesIds[tag] = seriesSet = new HashSet<long>();
-                        seriesSet.Add(seriesId);
-                    }
-                    if (!tagTypes.TryGetValue(tag, out var typeSet))
-                        tagTypes[tag] = typeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    typeSet.Add(GetItemTypeKey(item));
+                    var imdb = item.GetProviderId("Imdb");
+                    var movieKey = !string.IsNullOrEmpty(imdb)
+                        ? imdb
+                        : (item.Name ?? "") + "_" + (item.ProductionYear?.ToString() ?? "");
+                    if (!tagMovieKeys.TryGetValue(tag, out var seen))
+                        tagMovieKeys[tag] = seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    seen.Add(movieKey);
                 }
+                if (seriesId > 0)
+                {
+                    if (!tagSeriesIds.TryGetValue(tag, out var seriesSet))
+                        tagSeriesIds[tag] = seriesSet = new HashSet<long>();
+                    seriesSet.Add(seriesId);
+                }
+                if (!tagTypes.TryGetValue(tag, out var typeSet))
+                    tagTypes[tag] = typeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                typeSet.Add(GetItemTypeKey(item));
             }
 
             var tags = tagCount
@@ -3460,6 +3482,18 @@ public class HomeScreenCompanionService : IService
 
         public object Post(SyncAllTopListSectionsRequest request)
         {
+            // Another run busy: SyncAll waits for it in the background, so the request does not hang until then.
+            if (RunGate.Busy)
+            {
+                var holder = RunGate.Holder;
+                _ = Task.Run(() =>
+                {
+                    try { TopListSyncTask.SyncAll(_libraryManager, _userViewManager, _userManager, _jsonSerializer, _logger, CancellationToken.None); }
+                    catch (Exception ex) { _logger.ErrorException("Top-list section sync failed", ex); }
+                });
+                return new SyncAllTopListSectionsResponse { Success = true, Queued = true,
+                    Message = $"Queued — {(string.IsNullOrEmpty(holder) ? "another sync" : holder)} is running. The top-list sections are synced as soon as it has finished." };
+            }
             try
             {
                 var (updated, msg) = TopListSyncTask.SyncAll(_libraryManager, _userViewManager, _userManager, _jsonSerializer, _logger, CancellationToken.None);

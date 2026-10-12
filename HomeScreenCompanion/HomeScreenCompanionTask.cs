@@ -1368,14 +1368,6 @@ namespace HomeScreenCompanion
                     }
                 }
 
-                // The history keeps only the tags of groups in the config. A deleted group's tag (or a
-                // renamed group's old tag) was just removed from its items, so it is forgotten now:
-                // HSC no longer touches it, also when someone adds that tag by hand later.
-                if (!dryRun)
-                    SaveFileHistory("homescreencompanion_history.txt", managedTags
-                        .Where(t => config.Tags.Any(c => !string.IsNullOrWhiteSpace(c.Tag) && string.Equals(c.Tag.Trim(), t, StringComparison.OrdinalIgnoreCase)))
-                        .ToList());
-
                 WriteTagDiffDebug(_dbgTagAdded, _dbgTagRemoved);
                 _log.Info(tagsAdded == 0 && tagsRemoved == 0
                     ? $"    No tag changes needed  ·  {RunLog.Elapsed(phaseTimer.Elapsed)}"
@@ -1401,11 +1393,12 @@ namespace HomeScreenCompanion
                     RankedCollections.Cleanup(new HashSet<string>(rankedSources.Values.Select(RankedCollections.FolderName), StringComparer.OrdinalIgnoreCase),
                         null, _libraryManager, _collectionManager, _userManager, _log);
                 int _collIdx = 0;
+                var allItemsById = ItemsById(allItems);
                 foreach (var kvp in desiredCollectionsMap)
                 {
                     string cName = kvp.Key;
                     _log.Step($"Collections — [{++_collIdx}/{desiredCollectionsMap.Count}] {cName}");
-                    var _extraVersions = ExtraVersionIds(OrderedItems(allItems, kvp.Value));
+                    var _extraVersions = ExtraVersionIds(OrderedItems(allItemsById, kvp.Value));
                     var desiredIds = kvp.Value.Where(id => !_extraVersions.Contains(id)).ToHashSet();
                     if (desiredIds.Count == 0) continue;
                     bool _ranked = false;
@@ -1448,7 +1441,7 @@ namespace HomeScreenCompanion
                                 ApplyCollectionSortName(createdRef, cName, collectionSortNames.GetValueOrDefault(cName));
                                 if (collectionSources.TryGetValue(cName, out var _artSrc))
                                 {
-                                    var _artItems = _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItems, desiredIds);
+                                    var _artItems = _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItemsById, desiredIds);
                                     ApplyCollectionArt(createdRef, cName, _artSrc, _artItems);
                                     collCreatedArt.Add((cName, _artSrc, _artItems));
                                 }
@@ -1472,8 +1465,7 @@ namespace HomeScreenCompanion
                                 if (debug)
                                 {
                                     _log.Debug($"  {cName}  →  updated (+{toAdd.Count}, -{toRemove.Count})");
-                                    var _collMap = allItems.ToDictionary(i => i.InternalId, i => i.Name + (i.ProductionYear.HasValue ? $" ({i.ProductionYear})" : ""));
-                                    string CollLabel(long id) => _collMap.TryGetValue(id, out var _cn) ? _cn : id.ToString();
+                                    string CollLabel(long id) => allItemsById.TryGetValue(id, out var _ci) ? _ci.Name + (_ci.ProductionYear.HasValue ? $" ({_ci.ProductionYear})" : "") : id.ToString();
                                     foreach (var id in toAdd) _log.Debug($"    + {CollLabel(id)}");
                                     foreach (var id in toRemove) _log.Debug($"    - {CollLabel(id)}");
                                 }
@@ -1492,7 +1484,7 @@ namespace HomeScreenCompanion
                             if (!dryRun)
                                 ApplyCollectionSortName(existingColl, cName, collectionSortNames.GetValueOrDefault(cName));
                             if (!dryRun && collectionSources.TryGetValue(cName, out var _artSrc2))
-                                ApplyCollectionArt(existingColl, cName, _artSrc2, _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItems, desiredIds));
+                                ApplyCollectionArt(existingColl, cName, _artSrc2, _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItemsById, desiredIds));
                         }
                         if (_ranked)
                             RankedCollections.SetDisplayOrder(_libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault(), _libraryManager);
@@ -1858,11 +1850,13 @@ namespace HomeScreenCompanion
         {
             var preview = new SourcePreview(source, group) { UserId = previewUserId ?? "" };
             // Previews share the run state below, so they take turns (a second preview waits for
-            // the first instead of failing); a real sync still turns them away.
+            // the first instead of failing); a real sync still turns them away. The preview holds
+            // RunGate while it runs, so a sync or Run Group started meanwhile waits for it.
             await _previewGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-            if (IsRunning) { preview.Message = "A sync is running — try again when it has finished."; return preview; }
+            using var runGate = RunGate.TryEnter("Preview");
+            if (runGate == null || IsRunning) { preview.Message = "A sync is running — try again when it has finished."; return preview; }
             IsRunning = true;
             var savedLog = _log;
             var savedWrittenTags = _writtenTags;
@@ -3140,6 +3134,12 @@ namespace HomeScreenCompanion
             catch { return 0; }
         }
 
+        private List<long> PlaylistEntryIds(BaseItem playlist)
+        {
+            try { return _libraryManager.GetItemList(new InternalItemsQuery { ListIds = new[] { playlist.InternalId } }).Select(i => i.InternalId).ToList(); }
+            catch { return new List<long> { -1 }; }   // unreadable: never treated as ours
+        }
+
         private string? PlaylistInternalIdFor(TagConfig t, string userId)
         {
             var mapping = t.PlaylistMappings?.FirstOrDefault(m => string.Equals(m.UserId, userId, StringComparison.OrdinalIgnoreCase));
@@ -3486,11 +3486,16 @@ namespace HomeScreenCompanion
                                 existingPlaylist = candidate;
                         }
 
-                        // Playlists already mapped to other users of this source — never claimed here.
+                        // Playlists already mapped to other users of this source, or to any user of
+                        // another source (which may use the same playlist name) — never claimed here.
                         var claimedByOthers = (tagConfig.PlaylistMappings ?? new List<PlaylistMapping>())
-                            .Where(m => !string.Equals(m.UserId, userId, StringComparison.OrdinalIgnoreCase)
-                                     && Guid.TryParse(m.PlaylistId, out _))
-                            .Select(m => Guid.Parse(m.PlaylistId))
+                            .Where(m => !string.Equals(m.UserId, userId, StringComparison.OrdinalIgnoreCase))
+                            .Concat((Plugin.Instance?.Configuration?.Tags ?? new List<TagConfig>())
+                                .Where(t => !ReferenceEquals(t, tagConfig)
+                                         && !string.Equals(GroupKey(t), GroupKey(tagConfig), StringComparison.OrdinalIgnoreCase))
+                                .SelectMany(t => t.PlaylistMappings ?? new List<PlaylistMapping>()))
+                            .Select(m => Guid.TryParse(m.PlaylistId, out var g) ? g : Guid.Empty)
+                            .Where(g => g != Guid.Empty)
                             .ToHashSet();
 
                         // 2. This user's own playlists with this name (a user-scoped query only sees
@@ -3517,8 +3522,17 @@ namespace HomeScreenCompanion
                         }
                         if (existingPlaylist != null)
                         {
+                            // Only a duplicate holding nothing but titles this source puts there is
+                            // one of ours; a playlist the user made by hand with the same name stays.
+                            var ourIds = new HashSet<long>(desiredPlIdSet);
+                            if (mapping?.LastSyncedItemIds != null) ourIds.UnionWith(mapping.LastSyncedItemIds);
                             foreach (var dup in ownSameName.Where(p => p.Id != existingPlaylist.Id))
                             {
+                                if (!PlaylistEntryIds(dup).All(ourIds.Contains))
+                                {
+                                    _log.Debug($"  Playlist \"{plName}\": {plUser.Name} has another playlist with this name (id {dup.Id}) with other titles — left alone");
+                                    continue;
+                                }
                                 try
                                 {
                                     _libraryManager.DeleteItem(dup, new DeleteOptions { DeleteFileLocation = false });
@@ -6039,12 +6053,15 @@ namespace HomeScreenCompanion
             return ordered.Where(i => !extra.Contains(i.InternalId)).GroupBy(i => i.InternalId).Select(g => g.First()).ToList();
         }
 
-        private static List<BaseItem> OrderedItems(List<BaseItem> allItems, IEnumerable<long> ids)
+        private static Dictionary<long, BaseItem> ItemsById(List<BaseItem> allItems)
         {
             var byId = new Dictionary<long, BaseItem>();
             foreach (var i in allItems) byId[i.InternalId] = i;
-            return ids.Select(id => byId.TryGetValue(id, out var it) ? it : null).Where(i => i != null).Select(i => i!).ToList();
+            return byId;
         }
+
+        private static List<BaseItem> OrderedItems(Dictionary<long, BaseItem> byId, IEnumerable<long> ids)
+            => ids.Select(id => byId.TryGetValue(id, out var it) ? it : null).Where(i => i != null).Select(i => i!).ToList();
 
         // New collections with generated or uploaded art: Emby refreshes a collection right after
         // CreateCollection, and that refresh can save the item it loaded before the art was put on
@@ -6420,7 +6437,6 @@ namespace HomeScreenCompanion
             SyncShowTopListFolders(config, topListsPath, managedTagNames, onlyTag);
 
             // Recreate .strm/.nfo files for each tag-based top-list
-            bool showListsUpdated = false;
             foreach (var tl in config.TopLists ?? new List<TopListHomeSection>())
             {
                 if (string.IsNullOrWhiteSpace(tl.TagName)) continue;
@@ -6593,9 +6609,6 @@ namespace HomeScreenCompanion
 
                 _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "movie")} synced to its library folder");
             }
-
-            // Show lists keep their ranked shows and tracked rows in the configuration.
-            if (showListsUpdated) Plugin.Instance.SaveConfiguration();
         }
 
         // Show top-lists are rebuilt on every sync, manual ones too: their series get new episodes,

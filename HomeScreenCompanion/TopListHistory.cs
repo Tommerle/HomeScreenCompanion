@@ -119,11 +119,10 @@ namespace HomeScreenCompanion
 
         private static string IsoWeek(DateTime d)
         {
-            var cal = CultureInfo.InvariantCulture.Calendar;
-            var day = cal.GetDayOfWeek(d);
-            if (day >= DayOfWeek.Monday && day <= DayOfWeek.Wednesday) d = d.AddDays(3);
-            int w = cal.GetWeekOfYear(d, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
-            return d.Year.ToString(CultureInfo.InvariantCulture) + "-W" + w.ToString("00", CultureInfo.InvariantCulture);
+            // An ISO week belongs to the year of its Thursday, and is numbered from that year's first Thursday.
+            var thursday = d.Date.AddDays(3 - ((int)d.DayOfWeek + 6) % 7);
+            int w = (thursday.DayOfYear - 1) / 7 + 1;
+            return thursday.Year.ToString(CultureInfo.InvariantCulture) + "-W" + w.ToString("00", CultureInfo.InvariantCulture);
         }
     }
 }

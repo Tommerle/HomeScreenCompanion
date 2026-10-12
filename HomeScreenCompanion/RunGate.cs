@@ -61,6 +61,14 @@ namespace HomeScreenCompanion
             return new Releaser();
         }
 
+        /// <summary>Takes the gate only if it is free right now; null when another run holds it.</summary>
+        public static IDisposable? TryEnter(string name)
+        {
+            if (!Gate.Wait(0)) return null;
+            _holder = name;
+            return new Releaser();
+        }
+
         /// <summary>Blocking variant for the synchronous entry points.</summary>
         public static IDisposable Enter(string name, ILogger? logger, CancellationToken cancellationToken)
             => EnterAsync(name, logger, cancellationToken).GetAwaiter().GetResult();
@@ -73,6 +81,7 @@ namespace HomeScreenCompanion
                 if (Interlocked.Exchange(ref _done, 1) != 0) return;
                 _holder = "";
                 Gate.Release();
+                RealPosterBadges.RunFinished();
             }
         }
     }
