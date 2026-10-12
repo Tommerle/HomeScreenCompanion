@@ -520,6 +520,7 @@ namespace HomeScreenCompanion
                 var tagAddedByTag = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 var tagRemovedByTag = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 var collCreatedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var collCreatedArt = new List<(string Name, TagConfig Source, IList<BaseItem> Items)>();
                 var collItemsAdded = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 var collItemsRemoved = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -1446,7 +1447,11 @@ namespace HomeScreenCompanion
                                     ApplyCollectionMeta(createdRef, cName, collectionDescriptions, collectionPosters, debug);
                                 ApplyCollectionSortName(createdRef, cName, collectionSortNames.GetValueOrDefault(cName));
                                 if (collectionSources.TryGetValue(cName, out var _artSrc))
-                                    ApplyCollectionArt(createdRef, cName, _artSrc, _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItems, desiredIds));
+                                {
+                                    var _artItems = _ranked ? RankedArtItems(collectionOrder[cName]) : OrderedItems(allItems, desiredIds);
+                                    ApplyCollectionArt(createdRef, cName, _artSrc, _artItems);
+                                    collCreatedArt.Add((cName, _artSrc, _artItems));
+                                }
                             }
                         }
                         else
@@ -1502,6 +1507,7 @@ namespace HomeScreenCompanion
                     }
                 }
                 if (!dryRun) RankedCollections.RestoreDisplayOrders(rankedSources.Keys, _libraryManager);
+                await ReapplyNewCollectionArtAsync(collCreatedArt, cancellationToken);
                 foreach (var gs in statsList)
                 {
                     if (gs.CollectionName != null)
@@ -2871,6 +2877,7 @@ namespace HomeScreenCompanion
                         catch (Exception ex) { _log.Warn($"Ranked collection '{cName}' failed, the real films are used: {ex.Message}"); }
                     }
                     var existingColl = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault();
+                    bool _newCollArt = false;
                     if (existingColl == null)
                     {
                         var createdColl = await _collectionManager.CreateCollection(new CollectionCreationOptions { Name = cName, IsLocked = false, ItemIdList = desiredIds.ToArray() });
@@ -2879,6 +2886,7 @@ namespace HomeScreenCompanion
                         _collItemsAdded = desiredIds.Count;
                         _log.Debug($"  {cName}  →  created ({desiredIds.Count} items)");
                         if (createdColl != null) ApplyCollectionSortName(createdColl, cName, tagConfig.CollectionSortName);
+                        _newCollArt = true;
                     }
                     else
                     {
@@ -2912,7 +2920,10 @@ namespace HomeScreenCompanion
                         CollectCollectionMeta(tagConfig, cName, _collDescs, _collPosters);
                         if (_collDescs.Count > 0 || _collPosters.Count > 0)
                             ApplyCollectionMeta(_artColl, cName, _collDescs, _collPosters, debug);
-                        ApplyCollectionArt(_artColl, cName, tagConfig, _ranked ? RankedArtItems(collectionOutputItems) : collectionOutputItems);
+                        var _artItems = _ranked ? RankedArtItems(collectionOutputItems) : collectionOutputItems;
+                        ApplyCollectionArt(_artColl, cName, tagConfig, _artItems);
+                        if (_newCollArt)
+                            await ReapplyNewCollectionArtAsync(new List<(string, TagConfig, IList<BaseItem>)> { (cName, tagConfig, _artItems) }, cancellationToken);
                         if (_ranked) RankedCollections.SetDisplayOrder(_artColl, _libraryManager);
                     }
                     RankedCollections.Probe(_rankProbe, _providerManager, _fileSystem);
@@ -6033,6 +6044,27 @@ namespace HomeScreenCompanion
             var byId = new Dictionary<long, BaseItem>();
             foreach (var i in allItems) byId[i.InternalId] = i;
             return ids.Select(id => byId.TryGetValue(id, out var it) ? it : null).Where(i => i != null).Select(i => i!).ToList();
+        }
+
+        // New collections with generated or uploaded art: Emby refreshes a collection right after
+        // CreateCollection, and that refresh can save the item it loaded before the art was put on
+        // it (the art then only shows after the next sync). Two short checks put the art back; when
+        // it is still there nothing is written (SetGeneratedArt compares path and date).
+        private async Task ReapplyNewCollectionArtAsync(List<(string Name, TagConfig Source, IList<BaseItem> Items)> created, CancellationToken cancellationToken)
+        {
+            var withArt = created.Where(c => CollectionArtRenderer.IsStyle(c.Source.CollectionPosterStyle)
+                || CollectionArtRenderer.IsStyle(c.Source.CollectionBackgroundStyle)
+                || !string.IsNullOrWhiteSpace(c.Source.CollectionBackgroundPath)).ToList();
+            if (withArt.Count == 0) return;
+            foreach (var delay in new[] { 3000, 5000 })
+            {
+                await Task.Delay(delay, cancellationToken);
+                foreach (var (name, source, items) in withArt)
+                {
+                    var coll = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = name, Recursive = true }).FirstOrDefault();
+                    if (coll != null) ApplyCollectionArt(coll, name, source, items);
+                }
+            }
         }
 
         // Generated poster / background (CollectionArtRenderer) and "top of Collections" for a
