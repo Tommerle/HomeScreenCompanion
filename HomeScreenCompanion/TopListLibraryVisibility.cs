@@ -10,8 +10,9 @@ using System.Threading;
 namespace HomeScreenCompanion
 {
     /// <summary>
-    /// Keeps movie top-list libraries out of sight (show top-list libraries are kept out of Latest
-    /// by TopListSyncTask, always, so their copies never show in Continue Watching or Next Up) (setting "Hide top-list libraries", on by
+    /// Keeps top-list libraries out of sight (show top-list libraries are kept out of Latest
+    /// by TopListSyncTask, always, so their copies never show in Continue Watching or Next Up;
+    /// here they only follow the My Media part) (setting "Hide top-list libraries", on by
     /// default): for every user they are excluded from "My Media" (which is also what Emby's
     /// sidebar lists) and from the "Latest" rows, both in the user configuration and in saved
     /// home rows (each row's own excluded folders). Users keep access, so the top-list row
@@ -29,20 +30,27 @@ namespace HomeScreenCompanion
     {
         public static int Apply(PluginConfiguration config, IUserManager userManager, ILibraryManager libraryManager, Action<string>? log = null)
         {
-            var libIds = (config.TopLists ?? new List<TopListHomeSection>())
-                .Where(t => !ShowTopList.IsShows(t)
-                         && !string.IsNullOrEmpty(t.HomeSectionLibraryId) && t.HomeSectionLibraryId != "auto")
+            var withLibrary = (config.TopLists ?? new List<TopListHomeSection>())
+                .Where(t => !string.IsNullOrEmpty(t.HomeSectionLibraryId) && t.HomeSectionLibraryId != "auto")
+                .ToList();
+            var libIds = withLibrary
+                .Where(t => !ShowTopList.IsShows(t))
                 .Select(t => t.HomeSectionLibraryId.Trim())
                 .Concat(RankedCollections.LibraryIds(libraryManager)) // ranked-collection libraries are hidden the same way
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            if (libIds.Count == 0) return 0;
-
-            var libGuids = libIds
-                .Select(id => long.TryParse(id, out var n) ? libraryManager.GetItemById(n)?.Id.ToString("N") : null)
-                .Where(g => !string.IsNullOrEmpty(g)).Select(g => g!)
+            // Show-list libraries: My Media only — their "Latest" exclusion is always on (TopListSyncTask).
+            var showIds = withLibrary
+                .Where(ShowTopList.IsShows)
+                .Select(t => t.HomeSectionLibraryId.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            if (libIds.Count == 0 && showIds.Count == 0) return 0;
+
+            var libGuids = Guids(libIds, libraryManager);
+            var showGuids = Guids(showIds, libraryManager);
+            var mediaIds = libIds.Concat(showIds).ToList();
+            var mediaGuids = libGuids.Concat(showGuids).ToList();
 
             bool hide = config.HideTopListLibraries;
             int changedUsers = 0;
@@ -55,8 +63,8 @@ namespace HomeScreenCompanion
 
                     var cfg = userManager.GetUserConfiguration(user);
                     // GUIDs in when hiding; the old internal ids always out.
-                    var myMedia = Merge(Merge(cfg.MyMediaExcludes, libIds, false) ?? cfg.MyMediaExcludes, libGuids, hide)
-                                  ?? Merge(cfg.MyMediaExcludes, libIds, false);
+                    var myMedia = Merge(Merge(cfg.MyMediaExcludes, mediaIds, false) ?? cfg.MyMediaExcludes, mediaGuids, hide)
+                                  ?? Merge(cfg.MyMediaExcludes, mediaIds, false);
                     var latest = Merge(Merge(cfg.LatestItemsExcludes, libIds, false) ?? cfg.LatestItemsExcludes, libGuids, hide)
                                  ?? Merge(cfg.LatestItemsExcludes, libIds, false);
                     if (myMedia != null || latest != null)
@@ -73,7 +81,7 @@ namespace HomeScreenCompanion
                     foreach (var section in sections)
                     {
                         if (section.SectionType != "latestmediablock" && section.SectionType != "userviews") continue;
-                        var excluded = Merge(section.ExcludedFolders, libIds, hide);
+                        var excluded = Merge(section.ExcludedFolders, section.SectionType == "userviews" ? mediaIds : libIds, hide);
                         if (excluded == null) continue;
                         section.ExcludedFolders = excluded;
                         userManager.UpdateHomeSection(user.InternalId, section, CancellationToken.None);
@@ -133,6 +141,12 @@ namespace HomeScreenCompanion
                 catch (Exception ex) { log?.Invoke($"Removing library '{libId}' from '{user.Name}' failed — {ex.Message}"); }
             }
         }
+
+        private static List<string> Guids(List<string> libIds, ILibraryManager libraryManager) => libIds
+            .Select(id => long.TryParse(id, out var n) ? libraryManager.GetItemById(n)?.Id.ToString("N") : null)
+            .Where(g => !string.IsNullOrEmpty(g)).Select(g => g!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         // The new list, or null when nothing changes.
         private static string[]? Merge(string[]? current, List<string> libIds, bool hide)

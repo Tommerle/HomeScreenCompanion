@@ -3198,14 +3198,12 @@ public class HomeScreenCompanionService : IService
                 var sanitized = SanitizeFolderName(request.TagName);
                 var folderPath = Path.Combine(dataPath, "toplists", sanitized);
 
-                // A show list's library was kept out of every user's "Latest" — undo that while
+                // The list's library was kept out of users' "My Media" and "Latest" — undo that while
                 // the library can still be found by its folder (the UI removes it afterwards).
-                if (ShowTopList.IsShowFolder(folderPath))
-                {
-                    var libGuid = FindLibraryGuidByPath(folderPath);
-                    if (!string.IsNullOrEmpty(libGuid))
-                        TopListSyncTask.SetLatestExclusion(_userManager, libGuid!, false, _logger);
-                }
+                var libGuid = FindLibraryGuidByPath(folderPath);
+                if (!string.IsNullOrEmpty(libGuid))
+                    TopListLibraryVisibility.Forget(_libraryManager.GetItemById(Guid.Parse(libGuid))?.InternalId.ToString() ?? "",
+                        libGuid!, _userManager, m => _logger.Warn(m));
 
                 if (Directory.Exists(folderPath))
                     Directory.Delete(folderPath, true);
