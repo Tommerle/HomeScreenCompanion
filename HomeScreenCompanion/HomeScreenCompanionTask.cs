@@ -3767,6 +3767,8 @@ namespace HomeScreenCompanion
         {
             bool configChanged = false;
             var processedHsKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // The tags of the tag rows (see TagAnchor): kept on the anchor so they always exist.
+            var anchoredTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var tc in config.Tags)
             {
@@ -3794,30 +3796,15 @@ namespace HomeScreenCompanion
                 var hsKey = GroupKey(tc);
                 bool isFirstForGroup = processedHsKeys.Add(hsKey);
 
-                // A tag row outside its schedule stays where it is: the tag is off its items, so the
-                // row is empty and Emby does not show it, and it can still be moved in the home
-                // screen settings. When the schedule starts again it is pointed at the tag once more
-                // (the update below; Emby gives a tag that comes back a new id).
-                if (tc.EnableHomeSection && tc.Active && !isActive && IsTagRow(tc))
-                {
-                    if (!isFirstForGroup)
-                    {
-                        if (tc.HomeSectionTracked.Count > 0) { tc.HomeSectionTracked.Clear(); configChanged = true; }
-                        continue;
-                    }
-                    foreach (var t in tc.HomeSectionTracked.Where(t => !tc.HomeSectionUserIds.Contains(t.UserId)).ToList())
-                    {
-                        try { DeleteSectionForUser(_userManager.GetInternalId(t.UserId), t.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken); }
-                        catch { }
-                        tc.HomeSectionTracked.Remove(t);
-                        configChanged = true;
-                    }
-                    if (tc.HomeSectionTracked.Count > 0)
-                        _log.Debug($"  {_hsDisplayName}: home section kept in place (empty until the schedule starts)");
-                    continue;
-                }
+                // A tag row exists also outside its schedule (and before the schedule has ever
+                // started): the tag is off its titles, so the row is empty and Emby hides it, but it
+                // can be moved in the home screen settings. Its title gets InactivePrefix, and every
+                // sync puts its settings back (e.g. the tag Emby's own editor may have dropped).
+                bool scheduledOffTagRow = tc.EnableHomeSection && tc.Active && !isActive && IsTagRow(tc, _jsonSerializer);
+                if (scheduledOffTagRow && isFirstForGroup) anchoredTags.Add(_hsTagName);
+                else if (tc.EnableHomeSection && isActive && isFirstForGroup && IsTagRow(tc, _jsonSerializer)) anchoredTags.Add(_hsTagName);
 
-                if (!tc.EnableHomeSection || !isActive)
+                if (!tc.EnableHomeSection || (!isActive && !scheduledOffTagRow))
                 {
                     if (tc.HomeSectionTracked.Count > 0)
                     {
@@ -3874,6 +3861,7 @@ namespace HomeScreenCompanion
                     settingsDict["SectionType"] = DefaultSectionType(tc);
 
                 FillDefaultCustomName(settingsDict, tc);
+                if (scheduledOffTagRow) MarkInactive(settingsDict);
                 NormalizePlaylistSectionSettings(settingsDict);
 
                 settingsDict.TryGetValue("SectionType", out var sectionType);
@@ -3937,12 +3925,20 @@ namespace HomeScreenCompanion
 
                 if (sectionType == "items" && !string.IsNullOrEmpty(tc.Tag))
                 {
+                    // The anchor keeps the tag (and its id) also when no title has it.
+                    if (tc.EnableTag) TagAnchor.Ensure(_libraryManager, _collectionManager, _jsonSerializer, _hsTagName, m => _log.Warn(m));
                     var tagItem = _libraryManager.GetItemList(new InternalItemsQuery
                     {
                         IncludeItemTypes = new[] { "Tag" },
-                        Name = tc.Tag,
+                        Name = _hsTagName,
                         Recursive = true
                     }).FirstOrDefault();
+                    // A tag row without its tag would show every title: no row until the tag exists.
+                    if (tagItem == null && tc.EnableTag)
+                    {
+                        HsWarn(statsList, _hsTagName, _hsDisplayName, $"tag '{_hsTagName}' does not exist in the library yet, so the home section was not created or updated");
+                        continue;
+                    }
                     if (tagItem != null)
                         settingsDict["_queryTagId"] = tagItem.InternalId.ToString();
                     else
@@ -3997,7 +3993,7 @@ namespace HomeScreenCompanion
                         if (tracked != null && !string.IsNullOrEmpty(tracked.SectionId) && !tracked.SectionId.StartsWith("hsc__"))
                             ownedSection = allCurrentSections.FirstOrDefault(s => s.Id == tracked.SectionId);
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _hsFallbackName) && !string.IsNullOrEmpty(_hsFallbackName))
-                            ownedSection = allCurrentSections.FirstOrDefault(s => string.Equals(s.CustomName, _hsFallbackName, StringComparison.OrdinalIgnoreCase));
+                            ownedSection = allCurrentSections.FirstOrDefault(s => SameTitle(s.CustomName, _hsFallbackName));
 
                         if (ownedSection != null)
                         {
@@ -4068,6 +4064,10 @@ namespace HomeScreenCompanion
                     HsWarn(statsList, _hsTagName, _hsDisplayName, "home section enabled but no users are selected");
                 }
             }
+
+            // A full run knows every tag row: tags the anchor holds for rows that are gone come off it.
+            if (filterTagName == null)
+                TagAnchor.Prune(_libraryManager, _jsonSerializer, anchoredTags, m => _log.Warn(m));
 
             if (configChanged)
                 Plugin.Instance.SaveConfiguration();
@@ -4175,8 +4175,9 @@ namespace HomeScreenCompanion
 
         // A home row's identity across users (section ids differ per user): its custom title, else
         // its type and library. The settings page offers "After <row>" with the same key.
+        // An inactive row keeps its key: the title counts without InactivePrefix.
         internal static string SectionKey(ContentSection s)
-            => !string.IsNullOrWhiteSpace(s.CustomName) ? "name:" + s.CustomName.Trim().ToLowerInvariant()
+            => !string.IsNullOrWhiteSpace(s.CustomName) ? "name:" + StripInactive(s.CustomName).Trim().ToLowerInvariant()
                 : "type:" + (s.SectionType ?? "").ToLowerInvariant() + "|" + (s.ParentId ?? "");
 
         // Where a new row goes (HomeSectionSettings "_position"): "" or "bottom" = where Emby puts it
@@ -4216,18 +4217,36 @@ namespace HomeScreenCompanion
                 : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
 
         // A home row that shows the source's tag (Dynamic Media), not its collection or playlist.
-        private bool IsTagRow(TagConfig tc)
+        internal static bool IsTagRow(TagConfig tc, IJsonSerializer json)
         {
             var st = "";
             try
             {
-                var s = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(string.IsNullOrEmpty(tc.HomeSectionSettings) ? "{}" : tc.HomeSectionSettings);
+                var s = json.DeserializeFromString<Dictionary<string, string>>(string.IsNullOrEmpty(tc.HomeSectionSettings) ? "{}" : tc.HomeSectionSettings);
                 if (s != null) s.TryGetValue("SectionType", out st);
             }
             catch { }
             if (string.IsNullOrEmpty(st)) st = DefaultSectionType(tc);
             return st == "items" && tc.EnableTag && !string.IsNullOrWhiteSpace(tc.Tag);
         }
+
+        // The title of a tag row outside its schedule starts with this, so it stands out in the home
+        // screen settings (the row itself is empty and hidden).
+        internal const string InactivePrefix = "[INACTIVE] ";
+
+        internal static string StripInactive(string? title)
+            => title != null && title.StartsWith(InactivePrefix, StringComparison.OrdinalIgnoreCase) ? title.Substring(InactivePrefix.Length) : title ?? "";
+
+        internal static void MarkInactive(Dictionary<string, string> settings)
+        {
+            if (settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn))
+                settings["CustomName"] = InactivePrefix + StripInactive(cn);
+        }
+
+        // Same row title, with or without InactivePrefix.
+        internal static bool SameTitle(string? a, string? b)
+            => !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b)
+               && string.Equals(StripInactive(a).Trim(), StripInactive(b).Trim(), StringComparison.OrdinalIgnoreCase);
 
         private void DeleteSectionForUser(long userInternalId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken)
         {
@@ -4260,7 +4279,7 @@ namespace HomeScreenCompanion
                 if (hint != null && hint.TryGetValue("CustomName", out var cn) && !string.IsNullOrEmpty(cn))
                 {
                     var fallbackIds = allSections
-                        .Where(s => s.CustomName == cn && !string.IsNullOrEmpty(s.Id))
+                        .Where(s => SameTitle(s.CustomName, cn) && !string.IsNullOrEmpty(s.Id))
                         .Select(s => s.Id).ToArray();
                     if (fallbackIds.Length > 0)
                         _userManager.DeleteHomeSections(userInternalId, fallbackIds, cancellationToken);
@@ -4406,6 +4425,7 @@ namespace HomeScreenCompanion
             var allBoxSets = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Recursive = true });
             foreach (var boxSet in allBoxSets)
             {
+                if (TagAnchor.IsAnchor(boxSet, _jsonSerializer)) continue;   // holds the tag rows' tags
                 bool updated = false;
                 foreach (var tagName in allHseTags)
                 {

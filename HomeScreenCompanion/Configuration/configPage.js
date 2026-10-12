@@ -4754,8 +4754,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     // A home row's identity across users (same as HomeScreenCompanionTask.SectionKey): its custom
     // title, else its type and library.
+    // A tag row outside its schedule has this before its title in Emby (HomeScreenCompanionTask.InactivePrefix).
+    var HSE_INACTIVE_PREFIX = '[INACTIVE] ';
+    function stripInactive(title) {
+        title = title || '';
+        return title.toUpperCase().indexOf(HSE_INACTIVE_PREFIX) === 0 ? title.substring(HSE_INACTIVE_PREFIX.length) : title;
+    }
+
     function hseSectionKey(s) {
-        var cn = (s.CustomName || '').trim();
+        var cn = stripInactive(s.CustomName).trim();
         return cn ? 'name:' + cn.toLowerCase() : 'type:' + (s.SectionType || '').toLowerCase() + '|' + (s.ParentId || '');
     }
 
@@ -5029,7 +5036,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 // Fält som kan läsas tillbaka från Emby och ha ett formulärfält
                 var fieldMap = {
                     SectionType:     section.SectionType || '',
-                    CustomName:      section.CustomName || '',
+                    CustomName:      stripInactive(section.CustomName),
                     DisplayMode:     section.DisplayMode || '',
                     ViewType:        section.ViewType || '',
                     ImageType:       section.ImageType || '',

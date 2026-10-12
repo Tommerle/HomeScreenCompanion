@@ -1755,6 +1755,10 @@ public class HomeScreenCompanionService : IService
                         : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
                 // An empty title would clear the row's name in Emby: use the pre-filled one, as the sync does.
                 HomeScreenCompanionTask.FillDefaultCustomName(settingsDict, tc);
+                // A tag row outside its schedule keeps its "[INACTIVE]" title (as the sync sets it).
+                if (tc.Active && !HomeScreenCompanionTask.IsScheduleActive(tc.ActiveIntervals, DateTime.Now)
+                    && HomeScreenCompanionTask.IsTagRow(tc, _jsonSerializer))
+                    HomeScreenCompanionTask.MarkInactive(settingsDict);
                 // Playlist rows keep each user's own playlist (ParentId is left as it is).
                 HomeScreenCompanionTask.NormalizePlaylistSectionSettings(settingsDict);
 
@@ -1815,7 +1819,7 @@ public class HomeScreenCompanionService : IService
 
                         ContentSection ownedSection = allSections.FirstOrDefault(s => s.Id == tracking.SectionId);
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _applyFallbackName) && !string.IsNullOrEmpty(_applyFallbackName))
-                            ownedSection = allSections.FirstOrDefault(s => string.Equals(s.CustomName, _applyFallbackName, StringComparison.OrdinalIgnoreCase));
+                            ownedSection = allSections.FirstOrDefault(s => HomeScreenCompanionTask.SameTitle(s.CustomName, _applyFallbackName));
 
                         if (ownedSection == null) continue;
 
@@ -2002,6 +2006,7 @@ public class HomeScreenCompanionService : IService
             var result = new List<ManagedCollectionInfo>();
             foreach (var c in collections)
             {
+                if (TagAnchor.IsAnchor(c, _jsonSerializer)) continue;   // HSC's own tag holder, not a real collection
                 var childCount = _libraryManager.GetItemList(new InternalItemsQuery { CollectionIds = new[] { c.InternalId }, IsVirtualItem = false }).Count();
                 result.Add(new ManagedCollectionInfo
                 {
@@ -2030,7 +2035,8 @@ public class HomeScreenCompanionService : IService
 
         public object Get(GetImportCollectionsRequest request)
         {
-            var collections = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Recursive = true });
+            var collections = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Recursive = true })
+                .Where(c => !TagAnchor.IsAnchor(c, _jsonSerializer)).ToArray();   // HSC's own tag holder
             var hsc = HscCollectionNames();
             var nameCounts = collections.GroupBy(c => (c.Name ?? "").Trim(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
