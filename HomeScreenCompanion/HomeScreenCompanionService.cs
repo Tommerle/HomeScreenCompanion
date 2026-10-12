@@ -1753,6 +1753,8 @@ public class HomeScreenCompanionService : IService
                 if (!settingsDict.ContainsKey("SectionType"))
                     settingsDict["SectionType"] = (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
                         : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
+                // An empty title would clear the row's name in Emby: use the pre-filled one, as the sync does.
+                HomeScreenCompanionTask.FillDefaultCustomName(settingsDict, tc);
                 // Playlist rows keep each user's own playlist (ParentId is left as it is).
                 HomeScreenCompanionTask.NormalizePlaylistSectionSettings(settingsDict);
 

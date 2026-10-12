@@ -4752,6 +4752,49 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     var PLAYLIST_SECTION_LABEL = "This source's playlist (each user's own)";
 
+    // A home row's identity across users (same as HomeScreenCompanionTask.SectionKey): its custom
+    // title, else its type and library.
+    function hseSectionKey(s) {
+        var cn = (s.CustomName || '').trim();
+        return cn ? 'name:' + cn.toLowerCase() : 'type:' + (s.SectionType || '').toLowerCase() + '|' + (s.ParentId || '');
+    }
+
+    // A saved "after:<key>" before the row list has loaded.
+    function hsePositionKeyLabel(pos) {
+        var key = pos.substring('after:'.length);
+        if (key.indexOf('name:') === 0) return key.substring(5);
+        return key.substring(5).split('|')[0];
+    }
+
+    // Adds "After <row>" for each row on the user's home screen (but this source's own row).
+    function fillHsePositionOptions(tab, userId) {
+        var sel = tab.querySelector('.selHsePosition');
+        if (!sel || !userId) return;
+        var headers = {};
+        var token = window.ApiClient.accessToken && window.ApiClient.accessToken();
+        if (token) headers['X-Emby-Token'] = token;
+        fetch(window.ApiClient.getUrl('HomeScreenCompanion/Hsc/UserSections', { UserId: userId }), { headers: headers })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var nameEl = tab.querySelector('[data-field="CustomName"]');
+                var ownName = ((nameEl && (nameEl.value || nameEl.placeholder)) || '').trim().toLowerCase();
+                var current = sel.value;
+                ((data && data.Sections) || []).forEach(function (s, i) {
+                    var key = hseSectionKey(s);
+                    if (ownName && key === 'name:' + ownName) return;
+                    var value = 'after:' + key;
+                    var label = 'After: ' + (s.CustomName || s.Name || s.SectionType || ('Row ' + (i + 1)));
+                    var existing = Array.from(sel.options).find(function (o) { return o.value === value; });
+                    if (existing) { existing.textContent = label; return; }
+                    var o = document.createElement('option');
+                    o.value = value; o.textContent = label;
+                    sel.appendChild(o);
+                });
+                sel.value = current;
+            })
+            .catch(function () { /* the saved choice stays; Bottom and Top still work */ });
+    }
+
     function buildHomeSectionFormHtml(savedSettings, defaultSectionType, defaultName, tagEnabled, collEnabled, libraryOptions, savedLibraryId, allLibraries, plEnabled) {
         var s = savedSettings || {};
         var html = '';
@@ -4810,6 +4853,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var customName = (s.CustomName || '').replace(/"/g, '&quot;');
         var customNamePlaceholder = (defaultName || '').replace(/"/g, '&quot;');
         html += '<div style="margin-bottom:12px;"><input is="emby-input" type="text" class="hse-field-str" data-field="CustomName" label="Custom Title" value="' + customName + '" placeholder="' + customNamePlaceholder + '"/></div>';
+
+        // Where a new row goes. "After" lists the first selected user's rows (filled in by
+        // fillHsePositionOptions); the saved choice is shown until that list has loaded.
+        var posVal = s._position || '';
+        html += '<div style="margin-bottom:12px;"><label class="selectLabel">Position</label>';
+        html += '<select is="emby-select" class="selHsePosition hse-field-str" data-field="_position" style="width:100%;">';
+        html += '<option value=""' + (posVal === '' ? ' selected' : '') + '>Bottom (default)</option>';
+        html += '<option value="top"' + (posVal === 'top' ? ' selected' : '') + '>Top</option>';
+        if (posVal.indexOf('after:') === 0)
+            html += '<option value="' + escapeHtml(posVal) + '" selected>After: ' + escapeHtml(hsePositionKeyLabel(posVal)) + '</option>';
+        html += '</select>';
+        html += '<div class="fieldDescription">Where the row is put when it is created. A row you move later (in Emby\'s home screen settings) keeps its place, also while its schedule hides it.</div>';
+        html += '</div>';
 
         // Emby native uses "" for Cards (default); migrate old stored "cards" value
         var viewTypeVal = (s.ViewType === 'cards' ? '' : s.ViewType) || '';
@@ -5101,6 +5157,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var plEnabled = !!(row.querySelector('.chkEnablePlaylist') || {}).checked;
                 tab.querySelector('.hse-fields-inner').innerHTML = buildHomeSectionFormHtml(savedSettings, defaultSectionType, defaultTagName, tagEnabled, collEnabled, libraryOptions, savedLibraryId, allLibraries, plEnabled);
                 wireHomeSectionTypeChange(tab);
+                fillHsePositionOptions(tab, savedUserIds[0] || ((users || [])[0] || {}).Id);
 
                 // Mark as fully loaded only after form is in DOM so getUiConfig reads form values
                 tab.dataset.hseLoaded = '1';
@@ -5255,6 +5312,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             } else {
                 try { hseSettings = JSON.parse(decodeURIComponent((hseTab && hseTab.dataset.hseSettings) || '%7B%7D')); } catch {}
             }
+            // An empty Custom Title is the pre-filled one: the source's name, else its tag (as the sync uses).
+            if (!(hseSettings.CustomName || '').trim() && (entryLabel || name)) hseSettings.CustomName = entryLabel || name;
             var hseTracked = (function() { try { return JSON.parse(decodeURIComponent((hseTab && hseTab.dataset.hseTracked) || '%5B%5D')); } catch { return []; } })();
 
             var baseTag = {

@@ -3235,6 +3235,14 @@ namespace HomeScreenCompanion
         // the show's poster (hometab: ImageType "Primary" → preferSeriesImage; imagehelper then uses
         // SeriesPrimaryImageTag, 2:3), so shows look like the movies next to them. The episode's own
         // image is not touched.
+        // An empty Custom Title is the pre-filled one: the group's name, else its tag.
+        internal static void FillDefaultCustomName(Dictionary<string, string> settings, TagConfig tc)
+        {
+            if (settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn)) return;
+            var name = !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : tc.Tag;
+            if (!string.IsNullOrWhiteSpace(name)) settings["CustomName"] = name.Trim();
+        }
+
         internal static void NormalizePlaylistSectionSettings(Dictionary<string, string> settings)
         {
             if (!settings.TryGetValue("SectionType", out var st) || st != "playlist") return;
@@ -3786,6 +3794,29 @@ namespace HomeScreenCompanion
                 var hsKey = GroupKey(tc);
                 bool isFirstForGroup = processedHsKeys.Add(hsKey);
 
+                // A tag row outside its schedule stays where it is: the tag is off its items, so the
+                // row is empty and Emby does not show it, and it can still be moved in the home
+                // screen settings. When the schedule starts again it is pointed at the tag once more
+                // (the update below; Emby gives a tag that comes back a new id).
+                if (tc.EnableHomeSection && tc.Active && !isActive && IsTagRow(tc))
+                {
+                    if (!isFirstForGroup)
+                    {
+                        if (tc.HomeSectionTracked.Count > 0) { tc.HomeSectionTracked.Clear(); configChanged = true; }
+                        continue;
+                    }
+                    foreach (var t in tc.HomeSectionTracked.Where(t => !tc.HomeSectionUserIds.Contains(t.UserId)).ToList())
+                    {
+                        try { DeleteSectionForUser(_userManager.GetInternalId(t.UserId), t.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken); }
+                        catch { }
+                        tc.HomeSectionTracked.Remove(t);
+                        configChanged = true;
+                    }
+                    if (tc.HomeSectionTracked.Count > 0)
+                        _log.Debug($"  {_hsDisplayName}: home section kept in place (empty until the schedule starts)");
+                    continue;
+                }
+
                 if (!tc.EnableHomeSection || !isActive)
                 {
                     if (tc.HomeSectionTracked.Count > 0)
@@ -3840,17 +3871,9 @@ namespace HomeScreenCompanion
                 catch { /* ignore malformed settings */ }
 
                 if (!settingsDict.ContainsKey("SectionType"))
-                    settingsDict["SectionType"] = (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
-                        : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
+                    settingsDict["SectionType"] = DefaultSectionType(tc);
 
-                // Back-fill CustomName from group name/tag when not explicitly configured
-                if (!settingsDict.TryGetValue("CustomName", out var _existingCn) || string.IsNullOrWhiteSpace(_existingCn))
-                {
-                    var _defaultCn = !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : tc.Tag;
-                    if (!string.IsNullOrWhiteSpace(_defaultCn))
-                        settingsDict["CustomName"] = _defaultCn;
-                }
-
+                FillDefaultCustomName(settingsDict, tc);
                 NormalizePlaylistSectionSettings(settingsDict);
 
                 settingsDict.TryGetValue("SectionType", out var sectionType);
@@ -4004,7 +4027,9 @@ namespace HomeScreenCompanion
                                 .Where(s => !string.IsNullOrEmpty(s.Id) && !beforeIds.Contains(s.Id))
                                 .Select(s => s.Id).FirstOrDefault() ?? "";
                             trackId = !string.IsNullOrEmpty(newId) ? newId : sectionMarker;
-                            if (!string.IsNullOrEmpty(newId)) RestoreRowPosition(hsKey, userId, userInternalId, newId, cancellationToken);
+                            // Back where it was when it was removed, else at the row's chosen position.
+                            if (!string.IsNullOrEmpty(newId) && !RestoreRowPosition(hsKey, userId, userInternalId, newId, cancellationToken))
+                                PlaceNewRow(_userManager, userInternalId, newId, settingsDict.TryGetValue("_position", out var _pos) ? _pos : "", cancellationToken);
                         }
 
                         _hsSectionDone:
@@ -4048,12 +4073,16 @@ namespace HomeScreenCompanion
                 Plugin.Instance.SaveConfiguration();
         }
 
-        // Where a scheduled home row was when it was removed, per group and user (plugin data file),
-        // so it is put back at that place instead of at the bottom. Shared (static) with show
-        // top-lists, whose rows are removed while "Top lists for TV shows" is off.
+        // Where a home row was when it was removed (its group made inactive, or a collection /
+        // playlist row outside its schedule), per group and user, so it comes back at that place
+        // instead of at the bottom: right below the row that was above it (its section id), else
+        // at the same index. Plugin data files; the index file predates the anchor file.
         private static readonly object _rowPositionsLock = new object();
         private static Dictionary<string, int>? _rowPositions;
+        private static Dictionary<string, string>? _rowAnchors;
         private static string RowPositionsFile => Path.Combine(Plugin.Instance!.DataFolderPath, "home_row_positions.json");
+        private static string RowAnchorsFile => Path.Combine(Plugin.Instance!.DataFolderPath, "home_row_anchors.json");
+        private const string TopAnchor = "^";
 
         private static Dictionary<string, int> RowPositions(IJsonSerializer json)
         {
@@ -4067,15 +4096,28 @@ namespace HomeScreenCompanion
             return _rowPositions ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         }
 
+        private static Dictionary<string, string> RowAnchors(IJsonSerializer json)
+        {
+            if (_rowAnchors != null) return _rowAnchors;
+            try
+            {
+                if (File.Exists(RowAnchorsFile))
+                    _rowAnchors = json.DeserializeFromFile<Dictionary<string, string>>(RowAnchorsFile);
+            }
+            catch { }
+            return _rowAnchors ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         private static void SaveRowPositions(IJsonSerializer json)
         {
             try { json.SerializeToFile(RowPositions(json), RowPositionsFile); } catch { }
+            try { json.SerializeToFile(RowAnchors(json), RowAnchorsFile); } catch { }
         }
 
         private void RememberRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
             => RememberRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
 
-        private void RestoreRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+        private bool RestoreRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
             => RestoreRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
 
         internal static void RememberRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
@@ -4086,39 +4128,105 @@ namespace HomeScreenCompanion
                 var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
                 int index = Array.FindIndex(sections, s => s.Id == sectionId);
                 if (index < 0) return;
+                var key = groupKey + "\u001F" + userId;
                 lock (_rowPositionsLock)
                 {
-                    RowPositions(json)[groupKey + "\u001F" + userId] = index;
+                    RowPositions(json)[key] = index;
+                    RowAnchors(json)[key] = index == 0 ? TopAnchor : sections[index - 1].Id ?? "";
                     SaveRowPositions(json);
                 }
             }
             catch { }
         }
 
-        internal static void ForgetRowPosition(IJsonSerializer json, string groupKey, string userId)
-        {
-            lock (_rowPositionsLock)
-                if (RowPositions(json).Remove(groupKey + "\u001F" + userId)) SaveRowPositions(json);
-        }
-
-        internal static void RestoreRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+        /// <summary>Puts a re-created row back where it was; false when no place was remembered.</summary>
+        internal static bool RestoreRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
         {
             var key = groupKey + "\u001F" + userId;
             int index;
+            string? anchor;
             lock (_rowPositionsLock)
-                if (!RowPositions(json).TryGetValue(key, out index)) return;
+            {
+                if (!RowPositions(json).TryGetValue(key, out index)) return false;
+                RowAnchors(json).TryGetValue(key, out anchor);
+            }
             try
             {
-                var count = (userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>()).Length;
-                if (count > 0 && index < count - 1)
-                    userManager.MoveHomeSections(userInternalId, new[] { sectionId }, index, cancellationToken);
+                var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                var others = sections.Where(s => s.Id != sectionId).ToList();
+                // Below the row that was above it, when that row is still there; else the old index.
+                int target = anchor == TopAnchor ? 0 : index;
+                if (!string.IsNullOrEmpty(anchor) && anchor != TopAnchor)
+                {
+                    int above = others.FindIndex(s => s.Id == anchor);
+                    if (above >= 0) target = above + 1;
+                }
+                MoveRow(userManager, userInternalId, sectionId, target, sections.Length, cancellationToken);
             }
             catch { }
             lock (_rowPositionsLock)
             {
                 RowPositions(json).Remove(key);
+                RowAnchors(json).Remove(key);
                 SaveRowPositions(json);
             }
+            return true;
+        }
+
+        // A home row's identity across users (section ids differ per user): its custom title, else
+        // its type and library. The settings page offers "After <row>" with the same key.
+        internal static string SectionKey(ContentSection s)
+            => !string.IsNullOrWhiteSpace(s.CustomName) ? "name:" + s.CustomName.Trim().ToLowerInvariant()
+                : "type:" + (s.SectionType ?? "").ToLowerInvariant() + "|" + (s.ParentId ?? "");
+
+        // Where a new row goes (HomeSectionSettings "_position"): "" or "bottom" = where Emby puts it
+        // (the bottom), "top", or "after:<SectionKey>" = right below that row (bottom when this
+        // user's home screen does not have it).
+        internal static void PlaceNewRow(IUserManager userManager, long userInternalId, string sectionId, string position, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(position) || position == "bottom") return;
+            try
+            {
+                var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                int target;
+                if (position == "top") target = 0;
+                else if (position.StartsWith("after:", StringComparison.Ordinal))
+                {
+                    var anchor = position.Substring("after:".Length);
+                    int above = sections.Where(s => s.Id != sectionId).ToList().FindIndex(s => SectionKey(s) == anchor);
+                    if (above < 0) return;
+                    target = above + 1;
+                }
+                else return;
+                MoveRow(userManager, userInternalId, sectionId, target, sections.Length, cancellationToken);
+            }
+            catch { }
+        }
+
+        private static void MoveRow(IUserManager userManager, long userInternalId, string sectionId, int target, int count, CancellationToken cancellationToken)
+        {
+            // A new row is already last: nothing to move when the target is the end.
+            if (count > 0 && target < count - 1)
+                userManager.MoveHomeSections(userInternalId, new[] { sectionId }, target, cancellationToken);
+        }
+
+        // The row type a source's home section uses when none is saved.
+        private static string DefaultSectionType(TagConfig tc)
+            => (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
+                : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
+
+        // A home row that shows the source's tag (Dynamic Media), not its collection or playlist.
+        private bool IsTagRow(TagConfig tc)
+        {
+            var st = "";
+            try
+            {
+                var s = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(string.IsNullOrEmpty(tc.HomeSectionSettings) ? "{}" : tc.HomeSectionSettings);
+                if (s != null) s.TryGetValue("SectionType", out st);
+            }
+            catch { }
+            if (string.IsNullOrEmpty(st)) st = DefaultSectionType(tc);
+            return st == "items" && tc.EnableTag && !string.IsNullOrWhiteSpace(tc.Tag);
         }
 
         private void DeleteSectionForUser(long userInternalId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken)
