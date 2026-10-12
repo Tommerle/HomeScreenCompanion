@@ -3226,6 +3226,14 @@ namespace HomeScreenCompanion
             }
         }
 
+        // An empty Custom Title is the pre-filled one: the group's name, else its tag.
+        internal static void FillDefaultCustomName(Dictionary<string, string> settings, TagConfig tc)
+        {
+            if (settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn)) return;
+            var name = !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : tc.Tag;
+            if (!string.IsNullOrWhiteSpace(name)) settings["CustomName"] = name.Trim();
+        }
+
         // A "playlist" home row (SectionType "playlist", any source with Create Playlist) shows the
         // user's own playlist from the source: the playlist's items (no item-type or library filter;
         // ParentId is set per user). The row keeps the source's own Sort By / Sort Order like any other row:
@@ -3235,14 +3243,6 @@ namespace HomeScreenCompanion
         // the show's poster (hometab: ImageType "Primary" → preferSeriesImage; imagehelper then uses
         // SeriesPrimaryImageTag, 2:3), so shows look like the movies next to them. The episode's own
         // image is not touched.
-        // An empty Custom Title is the pre-filled one: the group's name, else its tag.
-        internal static void FillDefaultCustomName(Dictionary<string, string> settings, TagConfig tc)
-        {
-            if (settings.TryGetValue("CustomName", out var cn) && !string.IsNullOrWhiteSpace(cn)) return;
-            var name = !string.IsNullOrWhiteSpace(tc.Name) ? tc.Name : tc.Tag;
-            if (!string.IsNullOrWhiteSpace(name)) settings["CustomName"] = name.Trim();
-        }
-
         internal static void NormalizePlaylistSectionSettings(Dictionary<string, string> settings)
         {
             if (!settings.TryGetValue("SectionType", out var st) || st != "playlist") return;
