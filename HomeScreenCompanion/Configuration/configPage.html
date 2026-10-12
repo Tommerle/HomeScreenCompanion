@@ -1,8 +1,11 @@
-<div id="HomeScreenCompanionConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+<div id="HomeScreenCompanionConfigPage" data-role="page" class="page type-interior pluginConfigurationPage hsc-no-copypaste hsc-no-import hsc-no-ranked"
      data-require="emby-input,emby-button,emby-checkbox,emby-textarea"
      data-controller="__plugin/HomeScreenCompanionJS">
 
     <style>
+        /* API keys are plain text fields shown masked: a type="password" field makes the browser
+           offer to save a password every time the settings are saved. "Show" unmasks them. */
+        .api-key-field:not(.api-key-shown) { -webkit-text-security: disc; text-security: disc; }
         .tag-row {
             background: var(--theme-background-level2);
             margin-bottom: 15px;
@@ -191,6 +194,31 @@
                 border-color: #e57373 !important;
             }
 
+        /* Plugin version: at the right end of the top row; right after Logs on narrow screens. */
+        .hsc-version-chip {
+            order: 10;
+            margin-left: auto;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.78em;
+            white-space: nowrap;
+            color: #52B54B;
+            background: rgba(82, 181, 75, 0.15);
+            border: 1px solid rgba(82, 181, 75, 0.55);
+        }
+        /* The top row is as wide as the tab content (the form is max 900px), so the chip ends
+           at the content's right edge instead of the window's. */
+        .hsc-top-row { max-width: 900px; }
+        /* "Last run" stays on the buttons' line and takes the room left before the version chip;
+           a long status (step, elapsed, waiting runs) is cut with an ellipsis, full text in its tooltip. */
+        #lastRunIndicator { flex: 1 1 0; min-width: 0; }
+        #lastRunIndicator > span:not(#lastRunStatusLabel) { flex-shrink: 0; }
+        #lastRunStatusLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hsc-version-chip a { color: inherit; text-decoration: none; }
+        @media (max-width: 700px) {
+            .hsc-version-chip { order: 0; margin-left: 0; }
+        }
+
         .btn-help-trigger {
             background: rgba(82, 181, 75, 0.15) !important;
             border-color: rgba(82, 181, 75, 0.55) !important;
@@ -271,6 +299,25 @@
             text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
+        /* Close (X) at the right of a popup header: does what the popup's own Close/Cancel button does */
+        .modal-header-close {
+            margin-left: auto;
+            flex-shrink: 0;
+            background: transparent;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            line-height: 1;
+            opacity: 0.85;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-header-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .modal-header-close .md-icon { font-size: 1.6em; }
+
         .modal-body-scroll {
             padding: 30px;
             max-height: 70vh;
@@ -315,6 +362,68 @@
         .stm-footer { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12)); font-size: 0.82em; color: var(--plugin-popup-muted, #aaa); }
         .stm-footer button { margin-left: auto; cursor: pointer; border: none; background: #52B54B; color: #fff; border-radius: 4px; padding: 8px 20px; font-size: 1.1em; }
         @keyframes stmIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        /* Customise popup (generated art) */
+        .artc-wrap { display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
+        .artc-previewcol { flex:0 0 auto; width:300px; max-width:100%; position:sticky; top:0; }
+        .artc-preview { position:relative; border-radius:6px; overflow:hidden; background:rgba(128,128,128,0.15); }
+        .artc-preview.artc-poster { width:200px; height:300px; }
+        .artc-preview.artc-bg { width:300px; height:169px; }
+        .artc-preview.artc-card43 { width:300px; height:225px; }
+        .artc-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+        .artc-busy { position:absolute; left:6px; bottom:6px; font-size:0.75em; padding:2px 8px; border-radius:10px; background:rgba(0,0,0,0.6); color:#fff; }
+        .artc-fieldscol { flex:1 1 380px; min-width:0; }
+        .artc-section { font-weight:bold; font-size:0.95em; margin:14px 0 6px; opacity:0.85; }
+        .artc-section:first-child { margin-top:0; }
+        .artc-field { margin-bottom:10px; }
+        .artc-label { font-size:0.85em; opacity:0.75; margin-bottom:4px; }
+        .artc-hint { font-size:0.78em; opacity:0.6; margin-top:3px; font-style:italic; }
+        .artc-seg { display:inline-flex; flex-wrap:nowrap; max-width:100%; gap:0; border:1px solid rgba(128,128,128,0.35); border-radius:4px; overflow:hidden; vertical-align:top; }
+        .artc-segbtn { white-space:nowrap; }
+        /* Longer option lists: an even grid of equal-width buttons, each with its own border (wraps cleanly). */
+        .artc-seg.artc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:5px; border:none; border-radius:0; overflow:visible; width:100%; }
+        .artc-seg.artc-grid .artc-segbtn { border:1px solid rgba(128,128,128,0.35); border-radius:4px; padding:6px 8px; }
+        .artc-segbtn { cursor:pointer; background:transparent; border:none; border-right:1px solid rgba(128,128,128,0.35); color:inherit; padding:5px 12px; font-size:0.85em; }
+        .artc-segbtn:last-child { border-right:none; }
+        .artc-segcustom { display:inline-flex; align-items:center; gap:6px; margin-left:8px; vertical-align:top; font-size:0.85em; }
+        .artc-custom { width:64px; padding:4px 6px; font-size:inherit; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid rgba(128,128,128,0.35); border-radius:4px; }
+        .artc-custom.artc-on { border-color:#52B54B; box-shadow:0 0 0 1px #52B54B inset; }
+        .artc-segbtn.artc-on { background:#52B54B; color:#fff; }
+        .artc-fonts { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px; }
+        .artc-fontgroup { grid-column:1 / -1; font-size:0.72em; text-transform:uppercase; letter-spacing:1px; opacity:0.7; margin-top:6px; }
+        .artc-fontgroup:first-child { margin-top:0; }
+        .artc-font { position:relative; cursor:pointer; background:#26262b; border:2px solid rgba(128,128,128,0.35); border-radius:5px; padding:4px 6px; min-height:40px; color:#fff; display:flex; align-items:center; justify-content:center; }
+        .artc-font img { width:100%; height:auto; display:block; }
+        /* Selected font: the tile keeps its look (sample readable) with a thick green border and a green check. */
+        .artc-font.artc-on { border-color:#52B54B; box-shadow:0 0 0 2px #52B54B; }
+        .artc-font.artc-on::after { content:'\2713'; position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#52B54B; color:#fff; font-size:13px; font-weight:bold; line-height:20px; text-align:center; box-shadow:0 0 0 2px #fff; z-index:1; }
+        .artc-fontname { font-size:0.85em; }
+        /* Badge shape tiles: the preview's drawing with that shape (rank 7, the current settings), its name underneath. */
+        .artc-shapes { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px; }
+        .artc-shape { cursor:pointer; background:transparent; border:2px solid rgba(128,128,128,0.35); border-radius:6px; padding:4px; color:inherit; display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+        .artc-shape img, .artc-shape-noimg { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; border-radius:3px; background:rgba(128,128,128,0.2); }
+        .artc-shapes.artc-shapes-land { grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); }
+        .artc-shapes.artc-shapes-land .artc-shape img { aspect-ratio:16/9; }
+        .artc-shape-name { font-size:0.75em; line-height:1.2; text-align:center; min-height:2.4em; display:flex; align-items:center; justify-content:center; }
+        .artc-shape.artc-on { border-color:#52B54B; box-shadow:0 0 0 1px #52B54B; }
+        .artc-shape.artc-on .artc-shape-name { color:#52B54B; font-weight:600; }
+        /* Badge position: a mini poster with a dot at each valid spot. */
+        .artc-posrow { display:flex; align-items:center; gap:12px; }
+        .artc-posposter { position:relative; width:60px; height:90px; border:2px solid rgba(128,128,128,0.55); border-radius:4px; background:rgba(128,128,128,0.12); flex:0 0 auto; }
+        .artc-posdot { position:absolute; cursor:pointer; width:22px; height:22px; margin:0; padding:0; border:none; background:transparent; display:flex; align-items:center; justify-content:center; }
+        .artc-posdot span { width:10px; height:10px; border-radius:50%; background:rgba(128,128,128,0.7); }
+        .artc-posdot.artc-on span { background:#52B54B; width:14px; height:14px; }
+        .artc-pos-tl { left:2px; top:2px; } .artc-pos-tr { right:2px; top:2px; } .artc-pos-bl { left:2px; bottom:2px; } .artc-pos-br { right:2px; bottom:2px; } .artc-pos-bc { left:calc(50% - 11px); bottom:2px; }
+        .artc-posname { font-size:0.85em; opacity:0.85; }
+        .artc-pos { display:grid; grid-template-columns:repeat(3, 26px); gap:4px; padding:6px; border:1px solid rgba(128,128,128,0.35); border-radius:4px; width:max-content; }
+        .artc-dot { cursor:pointer; width:26px; height:20px; background:transparent; border:none; display:flex; align-items:center; justify-content:center; padding:0; }
+        .artc-dot span { width:9px; height:9px; border-radius:50%; background:rgba(128,128,128,0.55); }
+        .artc-dot.artc-on span { background:#52B54B; width:13px; height:13px; }
+        .artc-colours { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+        .artc-swatch { cursor:pointer; width:24px; height:24px; border-radius:50%; border:2px solid rgba(128,128,128,0.5); padding:0; }
+        .artc-swatch.artc-on { border-color:#52B54B; box-shadow:0 0 0 2px #52B54B; }
+        .artc-hex { width:82px; padding:4px 6px; font-family:monospace; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2)); border-radius:3px; }
+        .artc-darken { width:100%; max-width:320px; }
+        @media (max-width: 640px) { .artc-previewcol { position:static; } }
 
         /* Live execution log */
         #logContent { line-height: 1.5; }
@@ -986,15 +1095,20 @@
             font-size: 0.9em;
         }
 
-        .verticalSection {
+        #HomeScreenCompanionConfigPage .verticalSection {
             padding-bottom: 60px;
         }
 
+        /* Settings > Features: buttons that are off are hidden (the class is set from the saved settings). */
+        .hsc-no-copypaste .btnCopySourceRow, .hsc-no-copypaste #btnPasteSource,
+        .hsc-no-copypaste .btnCopyTopList, .hsc-no-copypaste #btnPasteTopList,
+        .hsc-no-import #btnImportCollection { display: none !important; }
+        .hsc-no-ranked .ranked-only { display: none !important; }
     </style>
 
     <div class="content-primary">
         <div class="verticalSection">
-            <div style="display:flex; align-items:center; margin-bottom: 10px; gap: 10px;">
+            <div class="hsc-top-row" style="display:flex; align-items:center; flex-wrap:wrap; margin-bottom: 10px; gap: 10px;">
 
                 <button type="button" is="emby-button" class="btn-help-trigger" id="btnOpenHelp" title="Open Setup Guide">
                     <i class="md-icon">help</i>
@@ -1010,6 +1124,8 @@
                     <i class="md-icon">terminal</i>
                     <span>Logs</span>
                 </button>
+
+                <span class="hsc-version-chip" title="Installed version" style="display:none;"></span>
 
                 <div id="lastRunIndicator" style="display: flex; align-items: center; margin-left: 10px; padding-left: 15px; border-left: 1px solid var(--line-color);">
                     <span style="font-size: 0.85em; opacity: 0.5; margin-right: 8px;">Last run:</span>
@@ -1058,7 +1174,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtTraktClientId" label="Trakt Client ID" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtTraktClientId" label="Trakt Client ID" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtTraktClientId" style="margin:0;" /> Show
                                     </label>
@@ -1078,7 +1194,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtMdblistApiKey" label="MDBList API Key" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtMdblistApiKey" label="MDBList API Key" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtMdblistApiKey" style="margin:0;" /> Show
                                     </label>
@@ -1098,7 +1214,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtTmdbApiKey" label="TMDb API Read Access Token" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtTmdbApiKey" label="TMDb API Read Access Token" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtTmdbApiKey" style="margin:0;" /> Show
                                     </label>
@@ -1131,7 +1247,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtGeminiApiKey" label="API Key" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtGeminiApiKey" label="API Key" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtGeminiApiKey" style="margin:0;" /> Show
                                     </label>
@@ -1157,7 +1273,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtOpenAiApiKey" label="API Key" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtOpenAiApiKey" label="API Key" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtOpenAiApiKey" style="margin:0;" /> Show
                                     </label>
@@ -1183,7 +1299,7 @@
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
                                 <div class="inputContainer">
-                                    <input is="emby-input" type="password" id="txtClaudeApiKey" label="API Key" />
+                                    <input is="emby-input" type="text" class="api-key-field" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore id="txtClaudeApiKey" label="API Key" />
                                     <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.85em; opacity:0.75; margin-top:4px; cursor:pointer;">
                                         <input type="checkbox" class="chkShowApiKey" data-target="txtClaudeApiKey" style="margin:0;" /> Show
                                     </label>
@@ -1302,6 +1418,45 @@
                             </label>
                             <div class="fieldDescription">Adds each top-list movie to the same collections as the original, so "Included in &lt;collection&gt;" also shows when a movie is opened from a top-list. Note: depending on the sort order, a collection may then show the top-list version with its rank-badge poster.</div>
                         </div>
+
+
+                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 24px; margin-bottom: 8px;">Features</div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkShowCopyPasteButtons" />
+                                <span>Copy &amp; paste sources</span>
+                            </label>
+                            <div class="fieldDescription">Shows Copy on source and top-list cards and the Paste source and Paste top-list buttons, to move them to another server.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkShowImportCollectionButton" />
+                                <span>Import collection</span>
+                            </label>
+                            <div class="fieldDescription">Shows the Import collection button, to let HSC take over collections that already exist in Emby.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkRankedCollectionsEnabled" />
+                                <span>Ranked collections — movies only (experimental)</span>
+                            </label>
+                            <div class="fieldDescription">Shows "Keep the list order" on the Collection tab of every source.</div>
+                            <div class="ranked-collections-warning" style="display:flex; align-items:flex-start; gap:8px; background:rgba(232,168,56,0.1); border:1px solid rgba(232,168,56,0.35); border-radius:4px; padding:10px 12px; font-size:0.85em; line-height:1.5; margin-top:8px;">
+                                <i class="md-icon" style="font-size:1.1em; color:#e8a838; flex-shrink:0; margin-top:1px;">warning</i>
+                                <span><strong>Experimental — adds a hidden library per ranked collection.</strong> For every collection with <em>Keep the list order</em> ticked, HSC creates a hidden library ("&lt;collection&gt; (ranked)") of small .strm copies of the movies, merges each copy with the real film as an extra version, and fills the collection with the copies so it opens in list order. Unticking removes the copies and the library.</span>
+                            </div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkHideTopListLibraries" />
+                                <span>Hide HSC libraries</span>
+                            </label>
+                            <div class="fieldDescription">Keeps the libraries HSC creates — those of movie top-lists and of ranked collections ("Keep the list order") — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -1325,8 +1480,14 @@
                 <form class="HomeScreenCompanionForm" id="homeScreenCompanionForm" style="max-width:900px;">
 
                 <div class="sectionTitleContainer flex align-items-center" style="margin-bottom: 1em; margin-top: 2em;">
-                    <h2 class="sectionTitle" style="margin-bottom:0;">Sources</h2>
-                    <button is="emby-button" type="button" id="btnAddTag" class="raised button-submit mb025" style="margin-left: auto;">
+                    <h2 class="sectionTitle" style="margin-bottom:0; margin-right:auto;">Sources</h2>
+                    <button is="emby-button" type="button" id="btnImportCollection" class="raised btn-neutral mb025" style="margin-right: 8px;" title="Let HSC take over collections that already exist in Emby (made by another plugin or by hand)">
+                        <i class="md-icon" style="margin-right:5px;">library_add</i><span>Import collection</span>
+                    </button>
+                    <button is="emby-button" type="button" id="btnPasteSource" class="raised btn-neutral mb025" style="margin-right: 8px;" title="Add a source copied with Copy on a source card (this or another server)">
+                        <i class="md-icon" style="margin-right:5px;">content_paste</i><span>Paste source</span>
+                    </button>
+                    <button is="emby-button" type="button" id="btnAddTag" class="raised button-submit mb025">
                         <span>+ Add New Source</span>
                     </button>
                 </div>
@@ -1364,7 +1525,7 @@
             </div>
 
             <div class="floating-actions">
-                <button is="emby-button" type="submit" form="homeScreenCompanionForm" class="raised button-submit fab-btn btn-save">
+                <button is="emby-button" type="submit" class="raised button-submit fab-btn btn-save">
                     <i class="md-icon" style="margin-right:5px;">save</i><span>Save Settings</span>
                 </button>
                 <div class="run-speed-dial" id="runSpeedDial">
@@ -1414,6 +1575,7 @@
                     <h2 class="modal-header-title">Report a Bug</h2>
                     <span style="opacity:0.9;font-size:0.9em;">Help us improve Home Screen Companion</span>
                 </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseBugReport" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll" style="padding:24px;">
 
@@ -1473,6 +1635,7 @@
                     <span style="color:#ef6e6e;">✖ error</span>
                     <span style="color:#9aa4b0;">– skipped</span>
                 </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseLogs" aria-label="Close" title="Close" style="margin-left:14px;"><i class="md-icon">close</i></button>
             </div>
             <div class="log-tabs" id="logTabs">
                 <button type="button" class="log-tab" data-log="sync"><span class="status-dot"></span>Sync<span class="log-tab-time"></span></button>
@@ -1495,6 +1658,7 @@
                     <h2 class="modal-header-title">Home Screen Companion — Setup Guide</h2>
                     <span style="opacity:0.9; font-size:0.9em;">All features at a glance</span>
                 </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll">
 
@@ -1508,15 +1672,16 @@
                 <nav style="background:rgba(128,128,128,0.06);border:1px solid var(--line-color);border-radius:6px;padding:10px 16px;margin-bottom:20px;">
                     <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin-bottom:8px;">Contents</div>
                     <ol style="margin:0;padding:0 0 0 18px;column-count:2;column-gap:28px;">
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-1').scrollIntoView({behavior:'smooth'});return false;">Quick Start</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-2').scrollIntoView({behavior:'smooth'});return false;">Source Types</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-3').scrollIntoView({behavior:'smooth'});return false;">Source Settings</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-4').scrollIntoView({behavior:'smooth'});return false;">Tags &amp; Collections</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-5').scrollIntoView({behavior:'smooth'});return false;">Scheduling</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-6').scrollIntoView({behavior:'smooth'});return false;">MediaInfo Filters</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-7').scrollIntoView({behavior:'smooth'});return false;">Home Screen</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-7b').scrollIntoView({behavior:'smooth'});return false;">Top-List</a></li>
-                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="document.getElementById('help-sec-8').scrollIntoView({behavior:'smooth'});return false;">Settings &amp; Utilities</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-1').scrollIntoView({behavior:'smooth'});return false;">Quick Start</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2').scrollIntoView({behavior:'smooth'});return false;">Source Types</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2b').scrollIntoView({behavior:'smooth'});return false;">Your Next Watch</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-3').scrollIntoView({behavior:'smooth'});return false;">Source Settings</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-4').scrollIntoView({behavior:'smooth'});return false;">Tags &amp; Collections</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-5').scrollIntoView({behavior:'smooth'});return false;">Scheduling</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-6').scrollIntoView({behavior:'smooth'});return false;">MediaInfo Filters</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-7').scrollIntoView({behavior:'smooth'});return false;">Home Screen</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-7b').scrollIntoView({behavior:'smooth'});return false;">Top-List</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-8').scrollIntoView({behavior:'smooth'});return false;">Settings &amp; Utilities</a></li>
                     </ol>
                 </nav>
 
@@ -1553,7 +1718,7 @@
                 </div>
                 <div class="help-step">
                     <div class="step-num">2</div>
-                    <div class="step-text"><strong>Add a Source</strong> — open the <strong>Tag &amp; Collection</strong> tab and click <strong>+ Add New Source</strong>. A source is simply the place the plugin fetches its movie list from.</div>
+                    <div class="step-text"><strong>Add a Source</strong> — open the <strong>Tag &amp; Collection</strong> tab and click <strong>+ Add New Source</strong>. A source is simply the place the plugin fetches its movie list from. Already set one up on another server? Use <strong>Copy</strong> on its card there and <strong>Paste source</strong> here.</div>
                 </div>
                 <div class="help-step">
                     <div class="step-num">3</div>
@@ -1571,6 +1736,8 @@
                     <div class="step-num">4</div>
                     <div class="step-text"><strong>Save &amp; Run</strong> — click <strong>Save Settings</strong> at the bottom of the page, then click the <strong>Run</strong> button at the bottom and choose <em>Full sync</em>. The plugin will now fetch the lists, match movies in your library, and apply the tags. Done!</div>
                 </div>
+                <p style="margin:10px 0 0; opacity:0.85;">Left the page without saving? When you come back, your unsaved changes and open sources are put back and a bar at the top says <em>Unsaved changes restored</em> — click <strong>Save Settings</strong> to keep them or <strong>Discard</strong> to go back to the saved settings. If the bar warns that settings changed on the server meanwhile, Save will not overwrite them (see below).</p>
+                <p style="margin:10px 0 0; opacity:0.85;"><strong>Changed elsewhere?</strong> If the settings were changed since you opened the page (another tab, another admin, or a run), <strong>Save Settings</strong> saves nothing and asks you to <em>Reload page</em> (shows the current settings, your unsaved edits here are dropped) or <em>Cancel</em> (keep editing) — so nobody's changes are silently overwritten. A run that only updated its own bookkeeping (tracked home rows, playlist links) does not count.</p>
 
                 <!-- 2. SOURCE TYPES -->
                 <div id="help-sec-2" class="help-section">
@@ -1581,27 +1748,106 @@
                 <div class="src-cards">
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">public</i> External</div>
-                        Paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong>, or <strong>TMDb</strong>. The plugin downloads the list and tags every matching title it finds in your library. You can add multiple URLs to the same source — they are combined into one list.
-                        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(128,128,128,0.3);font-size:0.92em;">
-                            <strong>TMDb</strong> can be used in two ways:
-                            <ul style="margin:4px 0 0;padding-left:16px;line-height:1.8;">
-                                <li><em>Your own lists</em> — paste the URL to any public or private list you have created on themoviedb.org.</li>
-                                <li><em>API endpoints</em> — paste a direct TMDb API URL (e.g. popular movies, top-rated, now-playing, or a specific collection). Requires a <strong>TMDb API Read Access Token</strong> in the Settings tab.</li>
-                            </ul>
-                        </div>
+                        Paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong> or <strong>TMDb</strong>; the plugin downloads the list and tags every matching title it finds in your library. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-external').scrollIntoView({behavior:'smooth'});return false;">More about External below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">video_library</i> Local</div>
-                        Use an existing <strong>playlist</strong> or <strong>collection</strong> already in Emby as the source. Every item in that list gets the configured tag. You can also use this to show a collection as a home screen row — see <em>Home Section — Collections mode</em> below.
+                        Use an existing <strong>playlist</strong> or <strong>collection</strong> already in Emby as the source. Every item in that list gets the configured tag. You can also use this to show a collection as a home screen row — see <em>Home Section — Collections mode</em> below. <em>Preview</em> lists the titles that would get the tag.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> MediaInfo</div>
-                        Build a list based on the properties of your own files — for example "all 4K HDR movies" or "Action films I haven't watched yet". Filter by video quality, audio format, genre, actors, ratings, and more.
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">format_list_numbered</i> Manual List</div>
+                        Pick <strong>movies and shows</strong> by hand, right inside the plugin. Search to add a title, use <strong>▲ ▼</strong> to set the order and <strong>✕</strong> to remove it. Top-lists made from the tag follow your order. An Emby collection still shows Emby's own sort order. Titles deleted from the library are skipped. <em>Preview</em> lists the titles that would get the tag, in your order.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> MediaInfo (Smart Playlist)</div>
+                        Build a list from the properties of your own files, e.g. "all 4K HDR movies" — including <strong>Popular on this server</strong>: most-watched titles by number of viewers. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-mediainfo').scrollIntoView({behavior:'smooth'});return false;">More about MediaInfo below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">auto_awesome</i> AI created lists</div>
-                        Describe what you want in plain language — for example <em>"Best sci-fi films from the 90s"</em> — and let <strong>OpenAI</strong> or <strong>Google Gemini</strong> generate the list. You can also have the AI take into account what a specific user has watched recently, to personalise the suggestions. Requires an API key in Settings.
+                        Describe what you want in plain language — for example <em>"Best sci-fi films from the 90s"</em> — and let <strong>OpenAI</strong> or <strong>Google Gemini</strong> generate the list. You can also have the AI take into account what a specific user has watched recently, to personalise the suggestions. Requires an API key in Settings. <em>Preview</em> asks the AI once and shows which of its titles are in your library and which are not; <em>Test AI Source</em> just shows the raw answer.
                     </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">recommend</i> Personal: Your Next Watch</div>
+                        Personal recommendations, worked out on your server (no AI, no internet): every ticked user gets their own playlist of unwatched titles most like what they have been watching, refreshed on every sync. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2b').scrollIntoView({behavior:'smooth'});return false;"><em>Your Next Watch</em> below</a> for how it picks and how to set it up.
+                    </div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about the source types</div>
+                <div id="help-more-external" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">public</i>
+                    <div><strong>External</strong> — paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong> or <strong>TMDb</strong>. The plugin downloads the list and tags every matching title it finds in your library.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>You can add several URLs to the same source; they are combined into one list.</li>
+                            <li><strong>TMDb</strong>, two ways: <em>your own lists</em> — paste the URL of any public or private list you made on themoviedb.org; or <em>API endpoints</em> — paste a direct TMDb API URL (e.g. popular movies, top-rated, now-playing, or a specific collection), which needs a <strong>TMDb API Read Access Token</strong> in the Settings tab.</li>
+                            <li><em>Preview</em> shows which titles on the list are in your library and which are not.</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-mediainfo" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tune</i>
+                    <div><strong>MediaInfo (Smart Playlist)</strong> — build a list from the properties of your own files, for example "all 4K HDR movies" or "Action films I haven't watched yet".
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Filter by video quality, audio format, genre, actors, ratings and more (see <em>MediaInfo Filters</em> below).</li>
+                            <li><strong>Popular on this server</strong> — most-watched titles by number of viewers: add the rule <em>Popular on this server (viewers)</em> (under <em>Activity</em>) to list what most people on your server watched, most viewed first.</li>
+                            <li><em>Preview</em> (next to <em>Max items</em>) lists what matches right now.</li>
+                        </ul></div>
+                </div>
+                <!-- 2b. YOUR NEXT WATCH -->
+                <div id="help-sec-2b" class="help-section">
+                    <i class="md-icon help-section-icon">recommend</i>
+                    <span>Your Next Watch</span>
+                </div>
+                <div class="step-text" style="margin-bottom:10px; font-size:0.92em;">The <strong>Personal: Your Next Watch</strong> source makes a <strong>private playlist for each user</strong> with the unwatched movies and shows most like what that user has been watching. It is all worked out on your server — no AI, no internet — and refreshed on every sync.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">person</i>
+                    <div><strong>One playlist per user</strong> — On the source's <em>Playlist</em> tab keep <em>Create Playlist</em> on (it starts on for this type) and tick the <strong>Target Users</strong> (<em>Select all</em> ticks everyone). Each ticked user gets <strong>their own</strong> playlist with their own picks, best first, named after the <em>Playlist Name</em> (or the Display Name when empty). Untick a user and their playlist is removed on the next sync. Older setups kept the users on the Home Screen tab; they are copied to the Playlist tab automatically, once (after that the Playlist tab's users stay as you set them, also when you clear them all).</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">history</i>
+                    <div><strong>What it learns from (taste)</strong> — for each user:
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>the titles they finished in the <strong>last 90 days</strong> — or, when that is fewer than 30, their <strong>last 50</strong> finished titles; a show counts once they watched an episode;</li>
+                            <li>their <strong>favourites</strong> and titles they <strong>rated 7 or higher</strong> (watched at any time);</li>
+                            <li>recent titles count a little more than older ones; titles they rated low (below 5) are left out.</li>
+                        </ul>
+                        Watched = marked played in Emby (past 90% or <em>Mark played</em>); started or stopped plays don't count.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">filter_alt</i>
+                    <div><strong>What it can pick</strong> — movies and shows the user can open (their library access and parental rating apply), that they have <strong>not watched or started</strong>, one per film (a second version of the same film is never picked). Blacklisted titles and the source's own filters (for example <em>Media Type</em> to keep it to movies or shows) apply too.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">join_inner</i>
+                    <div><strong>How a title scores</strong> — what it has in common with the user's taste:
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>Genres</strong> — weighted by how much more the user watches a genre than the library carries it (capped), so a few stray episodes of a rare genre don't take over;</li>
+                            <li><strong>People</strong> — the top-billed actors, directors and writers;</li>
+                            <li><strong>Studios</strong> and <strong>tags</strong> (tags made by HSC sources and top-lists are ignored);</li>
+                            <li>rare people, studios and tags count more than common ones;</li>
+                            <li>a <strong>similar year</strong>, a good <strong>community rating</strong>, and a <strong>"people like you"</strong> bonus for titles watched by the users who watched the most of the same titles.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">link</i>
+                    <div><strong>Strong matches win</strong> — each title is also compared with the one watched title it has most in common with. Several kinds of match (for example genres <em>and</em> actors <em>and</em> studio or keywords) beat a single one — one shared actor or one broad genre is not enough for the top 10. Another film of a franchise (TMDb collection) the user is watching always counts as a strong match.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>How the list is built</strong> — best first, with limits so it stays varied: a few titles per franchise and per main genre, and a movie/show mix that follows what the user watches. Unwatched favourites are included as titles the user wants to watch, but at most <strong>3 in the top 10</strong> and about <strong>30%</strong> of the list, spread through it. <strong>Max items</strong> (default 50) sets the length.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">fiber_new</i>
+                    <div><strong>New users (little history)</strong> — a user with fewer than 3 titles to learn from gets the server's <strong>most watched titles of all time</strong> that they have not seen — a different mix of the top titles for each user, changing daily, so new users don't all get the same list.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">home</i>
+                    <div><strong>Show it on the home screen</strong> — turn on the <em>Home Screen</em> tab, tick the users who get the row and choose Section Type <em>This source's playlist (each user's own)</em>: each of them sees their own playlist (a user needs a playlist, so tick them on the Playlist tab too). <em>Copy &amp; Sync</em> copies the row to each target user pointing at <strong>their own</strong> playlist; users without one don't get the row. A show goes into the playlist as its first episode, because Emby playlists hold episodes, not whole shows; on the row its card still shows the show's poster (<em>Image Type</em> <em>Primary</em>; choose <em>Thumb</em> for the landscape image). <em>Sort By</em> <em>(Default)</em> keeps the playlist order, best match first; <em>Random</em> shuffles the row every time the home screen loads, so it shows a different 10 of the 50 each time (the playlist itself keeps its order).</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">sync</i>
+                    <div><strong>Refreshed every run</strong> — the lists are worked out again on every sync (and by <em>Run Group</em>), so they follow what each user watched since.</div>
+                </div>
+                <div class="help-feature-row" style="margin-bottom:0;">
+                    <i class="md-icon help-feat-icon">tab</i>
+                    <div><strong>Its other tabs</strong> — it has the same tabs as every other source. <em>Preview</em> lets you pick a user and shows their list with the reason for each title. <em>Apply Tag</em> and <em>Create Collection</em> start off for this type and work when turned on, but a tag or collection is shared by everyone: it gets the titles picked for the most users, not each user's own picks (a warning shows when you turn one on). The <em>Playlist</em> tab's <strong>Playlist look</strong> gives every user's playlist the same poster, background and description instead of Emby's automatic collage of four posters; a generated style is drawn from the titles picked for the most users, and an empty description gives <em>"Picked just for you from what you've been watching — fresh recommendations every day."</em></div>
                 </div>
 
                 <!-- 3. SOURCE SETTINGS -->
@@ -1613,22 +1859,63 @@
                     <i class="md-icon help-feat-icon">toggle_on</i>
                     <div><strong>Active toggle</strong> — The checkbox at the top of each source card turns it on or off without deleting it. When turned off, the source is skipped during sync and its tag and collection are automatically removed from all items. Handy for temporarily pausing a source (e.g. a seasonal list).</div>
                 </div>
-                <div class="help-feature-row" style="margin-bottom:12px;">
+                <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">badge</i>
                     <div><strong>Display Name</strong> — A label for your own reference, shown in the source header. This is separate from the tag name — you can call it anything you like.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">content_copy</i>
+                    <div><strong>Duplicate</strong> — Makes a copy of the source. The copy gets its own name, tag, collection and playlist names, ending in <em>(copy)</em>, so it never changes the original's items.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">share</i>
+                    <div><strong>Copy</strong> — Puts the source on the clipboard as text, exactly as the card shows it (unsaved changes included), so you can paste it on another server (for example from one Emby server to the other). Users, libraries and Manual List titles are copied with their names and IMDb/TMDb/TVDb ids, and an uploaded poster or background goes along with it (up to 5 MB per image). Tracked home sections, playlist links and run history are not copied, and neither is a top-list that uses the source's tag — copy that one with <strong>Copy</strong> on the top-list in the <strong>Top Lists</strong> tab. If the browser blocks the clipboard, the text is shown to copy by hand.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">library_add</i>
+                    <div><strong>Import collection</strong> — next to <strong>Paste source</strong>: lets HSC take over collections that already exist in Emby (made by another plugin or by hand).
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>The popup lists every collection with a tick box (and a search box when the list is long); tick one or several and click <em>Import</em>. With a long list you can also sort by name or item count and show only collections of a certain size; ticks stay when a collection is hidden.</li>
+                            <li>Each becomes a <strong>Manual List</strong> source, added as a new card at the top, not saved yet — check it and click <strong>Save</strong>.</li>
+                            <li>It keeps the <strong>same collection</strong>, not a copy, so links, home rows and favourites keep working: the name, sort title and description stay as they are, the collection's current titles fill the Manual List, and the poster and background are set to <em>Keep current image</em>.</li>
+                            <li>Nothing changes until the next sync, and nothing is deleted.</li>
+                            <li>Cannot be ticked: collections a source already makes, and collections whose name another collection also has (HSC finds its collection by name — rename one in Emby first).</li>
+                            <li>As on every HSC collection a film appears once: extra versions of a film leave the collection on the next sync, and so do items a Manual List cannot hold (episodes, seasons); the popup lists them after the import.</li>
+                            <li>If another plugin or tool also updates the collection, switch that off there first, otherwise the two keep changing it.</li>
+                            <li>An imported collection is never deleted by HSC: if you delete the source or switch it off, the collection stays in Emby and HSC simply stops changing it.</li>
+                            <li>An imported source shows an <strong>Imported</strong> chip in its card header; a copy of it does not (the copy makes its own collection). Changing its <em>Source Type</em> makes it an ordinary source: the chip goes (saved with Save); editing its titles does not.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">content_paste</i>
+                    <div><strong>Paste source</strong> — Next to <strong>+ Add New Source</strong>. On https or localhost one click pastes straight from the clipboard (the browser may ask permission first); otherwise paste the copied text into the box and click <em>Add source</em>. Either way it becomes a new card at the top, not saved yet — check it and click <strong>Save</strong>. Users and libraries are matched by name, Manual List titles by IMDb/TMDb/TVDb id (then name and year), and the images are uploaded to this server. Anything this server does not have (a user, a library, a title, a local collection or playlist) is left out and listed when the source is added. If a source with the same name or tag already exists, the new one gets <em>(copy)</em> names, like <strong>Duplicate</strong>.</div>
+                </div>
+                <div class="src-cards" style="grid-template-columns: repeat(2, 1fr); margin-bottom:10px;">
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">play_arrow</i> Run Group</div>
+                        Syncs just this source. If you have unsaved changes, it first asks <em>You have unsaved changes. Save and run?</em> — choose OK to save them and run the group, or Cancel to do neither. If you renamed the tag, the run also removes the old tag from your items. A source saved without a URL yet (or with no collection or playlist picked) is skipped by Run Group and the full sync: its tags, collection, playlist and home row stay as they are. Clicked while another sync is busy, Run Group says <em>Queued</em> and starts as soon as that sync has finished.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">delete</i> Remove Group</div>
+                        Asks <em>Delete "&lt;name&gt;"?</em> with the source's name; the source goes when you click Save.
+                    </div>
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">input</i> Source tab</div>
-                        Choose the source type and add URLs or local sources. Set the <strong>Max items</strong> limit to cap how many items are fetched (0 = no limit).
+                        Choose the source type and add URLs, local sources, or hand-picked titles. Set the <strong>Max items</strong> limit to cap how many items are fetched (0 = no limit). When the last run found fewer titles than <strong>Max items</strong>, the card header shows an amber chip such as <strong>9 of 10</strong>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">label</i> Tag tab</div>
-                        Enable or disable tagging and set the <strong>Tag Name</strong> — the invisible label applied to each matched item in Emby.
+                        Tick <em>Apply Tag</em> to put an invisible label (the <strong>Tag Name</strong>) on every matched item. Renamed and deleted tags are cleaned up, and the tag's page can get its own art. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-tagtab').scrollIntoView({behavior:'smooth'});return false;">More about the Tag tab below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">collections_bookmark</i> Collection tab</div>
-                        Optionally group the matched items into an Emby collection with a custom name, description, and poster image. Enable <em>Only Collection</em> to skip tagging and only maintain the collection.
+                        Optionally group the matched items into an Emby collection with a custom name, description, poster and background. Upload your own art or let the plugin draw it in a style you pick. Enable <em>Only Collection</em> to skip tagging and only maintain the collection.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">queue_music</i> Playlist tab</div>
+                        Keep an Emby playlist of the matched items, in the source's order, for each user you tick — with an optional shared poster, background and description (<strong>Playlist look</strong>). <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-playlisttab').scrollIntoView({behavior:'smooth'});return false;">More about the Playlist tab below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">calendar_month</i> Schedule tab</div>
@@ -1640,8 +1927,41 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tv</i> Home Screen tab</div>
-                        Make this source automatically show up as a row on the home screen for specific users, updated every time sync runs. Choose <em>Media Type: Collections</em> to show a collection row instead of individual items.
+                        Show this source as a home screen row for the users you tick — a collection, a tag row or each user's own playlist — updated on every sync. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-hometab').scrollIntoView({behavior:'smooth'});return false;">More about the Home Screen tab below</a>.
                     </div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about the source tabs</div>
+                <div id="help-more-tagtab" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">label</i>
+                    <div><strong>Tag tab</strong> — tick <em>Apply Tag</em> to tag the matched items.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>The <strong>Tag Name</strong> field then shows under it (like <em>Collection Name</em> under <em>Create Collection</em>): the invisible label put on each matched item in Emby. Leave it empty to use the Display Name.</li>
+                            <li>Rename the tag and the old tag is removed from your items the next time the group runs.</li>
+                            <li>A deleted group's tag is removed on the next sync (or the next <em>Run Group</em> of any source). That cleanup runs once: after it, HSC leaves the old tag alone, so you can add it to items by hand.</li>
+                            <li>Optionally give the tag's own page a poster and background drawn in a style you pick (the same styles as a collection).</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-playlisttab" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">queue_music</i>
+                    <div><strong>Playlist tab</strong> — enable <em>Create Playlist</em> to keep an Emby playlist of the matched items, in the source's order, for each user you tick.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Set a <strong>Playlist Name</strong>, or leave it empty to use the Display Name.</li>
+                            <li>Each sync brings the playlists up to date. Unticking a user, turning the option off or making the group inactive deletes those playlists on the next sync.</li>
+                            <li><strong>Playlist look</strong> — give all of the source's playlists the same <strong>description</strong>, <strong>poster</strong> and <strong>background</strong> (shown on the playlist's page and wherever Emby shows the playlist) instead of Emby's automatic collage of four posters. Upload an image (<em>Custom</em>; never changes) or pick a style drawn from the first titles of the list, redrawn when they change. <em>Preview art</em> shows the result.</li>
+                            <li>The look is put back by the full sync and by <em>Run Group</em>; a playlist is only rewritten when something changed.</li>
+                            <li>For <em>Your Next Watch</em> each ticked user's playlist holds <strong>their own</strong> picks instead of the same list for everyone.</li>
+                            <li>With <em>Create Playlist</em> on, the <em>Home Screen</em> tab can show the playlist as a row: Section Type <em>This source's playlist (each user's own)</em> shows every user their own playlist from this source.</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-hometab" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tv</i>
+                    <div><strong>Home Screen tab</strong> — show this source as a row on the home screen for specific users, updated every time sync runs.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>In the user list, <em>Select all</em> and <em>Clear</em> tick or untick everyone at once; <em>Unrestricted</em> and <em>Restricted</em> tick only the users without or with a parental rating limit (the coloured chip after a name shows that limit, see <em>Home Screen</em> below).</li>
+                            <li>Choose <em>Media Type: Collections</em> to show a collection row instead of individual items.</li>
+                            <li>The <em>Section Type</em> is <em>Single Collection</em> (needs Create Collection), <em>Dynamic Media (tag)</em> (needs Apply Tag) or <em>This source's playlist (each user's own)</em> (needs Create Playlist; each user sees their own playlist from the source, so tick them on the Playlist tab too).</li>
+                            <li>For <em>Your Next Watch</em> the playlist row shows each user their own picks, in pick order (or shuffled on every load when the row's <em>Sort By</em> is <em>Random</em>).</li>
+                        </ul></div>
                 </div>
 
                 <!-- 4. TAGS & COLLECTIONS -->
@@ -1658,7 +1978,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">collections_bookmark</i>
-                    <div><strong>Collection</strong> — In addition to (or instead of) tagging, the plugin can maintain an Emby collection. Items are added and removed automatically on every sync, just like tags.</div>
+                    <div><strong>Collection</strong> — In addition to (or instead of) tagging, the plugin can maintain an Emby collection. Items are added and removed automatically on every sync, just like tags. When Emby stores several versions of a film (e.g. 4K and 1080p), the collection keeps just one of them.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">check_box_outline_blank</i>
@@ -1666,7 +1986,63 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">image</i>
-                    <div><strong>Collection Poster</strong> — Upload a local image or paste an image URL to set a custom poster for the collection. The poster is stored on the server and re-applied on every sync so it is never overwritten by Emby.</div>
+                    <div><strong>Collection Poster</strong> — Pick a style. <em>Custom</em> lets you upload a local image or paste an image URL; it is stored on the server and re-applied on every sync so it is never overwritten by Emby. The other styles — <em>Collage</em>, <em>Grid</em>, <em>Fan</em>, <em>Wall</em>, <em>Hero strip</em>, <em>Spotlight split</em> and <em>Ranked (Top 10)</em> — draw the poster from the posters of the first titles in the collection, each film used once. It is redrawn when the titles change. <em>Keep current image</em> is offered on an imported collection only (see <strong>Import collection</strong>), where it is the default: it leaves the poster the collection has now exactly as it is — nothing is drawn, uploaded or removed. Its tile shows that poster. Once you pick another style, Save and the source has run (so the original image is replaced), <em>Keep current image</em> is no longer offered for that image.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">wallpaper</i>
+                    <div><strong>Collection Background</strong> — The same styles for the wide background image. With <em>Custom</em>, upload an image or paste a URL, or leave it empty to keep Emby's own background. On an imported collection, <em>Keep current image</em> leaves the current background untouched; its tile shows that background.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">style</i>
+                    <div><strong>Tag Poster &amp; Tag Background</strong> — When you open a tag in Emby (for example by clicking it on a movie), it gets its own page. In the <em>Tag</em> tab you can give that page the same art as a collection: pick a style for the poster and for the background, and the plugin draws them from the first titles with the tag, each film used once, on every sync. <em>Emby's own</em> (the default) keeps Emby's collage poster; a background <em>Custom</em> lets you upload an image or paste a URL, or leave it empty for no background. <em>Title on the art</em> and <em>Preview art</em> work as for a collection, with <code>{name}</code> as the tag name. Switch a style back to <em>Emby's own</em> or empty and the plugin removes its art from the tag on the next sync.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">title</i>
+                    <div><strong>Title on the art</strong> — The text drawn on the poster and background. Leave it empty to use the collection name. <code>{name}</code> is the collection name and <code>{week}</code> this week's number (ISO week), e.g. <em>{name} {week}</em> → "Top Movies for the Week 41". Click <em>Preview art</em> to see the poster and background with your current settings; nothing is saved. It draws from the source's titles (a Manual List's own titles, else the titles in its collection, else the titles with its tag), so it works with <em>Apply Tag</em> off.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">settings</i>
+                    <div><strong>Customise</strong> — under every generated poster and background style (collection, tag and playlist) there is a <em>Customise</em> button. It opens the same screen for every style, starting at that style's own look.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>Tilt</strong> (straight, left, right), <strong>Rows</strong> (<em>Auto</em>, 2, 3, 4, 5, or any number from 1 to 10 in the <em>Custom</em> box) and <strong>Posters</strong> (how many titles; <em>Auto</em> = the style's own number; presets 4 to 20, or 1 to 250 in the <em>Custom</em> box — clicking a preset empties the box) work on every style.</li>
+                            <li><em>Grid</em> turns the whole grid and sets its rows.</li>
+                            <li><em>Fan</em> turns the whole fan and stacks smaller fans (one per row; from 3 rows on, and with over 20 posters on Auto rows, each row is a wide fan of overlapping cards across the picture).</li>
+                            <li><em>Collage</em> turns the collage and, with a poster count, shows each poster once in even rows.</li>
+                            <li><em>Wall</em> sets the angle, the rows across the picture, and with a poster count makes the cards big enough that about that many fill the wall (4 = four big posters; with Rows set too, when the count needs more rows than that, the rows keep their height and the cards get narrower so the count still fits across).</li>
+                            <li><em>Hero strip</em> and <em>Spotlight split</em> turn the strip of cards and put it in rows across the width (Spotlight split: across its dark left half); their count includes the big first poster, so 6 = 1 + 5 cards.</li>
+                            <li><em>Ranked</em> takes the tilt but keeps its own top 4 / top 5.</li>
+                            <li>Rows set and Posters on <em>Auto</em> (Grid, Hero strip, Spotlight split, and Fan from 3 rows): the cards are as big as that many rows allow and each row gets as many posters as fill the width, so more rows means more, smaller posters (up to 100; at 10 rows on a background that limit leaves space at the sides).</li>
+                            <li>Rows are always full (no half-empty last row). With a count you chose, the posters are spread as evenly as possible (12 on 3 rows = 4/4/4, 10 = 4/3/3, 20 on 4 rows = 5/5/5/5, on 5 rows = 4/4/4/4/4); with Rows on <em>Auto</em> the rows that give the biggest cards are used.</li>
+                            <li>Both Rows and Posters set: Posters wins and Rows is the most rows used — the art takes the number of rows (up to yours) that gives the biggest cards across the width, and the Customise screen says so when it used fewer (for example &ldquo;16 posters fit best on 4 rows&rdquo;). More rows means smaller cards: 16 or 20 posters look best on 4 or 5 rows; 100 posters on 10 rows makes a 10×10 grid.</li>
+                            <li>When a source has fewer titles than the count you chose, the posters repeat to make up the count (the Customise screen and <em>Preview art</em> say so). Wherever posters have to repeat to fill the picture (Wall, Collage), a poster is never placed beside, above, below or diagonally next to a copy of itself, and repeats are spread out (with very few titles this cannot always be avoided).</li>
+                            <li>The <strong>Title</strong> (on/off, font, position on a 3×3 grid, size S/M/L, UPPER or as typed, colour from the swatches or any <code>#hex</code>) and <strong>Darken</strong> (0–80%).</li>
+                            <li>The fonts are listed in groups (General, Horror, Christmas, …), each shown as its name drawn in that font; the style's own font is marked <em>(default)</em>; the selected font has a thick green border and a green ✓ (the style's own font when you have not picked another). Fonts include a bold condensed (the default), a clean sans, a serif, a slab and a script, and themed ones for Horror, Christmas, Sci-fi, Western, Kids and Romance.</li>
+                            <li>Only the fields that change the chosen style are shown: Ranked keeps its own rows, posters and background, so those are hidden there, and the title's font, position, size, case and colour show while the title is on (Case is hidden for Bebas Neue and Luckiest Guy, which have capitals only).</li>
+                            <li>The picture on the left is drawn by the server with stand-in posters and redraws as you change things; <em>Preview art</em> on the card shows your real titles. <em>Reset</em> goes back to the style's own look.</li>
+                            <li>Click <em>OK</em> and then <em>Save</em>; the full sync and <em>Run Group</em> redraw the art with your settings. Art you never customised is not changed. Copy/paste and <em>Duplicate</em> keep the settings.</li>
+                        </ul></div>
+                </div>
+                <div class="src-cards" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">sort_by_alpha</i> Sort Title</div>
+                        Optional. Used instead of the name when collections are sorted by name, e.g. "001" to show this collection first. Leave it empty to sort by the collection name; a sort title set in Emby by hand is never touched.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">format_list_numbered</i> Keep the list order — movies only (experimental)</div>
+                        The collection opens in the order of the list instead of Emby's own order, using hidden ranked copies of the films. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">More about keeping the list order below</a>.
+                    </div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about keeping the list order</div>
+                <div id="help-more-ranked" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>Keep the list order — movies only (experimental)</strong> — shown when <em>Ranked collections</em> is switched on under <em>Advanced Settings</em> in the Settings tab (and saved). The collection then opens in the order of the list instead of Emby's own order.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>For each movie HSC makes a hidden copy that carries its rank, linked to the real film as a version (so it appears once in search and shares its watched status).</li>
+                            <li>The copies sit in a hidden library "&lt;collection&gt; (ranked)" that is hidden from My Media and Latest like the top-list libraries (setting <em>Hide HSC libraries</em>).</li>
+                            <li>When the list order changes, only the ranks of the copies change: a copy is added only for a new film and removed only when its film leaves the list, so nothing is rebuilt on a reorder.</li>
+                            <li>Only movies are ranked: shows in the list keep their normal place after the ranked movies.</li>
+                            <li>Untick it (or switch the feature off) and the next sync puts the real films back and removes the copies and their library. This is experimental.</li>
+                        </ul></div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">tv</i>
@@ -1686,7 +2062,7 @@
                     <i class="md-icon help-section-icon">calendar_month</i>
                     <span>Scheduling</span>
                 </div>
-                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">By default a source is always active. Use the Schedule tab to limit when a source runs — for example to show a Halloween horror list only in October, or a Christmas movie row only in December.</div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">By default a source is always active. Use the Schedule tab to limit when a source runs — for example to show a Halloween horror list only in October, or a Christmas movie row only in December. When a schedule ends, the source's home row is removed; when it starts again, the row comes back at the place it had on each user's home screen.</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">all_inclusive</i>
                     <div><strong>No schedule</strong> — The source is always active (default).</div>
@@ -1763,8 +2139,26 @@
                     </div>
                     <div class="mi-help-col">
                         <div class="mi-help-category">Activity</div>
-                        Watched / Unwatched, Last Played (days ago), Play Count, Watched By Count (how many users have finished it) — can be scoped to <em>any user</em>, <em>all users</em>, or a specific user
+                        Watched / Unwatched, Last Played (days ago), Play Count, Watched By Count (how many users have finished it) — can be scoped to <em>any user</em>, <em>all users</em>, or a specific user. <em>Popular on this server (viewers)</em> — how many different users watched it in the last 7, 14, 30, 60, 90 or 180 days, the last year, or all time (default ≥ 3)
                     </div>
+                </div>
+                <div class="help-feature-row" style="margin-top:12px;">
+                    <i class="md-icon help-feat-icon">trending_up</i>
+                    <div><strong>Popular on this server</strong> — most-watched titles by number of viewers. Rule <em>Popular on this server (viewers)</em> under <em>Activity</em>: pick a time window (last 7, 14, 30, 60 or 90 days, last 6 months, last year or all time; default last 30 days), an operator and a viewer count (default <i>&gt;= 3</i>).
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>A <strong>viewer</strong> is a user who has the title marked <strong>played</strong> in Emby (watched past 90% or <em>Mark played</em>) with their last play inside the window. Started or stopped plays don't count. Each user counts once, however often they watched it.</li>
+                            <li>For a <strong>show</strong>, anyone who watched any episode counts as one viewer of the show. A <strong>film</strong> with several versions counts once: a user who watched any version is one viewer.</li>
+                            <li>Emby only remembers each user's <em>last</em> play of a title, so a user who watched it before the window and not since doesn't count; titles marked watched without a date only count for <em>All time</em>. Disabled users are not counted.</li>
+                            <li>The source lists its matches <strong>most viewed first</strong> (ties: higher community rating, then by name), so <strong>Max items</strong> keeps the most popular ones, and a top-list made from the tag follows that order. With more than one Popular rule, the first one sets the order.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">bookmarks</i>
+                    <div><strong>Premade filters &amp; My saved filters</strong> — Below the filters of a MediaInfo source. <em>Premade filters</em> offers ready-made rule sets (Resolution, Release Year, Recently, Watch Status, Music); picking one replaces the current filters. <em>My saved filters</em> lists filters you saved: pick one to replace the current filters, or type a name under <em>Save current filter as</em> and click <em>Save</em> — it is stored straight away and offered on every MediaInfo source (✕ deletes one). The <em>Clear all filters</em> button (bin icon) empties the filter list.</div>
+                </div>
+                <div class="help-feature-row" style="margin-bottom:0;">
+                    <i class="md-icon help-feat-icon">visibility</i>
+                    <div><strong>Preview</strong> — Every source type has a <em>Preview</em> button (here it is next to <em>Max items</em>). It shows what the source would tag right now, using your current (unsaved) settings, filters, blacklist and limit: up to 250 titles in list order plus the total. For an External or AI source it also lists the titles on the list that are <em>Not in your library</em> (title, year, IMDb id). Nothing is written — no tags, collections or settings change. An AI preview asks the AI once (one paid call), ignores <em>Refresh every</em>, and the next answer may differ.</div>
                 </div>
 
                 <!-- 7. HOME SCREEN -->
@@ -1778,12 +2172,20 @@
                     <div><strong>Manage</strong> — Creates and keeps custom home screen rows up to date. Each row is tied to one of your sources and is automatically refreshed for the selected users every time sync runs. To set up a row for a source, open that source card and go to its <em>Home Screen</em> tab.</div>
                 </div>
                 <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">photo_size_select_small</i>
+                    <div><strong>Card size</strong> — Sets how big the cards in a row are: <em>Smaller</em> or <em>Smallest</em> fit more titles on screen at once (a compact, Netflix-like row), <em>Larger</em> fits fewer. <em>Default</em> uses Emby's normal size. It is Emby's own per-row setting, so it works in every Emby app that honours it. Found next to <em>Image Type</em> in a source's <em>Home Screen</em> tab and in the top-list dialogs.</div>
+                </div>
+                <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">copy_all</i>
-                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. This runs separately from the tag and collection sync.</div>
+                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. Every row is copied, in the same order — including top-list and source rows, whatever that row's own target users are. The only exception is a per-user playlist row (such as <em>Your Next Watch</em>): it is copied in the same place but shows each user's own playlist, and users without one from that source don't get the row. Old copies pointing at someone else's playlist are re-pointed or removed. This runs separately from the tag and collection sync.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">tune</i>
                     <div><strong>Home Screen Tweaks</strong> — <em>Continue Watching</em>: when a new episode arrives for a series you had watched to the end, the series moves to the front of Continue Watching / Next Up. Watched status is never changed. Runs automatically when new episodes are added, plus the scheduled task <em>Continue Watching Bump</em>.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">family_restroom</i>
+                    <div><strong>Age limits in user lists</strong> — Every user list in HSC (Target Users, Sync to, Continue Watching, the user pickers) shows a small coloured chip after a user who has a parental rating limit in Emby: their highest allowed rating, e.g. <em>PG</em>, <em>12</em>, <em>PG-13</em>. Green is for children (up to PG), amber for teens (12–15), red for 16 and older; users without a limit get no chip. A &#128274; means the user also blocks unrated items (hover to see which kinds). Next to <em>Select all</em> and <em>Clear</em>, <em>Unrestricted</em> ticks only the users without a limit (adults) and <em>Restricted</em> only those with one (kids), so you can give kids and adults different home screens quickly. In drop-down pickers the rating shows as text after the name. The limits are set per user in Emby (<em>Users → Parental Control</em>); reload this page to see a change.</div>
                 </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">sync</i>
@@ -1804,7 +2206,50 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">edit_note</i>
-                    <div><strong>Manual top-list</strong> — Click <em>Create manual top-list</em> to hand-pick and order movies yourself, without needing an existing tag. Search your library, drag items into the order you want, and save.</div>
+                    <div><strong>Manual top-list</strong> — Click <em>Create manual top-list</em> to hand-pick and order movies yourself, without needing an existing tag. Search your library, put the items in the order you want with the ▲ ▼ buttons, and save. Choose <em>TV Shows</em> in the <em>Create Top-List</em> dialog to rank shows instead.</div>
+                </div>
+                <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">palette</i> Badge style &amp; Max items</div>                <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">palette</i> Badge style &amp; Max items</div>
+                        Pick how the rank number looks, for movie and show lists alike: a number badge in one of six colours (<em>Neutral</em>, <em>Slate grey</em>, <em>Emby green</em>, <em>Ocean blue</em>, <em>Soft red</em>, <em>Violet</em>), <em>No number</em>, or <em>Top 10 tile</em>. <em>Top 10 tile</em> draws a big outlined number beside the poster on a flat background in the colour of Emby's dark theme, so the row reads as one strip, like Netflix. On a lighter or black theme the tile edges show faintly. <strong>Max items</strong> limits how many titles the list shows (0 = all). <strong>Card size</strong> works as on the Home Screen tab: <em>Smaller</em> fits more tiles on screen.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> Customise the Top 10 tile</div>
+                        With <em>Top 10 tile</em> selected, <em>⚙ Customise</em> under the badge choices opens a popup with a live preview (rank 7 on a stand-in poster): the number's font, style and colours, where it sits, the tile background, medal colours, a #1 special and extras (rank movement, weeks in list, plays, a red TOP 10 logo). <em>Reset</em> goes back to the standard tile. Nothing changes until you press <em>OK</em> and then <em>Save</em>; the next sync redraws the list. The colour badges and <em>No number</em> have nothing to customise. Lists with a Popular rule compare with where each title stood one week ago; other lists compare with the previous run.
+                    </div>
+                    <div class="src-card">
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">verified</i> Real posters</div>
+                        Tick <em>Badge the real posters too</em> to put a red TOP 10 square on each listed title's own poster everywhere in Emby. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-realposters').scrollIntoView({behavior:'smooth'});return false;">More about real posters below</a>.
+                    </div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about real posters</div>
+                <div id="help-more-realposters" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">verified</i>
+                    <div><strong>Real posters</strong> — under <em>Badge Style</em>, tick <em>Badge the real posters too</em> to put a red TOP 10 square on each listed title's own poster everywhere in Emby: libraries, search, the item page, other rows and every app (for a show list, the series poster; for a movie, all its versions).
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><em>Label</em>: <em>TOP 10</em>, or <em>TOP 10 #3</em> with the title's rank on a second line; <em>Size</em>: S, M or L; <em>Position</em>: top left, top right (the standard), bottom left, bottom centre or bottom right. The small poster beside them shows the result at rank 7.</li>
+                            <li>A title in several lists gets one badge with its best rank.</li>
+                            <li>Emby draws the badge when it serves the poster, so no image file is changed: when the title leaves the list or you untick the box, the plain poster comes back. The list's own tiles keep their look.</li>
+                            <li>Changes show after Save (or the list's next sync / Run Group); apps that cached the poster pick it up when they reload it.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">play_arrow</i>
+                    <div><strong>Run Group</strong> — Open a top-list and click <strong>Run Group</strong> (next to <em>Delete top-list</em>) to rebuild just that list: its tiles and badges, its home rows and its collection mirror, from the titles the tag (or your manual list) holds now — the source itself is not fetched again and other lists are not touched. With unsaved changes it first asks <em>You have unsaved changes. Save and run?</em>; the result shows in the Sync log.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">share</i>
+                    <div><strong>Copy</strong> — Open a top-list and click <strong>Copy</strong> (top right) to put it on the clipboard as text, so you can paste it on another server. Works for every kind: movie and show lists, fed by a tag or picked by hand. The copy is the saved list: its name and custom title, target users (by name), when the row shows, image type, card size, badge style and its Customise options, max items and, for a hand-picked list, its titles in order (with IMDb/TMDb/TVDb ids). Its library, home rows and generated files are not copied – the other server makes its own when you create the list there. A list fed by a tag needs that tag on the other server: copy its source first. If the browser blocks the clipboard, the text is shown to copy by hand.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">content_paste</i>
+                    <div><strong>Paste top-list</strong> — Next to <strong>+ Create New</strong>. On https or localhost one click pastes straight from the clipboard (the browser may ask permission first); otherwise paste the copied text into the box and click <em>Open in create dialog</em>. Either way the usual create dialog for that kind of list opens, filled in. Check it and click <em>Create</em> (or <em>Save and apply</em>) – that creates the library or show tags, the home rows and the access rights exactly like <strong>+ Create New</strong>. Users are matched by name and titles by IMDb/TMDb/TVDb id (then name and year); anything this server does not have is listed at the top of the dialog, as is a source tag that does not exist here yet (<em>Create or paste the source first</em>). If a list with the same name exists, the new one gets a <em>(copy)</em> name – except a movie list fed by a tag, which is named after its tag: Create then updates the existing list.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">visibility_off</i>
+                    <div><strong>Hide HSC libraries</strong> — On by default, under <em>Features</em> in the <strong>Settings</strong> tab. Keeps the libraries HSC creates — those of movie top-lists and of ranked collections ("Keep the list order") — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">block</i>
@@ -1850,7 +2295,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">play_circle</i>
-                    <div><strong>Run button</strong> — Manually trigger a sync at any time. Three options: <em>Full sync</em> (everything), <em>Sync home screen only</em> (just the home screen rows, no tag changes), and <em>Sync tags and collections only</em> (tags and collections, skips home screen).</div>
+                    <div><strong>Run button</strong> — Manually trigger a sync at any time. Three options: <em>Full sync</em> (everything), <em>Sync home screen only</em> (just the home screen rows, no tag changes), and <em>Sync tags and collections only</em> (tags and collections, skips home screen). While a sync, Run Group, Home Screen Sync or top-list sync is busy, <em>Last run</em> at the top of the page shows the step it is on and how long it has been running, e.g. <em>Running · Playlists — Top 10: 34/88 users · 1m 12s</em>. Runs never overlap: a sync, Run Group, Home Screen Sync or top-list sync started while another is busy waits for it to finish (shown as <em>… waiting for … to finish</em>) and then runs.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">science</i>
@@ -1864,15 +2309,85 @@
                     <i class="md-icon help-feat-icon">shield</i>
                     <div><strong>Preserve Tags on Empty Result</strong> — If a source returns zero items — for example because the website was temporarily unreachable — the plugin will keep the existing tags and collection members as they are instead of removing everything. This prevents an accidental wipe-out caused by a network hiccup. Enable in the Settings tab.</div>
                 </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">auto_delete</i>
+                    <div><strong>Cleanup tab</strong> — Lists every tag and collection in Emby with its item count; the ones the plugin manages carry a <em>Managed by HSC Plugin</em> badge. Use <em>Remove</em> to clear out ones you no longer need; nothing changes until you confirm the summary with <em>Confirm &amp; Save</em>. Removing a <em>tag</em> takes that tag off every item that has it (films, shows, episodes, collections and so on) — the items themselves stay. Removing a <em>collection</em> deletes the collection itself from Emby, with its poster and background; the films and shows that were in it stay in your library. If an active group still makes that tag or collection, the next sync puts it back — the summary offers to deactivate that group. Tick <em>Only managed by HSC</em> to show just the plugin's own; this choice is remembered in your browser.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">close</i>
+                    <div><strong>Popups</strong> — Every popup has a <strong>✕</strong> at the right of its header. It does exactly what the popup's own <em>Close</em> or <em>Cancel</em> button does.</div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Features (Advanced Settings)</div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Optional features, listed as under <em>Advanced Settings → Features</em> in the <strong>Settings</strong> tab. Tick one and click <strong>Save</strong>.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">share</i>
+                    <div><strong>Copy &amp; paste sources</strong> — Off by default; switch it on under <em>Advanced Settings</em> in the Settings tab (and click Save) to show <strong>Copy</strong> on source and top-list cards and the <strong>Paste source</strong> and <strong>Paste top-list</strong> buttons.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">library_add</i>
+                    <div><strong>Import collection</strong> — Off by default; switch it on under <em>Advanced Settings</em> in the Settings tab (and click Save) to show the <strong>Import collection</strong> button; switching it off again changes nothing on sources you already imported.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>Ranked collections — movies only (experimental)</strong>                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>Ranked collections — movies only (experimental)</strong> — Off by default. Shows <em>Keep the list order</em> on the Collection tab of every source. For every collection with it ticked, HSC adds a hidden library ("&lt;collection&gt; (ranked)") of small .strm copies of the movies, merges each copy with the real film as an extra version (one entry in search, shared watched status) and fills the collection with the copies, so it opens in list order. Only movies are ranked: shows keep their place after them. Unticking removes the copies and the library. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">Keep the list order</a> under Tags &amp; Collections.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">visibility_off</i>
+                    <div><strong>Hide HSC libraries</strong> — On by default. Keeps                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">visibility_off</i>
+                    <div><strong>Hide HSC libraries</strong> — On by default. Keeps the libraries HSC creates — those of movie top-lists and of ranked collections — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
+                </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">save</i>
-                    <div><strong>Backup &amp; Restore</strong> — Export your plugin configuration (settings, API keys, tag &amp; collection groups, saved filters, top lists and home screen sync) to a file, or restore any selection of those sections from a previous backup. Found at the bottom of the <strong>Settings</strong> tab. Recommended before making large changes.</div>
+                    <div><strong>Backup &amp; Restore</strong> — Export your plugin configuration (settings, API keys, tag &amp; collection groups, saved filters, top lists and home screen sync) to a file, or restore any selection of those sections from a previous backup. Found at the bottom of the <strong>Settings</strong> tab. Recommended before making large changes. To move just one source or top-list to another server, use <strong>Copy</strong> on it and <strong>Paste source</strong> / <strong>Paste top-list</strong> on the other server instead.</div>
                 </div>
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
                     <button is="emby-button" type="button" id="btnCloseHelp" class="raised button-submit" style="background:#52B54B; color:white; padding: 0 25px;">Close Guide</button>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <div id="artCustomiseModalOverlay" class="modal-backdrop">
+        <div class="modal-content" style="max-width:900px; width:96%;">
+            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+                <i class="md-icon modal-header-icon">settings</i>
+                <div>
+                    <h2 class="modal-header-title artc-title">Customise</h2>
+                    <span class="artc-subtitle" style="opacity:0.9;font-size:0.9em;"></span>
+                </div>
+                <button type="button" class="modal-header-close" data-close="btnArtcCancel" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding:18px 24px;">
+                <div class="artc-body"></div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
+                    <button is="emby-button" type="button" class="btnArtcReset raised btn-neutral" style="margin-right:auto;background:transparent;border:1px solid rgba(128,128,128,0.35);color:var(--theme-text-secondary);">Reset</button>
+                    <button is="emby-button" type="button" class="btnArtcCancel raised btn-neutral" style="background:transparent;border:1px solid rgba(128,128,128,0.35);color:var(--theme-text-secondary);">Cancel</button>
+                    <button is="emby-button" type="button" class="btnArtcOk raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="miPreviewModalOverlay" class="modal-backdrop">
+        <div class="modal-content" style="max-width:640px; width:95%;">
+            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+                <i class="md-icon modal-header-icon">visibility</i>
+                <div>
+                    <h2 class="modal-header-title">Preview</h2>
+                    <span class="mi-preview-subtitle" style="opacity:0.9;font-size:0.9em;">What this source would tag right now</span>
+                </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseMiPreview" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding:20px 24px;">
+                <div class="mi-preview-body"></div>
+                <div style="text-align:right;margin-top:20px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
+                    <button is="emby-button" type="button" id="btnCloseMiPreview" class="raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">Close</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1885,6 +2400,7 @@
                     <h2 class="modal-header-title">Local Media Information — Filter Guide</h2>
                     <span style="opacity:0.9;font-size:0.9em;">How the smart filter rules work</span>
                 </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseMiHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll" style="padding:24px;">
 
@@ -1917,8 +2433,8 @@
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Director</span> / <span class="mi-help-prop">Writer</span> — crew members. Use Exact or Contains mode. One per line for multiple names.</div></div>
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Content Rating</span> — e.g. PG-13, TV-MA. Use <em>Exact</em> mode. One per line: <i>PG-13</i> / <i>R</i> matches either rating.</div></div>
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">IMDB ID</span> — one or more IDs, one per line, e.g. <i>tt0468569</i></div></div>
-                <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Collection</span> — matches items that are members of the named Emby collection. One collection name per line (OR). Names containing colons are supported.</div></div>
-                <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Playlist</span> — matches items that belong to the named Emby playlist. One playlist name per line (OR). Names containing colons are supported.</div></div>
+                <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Collection</span> — matches items that are members of the named Emby collection. One collection name per line (OR). Names containing colons are supported. As with <em>Playlist</em>, every version of a film counts when the collection holds one of them.</div></div>
+                <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Playlist</span> — matches items that belong to the named Emby playlist. One playlist name per line (OR). Names containing colons are supported. When Emby stores several versions of a film (e.g. 4K and 1080p) and the playlist holds one of them, every version counts as in the playlist (and is left out by a <em>not</em> rule).</div></div>
 
                 <div class="help-section"><i class="md-icon help-section-icon">music_note</i>Music</div>
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">Artist</span> / <span class="mi-help-prop">Album</span> — use with <em>MediaType = Audio</em> for songs or <em>MediaType = MusicVideo</em> for music videos. Supports Contains/Exact mode. One per line for multiple values.</div></div>
@@ -1939,7 +2455,8 @@
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">group</i><div><span class="mi-help-prop">Any User</span> — matches if <b>at least one</b> user in the library satisfies the condition. Example: <i>Watched = Any User</i> matches items that <em>someone</em> has seen.</div></div>
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">groups</i><div><span class="mi-help-prop">All Users</span> — matches only if <b>every</b> user in the library satisfies the condition. Example: <i>Watched = All Users</i> matches items that <em>everybody</em> has seen. <i>NOT Watched = All Users</i> matches items that nobody has seen.</div></div>
                 <div class="help-feature-row"><i class="md-icon help-feat-icon">person</i><div><span class="mi-help-prop">Specific user</span> — scopes the condition to one named user only. Useful when different household members have different watch habits.</div></div>
-                <div class="help-feature-row" style="margin-bottom:0;"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">WatchedByCount</span> — number of distinct users who have finished the item. Supports numeric operators (e.g. <i>&gt;= 2</i> = at least two users have watched it). Useful for finding content that is popular or completely unseen across the household.</div></div>
+                <div class="help-feature-row"><i class="md-icon help-feat-icon">check_circle</i><div><span class="mi-help-prop">WatchedByCount</span> — number of distinct users who have finished the item. Supports numeric operators (e.g. <i>&gt;= 2</i> = at least two users have watched it). Useful for finding content that is popular or completely unseen across the household.</div></div>
+                <div class="help-feature-row" style="margin-bottom:0;"><i class="md-icon help-feat-icon">trending_up</i><div><span class="mi-help-prop">Popular on this server (viewers)</span> — most-watched titles by number of viewers: how many different users watched it in a time window (last 7, 14, 30, 60 or 90 days, last 6 months, last year, or all time; default last 30 days). Pick an operator and a viewer count (default <i>&gt;= 3</i>). A viewer = a user with the title marked played in Emby (past 90% or <i>Mark played</i>) whose last play is inside the window; started or aborted plays don't count, and each user counts once however often they watched. Anyone who watched an episode counts as one viewer of the show; a film's versions count as one film. Emby only remembers each user's last play, and titles marked watched without a date only count for <i>All time</i>; disabled users are not counted. Matches are listed most viewed first (ties: higher community rating, then name), so <b>Max items</b> keeps the most popular; with several Popular rules the first one sets the order.</div></div>
 
                 <div class="help-section"><i class="md-icon help-section-icon">lightbulb</i>Examples</div>
                 <div class="step-text" style="font-size:0.88em; margin-bottom:12px; opacity:0.75;"><b>Tip:</b> for text properties (Genre, Actor, Director, Studio, etc.) you can enter multiple values on separate lines in a single rule — any matching line satisfies the rule (OR logic).</div>
@@ -2103,6 +2620,7 @@
                     <h2 class="modal-header-title">Tag &amp; Collection Target Level</h2>
                     <span style="opacity:0.9;font-size:0.9em;">How Series, Season and Episode targeting works</span>
                 </div>
+                <button type="button" class="modal-header-close" data-close="btnCloseTagTargetHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll" style="padding:24px;">
 

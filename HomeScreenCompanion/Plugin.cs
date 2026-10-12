@@ -33,10 +33,21 @@ namespace HomeScreenCompanion
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
+            HomeScreenCompanionTask.KeepLastRunCounts(Configuration, configuration as PluginConfiguration);
             base.UpdateConfiguration(configuration);
+            HomeScreenCompanionTask.RecordImportedCollections(Configuration);
             // Toggling the collection mirror adds (or removes) memberships for all existing copies.
             if (Configuration.TopListMirrorCollections != wasMirroring)
                 TopListCollectionMirror.QueueFullSync();
+        }
+
+        // Every config save (the settings page and the server's own saves) can change which
+        // titles carry a badge on their real poster.
+        public override void SaveConfiguration()
+        {
+            base.SaveConfiguration();
+            HomeScreenCompanionTask.RecordImportedCollections(Configuration);
+            RealPosterBadges.QueueRebuild();
         }
 
         public IEnumerable<PluginPageInfo> GetPages()

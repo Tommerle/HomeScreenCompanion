@@ -177,6 +177,8 @@ namespace HomeScreenCompanion
                     ProcessTopListStrmItem(item);
                     return;
                 }
+                // Ranked-collection copies: never tagged; the sync links and probes them.
+                if (RankedCollections.IsRankedPath(item.Path)) return;
             }
 
             var ids = item.ProviderIds;
@@ -251,6 +253,7 @@ namespace HomeScreenCompanion
                         }).Where(m => m.Id != itemId
                             && !string.IsNullOrEmpty(m.Path)
                             && !m.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase)
+                            && !RankedCollections.IsRankedPath(m.Path)
                             && string.Equals(m.GetProviderId("Imdb"), imdb, StringComparison.OrdinalIgnoreCase))
                           .ToList();
 

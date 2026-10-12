@@ -1,6 +1,7 @@
 using MediaBrowser.Model.Logging;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace HomeScreenCompanion
 {
@@ -23,18 +24,43 @@ namespace HomeScreenCompanion
 
         public bool Extended { get; }
 
-        public RunLog(List<string> sink, ILogger? logger, string serverLogPrefix, bool extended)
+        private readonly RunProgress? _progress;
+
+        /// <param name="progress">The running task's live step (shown next to "Running" on the page);
+        /// null for logs that are not a real run (previews, restore).</param>
+        public RunLog(List<string> sink, ILogger? logger, string serverLogPrefix, bool extended, RunProgress? progress = null)
         {
             _sink = sink;
             _logger = logger;
             _serverPrefix = string.IsNullOrEmpty(serverLogPrefix) ? "" : serverLogPrefix + " ";
             Extended = extended;
+            _progress = progress;
+            _progress?.Clear();
         }
+
+        // ── Live step (what the page shows while a run is busy) ─────────────────────
+
+        /// <summary>Sets the current step now, e.g. "Collections — IMDB Top 250".</summary>
+        public void Step(string text) => _progress?.Set(text);
+
+        /// <summary>Updates the step from inside a loop, e.g. "Playlists — 34/88 users";
+        /// written at most four times a second (the last item of a loop always shows).</summary>
+        public void Count(string label, int done, int total, string unit = "") => _progress?.Count(label, done, total, unit);
 
         // ── Status lines (always written) ────────────────────────────────────────
 
-        /// <summary>Neutral line, no symbol. Used for headers, step lines and plain facts.</summary>
-        public void Info(string message) => Write(message, LogSeverity.Info);
+        /// <summary>Neutral line, no symbol. Used for headers, step lines and plain facts.
+        /// A phase header ("» Playlists  ·  …") also becomes the live step ("Playlists").</summary>
+        public void Info(string message)
+        {
+            if (_progress != null && message.StartsWith("» ", StringComparison.Ordinal))
+            {
+                var phase = message.Substring(2);
+                int dot = phase.IndexOf("  ·  ", StringComparison.Ordinal);
+                _progress.Set((dot >= 0 ? phase.Substring(0, dot) : phase).Trim());
+            }
+            Write(message, LogSeverity.Info);
+        }
 
         /// <summary>Something completed successfully.</summary>
         public void Ok(string message) => Write("  ✔ " + message, LogSeverity.Info);
@@ -104,6 +130,31 @@ namespace HomeScreenCompanion
             if (span.TotalMinutes >= 1) return $"{(int)span.TotalMinutes}m {span.Seconds}s";
             if (span.TotalSeconds >= 10) return $"{(int)span.TotalSeconds}s";
             return $"{span.TotalSeconds:0.0}s";
+        }
+    }
+
+    /// <summary>
+    /// The step a running task is on, read by the Status endpoints while a run is busy. One per
+    /// task (see each task's static <c>Progress</c>). Set from the run's <see cref="RunLog"/>:
+    /// phase headers set it, long loops update the count. Cleared when the run's log is saved.
+    /// </summary>
+    internal sealed class RunProgress
+    {
+        private volatile string _step = "";
+        private long _lastCountTicks;
+
+        public string Step => _step;
+
+        public void Set(string text) { _step = text ?? ""; Interlocked.Exchange(ref _lastCountTicks, DateTime.UtcNow.Ticks); }
+
+        public void Clear() => _step = "";
+
+        public void Count(string label, int done, int total, string unit = "")
+        {
+            long now = DateTime.UtcNow.Ticks;
+            if (done < total && now - Interlocked.Read(ref _lastCountTicks) < TimeSpan.TicksPerMillisecond * 250) return;
+            Interlocked.Exchange(ref _lastCountTicks, now);
+            _step = $"{label} {done}/{total}{(unit.Length > 0 ? " " + unit : "")}";
         }
     }
 }

@@ -21,6 +21,7 @@
 	  <None Remove="Configuration\configPage.js" />
 	  <None Remove="thumb.png" />
 	  <None Remove="LemonMilk.otf" />
+	  <None Remove="Fonts\*.ttf" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -28,6 +29,7 @@
 	  <EmbeddedResource Include="Configuration\configPage.js" />
 	  <EmbeddedResource Include="thumb.png" />
 	  <EmbeddedResource Include="LemonMilk.otf" />
+	  <EmbeddedResource Include="Fonts\*.ttf" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -29,10 +29,17 @@ namespace HomeScreenCompanion
             "Example: [{\"title\":\"Inception\",\"year\":2010,\"imdb_id\":\"tt1375666\",\"type\":\"movie\"}]";
         public bool ExtendedConsoleOutput { get; set; } = false;
         public bool LogMissingItems { get; set; } = false;
+        // Keep movie top-list libraries out of users' "My Media" tiles and "Latest" rows.
+        public bool HideTopListLibraries { get; set; } = true;
         public bool DryRunMode { get; set; } = false;
         public bool PreserveTagsOnEmptyResult { get; set; } = true;
         // Give top-list copies the same collection memberships as their original movie.
         public bool TopListMirrorCollections { get; set; } = false;
+        // Settings > Features: show the Copy / Paste buttons and the Import collection button.
+        public bool ShowCopyPasteButtons { get; set; } = false;
+        public bool ShowImportCollectionButton { get; set; } = false;
+        // Settings > Features (experimental): offers "Keep the list order" on each source's Collection tab.
+        public bool RankedCollectionsEnabled { get; set; } = false;
         public List<TagConfig> Tags { get; set; } = new List<TagConfig>();
         public List<TopListHomeSection> TopLists { get; set; } = new List<TopListHomeSection>();
         public List<SavedMediaInfoFilter> SavedFilters { get; set; } = new List<SavedMediaInfoFilter>();
@@ -60,6 +67,8 @@ namespace HomeScreenCompanion
         public string SourceType { get; set; } = "External";
         public string LocalSourceId { get; set; } = "";
         public List<string> LocalSources { get; set; } = new List<string>();
+        // "Manual" source: Emby item ids (movies and series), in list order.
+        public List<string> ManualItemIds { get; set; } = new List<string>();
         public List<string> MediaInfoConditions { get; set; } = new List<string>();
         public List<MediaInfoFilter> MediaInfoFilters { get; set; } = new List<MediaInfoFilter>();
 
@@ -77,13 +86,50 @@ namespace HomeScreenCompanion
 
         public bool OverrideWhenActive { get; set; } = false;
         public bool EnableTag { get; set; } = true;
+        // Generated art on the tag's own page (the Emby Tag item), same styles as the collection
+        // art. "" = none: Emby's own collage poster and no background (or TagBackgroundPath).
+        public string TagPosterStyle { get; set; } = "";
+        public string TagBackgroundStyle { get; set; } = "";
+        // Text drawn on the tag art; "" = the tag name. {name} and {week} as for CollectionArtTitle.
+        public string TagArtTitle { get; set; } = "";
+        // Customise options of the generated tag poster / background (ArtOptions JSON; "" = the style's own look).
+        public string TagPosterOptions { get; set; } = "";
+        public string TagBackgroundOptions { get; set; } = "";
+        // Uploaded background (used when TagBackgroundStyle is "", i.e. Custom).
+        public string TagBackgroundPath { get; set; } = "";
         public bool EnableCollection { get; set; } = false;
         public string CollectionName { get; set; } = "";
         // Optional sort title for the collection (empty = Emby sorts it by its name).
         public string CollectionSortName { get; set; } = "";
         public string CollectionDescription { get; set; } = "";
         public string CollectionPosterPath { get; set; } = "";
+        // Generated collection art ("" = none / the uploaded poster). See CollectionArtRenderer.
+        public string CollectionPosterStyle { get; set; } = "";
+        public string CollectionBackgroundStyle { get; set; } = "";
+        // Text drawn on the generated art; "" = the collection name. {name} and {week} (ISO week
+        // number) are filled in, e.g. "{name} {week}" → "Top Movies for the Week 41".
+        public string CollectionArtTitle { get; set; } = "";
+        // Customise options of the generated poster / background (ArtOptions JSON; "" = the style's own look).
+        public string CollectionPosterOptions { get; set; } = "";
+        public string CollectionBackgroundOptions { get; set; } = "";
+        // Uploaded background (used when CollectionBackgroundStyle is "", i.e. Custom).
+        public string CollectionBackgroundPath { get; set; } = "";
+        // Experimental (needs RankedCollectionsEnabled): the collection holds ranked .strm copies of
+        // its movies so it opens in list order. See RankedCollections.
+        public bool CollectionKeepOrder { get; set; } = false;
+        // The collection existed before HSC (Import collection) and was taken over. It is never
+        // deleted when the source is removed, disabled or out of schedule: HSC just stops managing it.
+        public bool CollectionImported { get; set; } = false;
+        // The last run's titles against Limit, for the "9 of 10" chip on the group's card:
+        // LastRunLimit is the Limit that run had (0 = no run with a limit recorded).
+        public int LastRunCount { get; set; } = 0;
+        public int LastRunLimit { get; set; } = 0;
+        // Imported collection: set by the sync once HSC's own poster / background has replaced the
+        // collection's original image; from then on "Keep current image" is no longer offered for it.
+        public bool CollectionPosterReplaced { get; set; } = false;
+        public bool CollectionBackgroundReplaced { get; set; } = false;
         public bool OnlyCollection { get; set; } = false;
+
         // Legacy fields — kept for backwards compat, never written by new code
         public bool MediaInfoSeasonMode { get; set; } = false;
         public string MediaInfoTargetType { get; set; } = "";
@@ -111,6 +157,22 @@ namespace HomeScreenCompanion
         public string PlaylistName { get; set; } = "";
         public List<string> PlaylistUserIds { get; set; } = new List<string>();
         public List<PlaylistMapping> PlaylistMappings { get; set; } = new List<PlaylistMapping>();
+        // Your Next Watch: true once the one-time move of the Home Screen tab's users to the
+        // Playlist tab (HomeScreenCompanionTask.NormalizeNextWatch) has been done, so an emptied
+        // Playlist user list stays empty.
+        public bool NextWatchUsersMigrated { get; set; } = false;
+        // The look of every playlist this source makes (same for all its users, also Your Next
+        // Watch): Overview, and a Primary / Backdrop image, generated in a CollectionArtRenderer
+        // style or uploaded (style "" = the uploaded image; none = Emby's own). Title as CollectionArtTitle.
+        public string PlaylistDescription { get; set; } = "";
+        public string PlaylistPosterPath { get; set; } = "";
+        public string PlaylistPosterStyle { get; set; } = "";
+        public string PlaylistBackgroundStyle { get; set; } = "";
+        public string PlaylistBackgroundPath { get; set; } = "";
+        public string PlaylistArtTitle { get; set; } = "";
+        // Customise options of the generated playlist poster / background (ArtOptions JSON; "" = the style's own look).
+        public string PlaylistPosterOptions { get; set; } = "";
+        public string PlaylistBackgroundOptions { get; set; } = "";
 
         public DateTime LastModified { get; set; } = DateTime.MinValue;
     }

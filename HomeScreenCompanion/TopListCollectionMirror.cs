@@ -184,6 +184,30 @@ namespace HomeScreenCompanion
             finally { _mirrorLock.Release(); }
         }
 
+        // Run Group on one top-list: only the copies in that list's folder.
+        internal static async Task<int> SyncFolder(string folderPath, CancellationToken cancellationToken)
+        {
+            if (_libraryManager == null || _collectionManager == null || TopListsFolder == null) return 0;
+            var prefix = folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
+            await _mirrorLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var (originals, copies) = BuildLookups(withOriginals: true);
+                int changes = 0;
+                foreach (var kv in copies)
+                {
+                    originals.TryGetValue(kv.Key, out var origs);
+                    foreach (var copy in kv.Value.Where(c => c.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        changes += await SyncCopyCore(copy, origs).ConfigureAwait(false);
+                    }
+                }
+                return changes;
+            }
+            finally { _mirrorLock.Release(); }
+        }
+
         internal static void QueueFullSync() =>
             Task.Run(async () =>
             {

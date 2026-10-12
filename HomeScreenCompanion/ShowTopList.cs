@@ -153,11 +153,13 @@ namespace HomeScreenCompanion
         // ── Writing the list folder ─────────────────────────────────────────────────────────
 
         // Makes the list folder match rankedSeries (in rank order). Returns the number of series
-        // written; series without any episode file are skipped.
+        // written; series without any episode file are skipped. badgeStyle is the list's look
+        // (BadgeLook); rankExtras, when given, works out the badge extras for the final ranking.
         internal static int WriteFolder(
             string folderPath, IList<BaseItem> rankedSeries, string badgeStyle,
             ILibraryManager libraryManager, IJsonSerializer jsonSerializer, IHttpClient httpClient,
-            IProviderManager providerManager, IFileSystem fileSystem, Action<string>? log = null)
+            IProviderManager providerManager, IFileSystem fileSystem, Action<string>? log = null,
+            Func<IList<BaseItem>, Dictionary<Guid, RankExtras>>? rankExtras = null)
         {
             Directory.CreateDirectory(folderPath);
 
@@ -174,6 +176,7 @@ namespace HomeScreenCompanion
                 log?.Invoke($"Top-list: '{skipped.Name}' has no episode files — left out");
 
             int digits = Math.Max(2, withEpisodes.Count.ToString().Length);
+            var extras = rankExtras?.Invoke(withEpisodes.Select(x => x.Series).ToList()) ?? new Dictionary<Guid, RankExtras>();
             var manifest = new List<ManifestEntry>();
             var usedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var tempDir = Path.Combine(Path.GetTempPath(), "hsc_showlist_" + Guid.NewGuid().ToString("N"));
@@ -193,7 +196,8 @@ namespace HomeScreenCompanion
 
                     var renderBase = Path.Combine(tempDir, "rank" + rank);
                     HomeScreenCompanionService.WriteRankedImages(series, rank, renderBase, badgeStyle, tempDir,
-                        httpClient, providerManager, libraryManager, fileSystem, log);
+                        httpClient, providerManager, libraryManager, fileSystem, log,
+                        extras.TryGetValue(series.Id, out var rx) ? rx : null);
                     CopyIfChanged(renderBase + ".jpg", Path.Combine(seriesDir, PosterFileName));
                     CopyIfChanged(renderBase + "-thumb.jpg", Path.Combine(seriesDir, ThumbFileName));
 

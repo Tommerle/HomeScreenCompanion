@@ -73,6 +73,8 @@ namespace HomeScreenCompanion
         public int SectionsCopied { get; set; }
         public List<string> Logs { get; set; } = new List<string>();
         public string StartedUtc { get; set; } = "";
+        public string Step { get; set; } = "";   // what a running sync is doing now
+        public string Waiting { get; set; } = ""; // runs waiting for this one to finish (see RunGate)
     }
 
     [MediaBrowser.Model.Services.Route("/HomeScreenCompanion/Hsc/UserSections", "GET")]

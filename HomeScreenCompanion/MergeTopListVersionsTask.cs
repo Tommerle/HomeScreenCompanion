@@ -118,6 +118,7 @@ namespace HomeScreenCompanion
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrEmpty(m.Path)) continue;
                 if (m.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase)) continue;
+                if (RankedCollections.IsRankedPath(m.Path)) continue;
                 var imdb = m.GetProviderId("Imdb");
                 if (!string.IsNullOrEmpty(imdb) && !origLookup.ContainsKey(imdb))
                     origLookup[imdb] = m;
@@ -194,6 +195,7 @@ namespace HomeScreenCompanion
             {
                 if (string.IsNullOrEmpty(m.Path)) continue;
                 if (topListsFolder != null && m.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase)) continue;
+                if (RankedCollections.IsRankedPath(m.Path)) continue;
                 var imdb = m.GetProviderId("Imdb");
                 if (!string.IsNullOrEmpty(imdb) && !origLookup.ContainsKey(imdb))
                     origLookup[imdb] = m;
