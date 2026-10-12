@@ -1750,6 +1750,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             PlaylistUserIds:  _plUserIds,
             PlaylistMappings: (function() { try { return JSON.parse(decodeURIComponent((_plTab && _plTab.dataset.plMappings) || '%5B%5D')); } catch { return []; } })(),
             NextWatchUsersMigrated: row.dataset.nwMigrated === '1',
+            NextWatchSeedDays: readNwSeedDays(row), NextWatchUseTaste: readNwUseTaste(row),
             MediaInfoTargetEpisode: false, MediaInfoTargetSeason: false, MediaInfoTargetSeries: false,
             MediaInfoTargetType: '', MediaInfoSeasonMode: false,
         };
@@ -2498,6 +2499,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         });
     }
 
+    // Your Next Watch settings of a source card (defaults as on the server: 90 days, taste on).
+    function readNwSeedDays(row) {
+        var n = parseInt((row.querySelector('.txtNwSeedDays') || {}).value, 10);
+        return n > 0 ? Math.max(7, Math.min(730, n)) : 90;
+    }
+    function readNwUseTaste(row) {
+        var c = row.querySelector('.chkNwUseTaste');
+        return c ? c.checked : true;
+    }
+
     // Must match HomeScreenCompanionTask.DefaultNextWatchDescription (used when the description is empty).
     var NEXT_WATCH_DEFAULT_DESCRIPTION = 'Picked just for you from what you\'ve been watching — fresh recommendations every day.';
     var NEXT_WATCH_HINT = 'Each user ticked on the Playlist tab gets their own playlist with their own picks: titles like the ones they watched lately (local scoring, no AI). Show it on their home screen with Section Type "This source\'s playlist" on the Home Screen tab.';
@@ -2565,6 +2576,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         if (localSources.length === 0) localSources = [{ id: "", limit: 0 }];
 
         var mediaInfoLimit = tagConfig.Limit || (tagConfig.SourceType === 'NextWatch' ? 50 : 0);
+        var nwSeedDays = tagConfig.NextWatchSeedDays > 0 ? tagConfig.NextWatchSeedDays : 90;
+        var nwUseTaste = tagConfig.NextWatchUseTaste !== false;
         var aiLimit = tagConfig.Limit || 0;
         // Backwards compat: legacy single-target → derive separate tag + collection targets
         var _legacyTarget = tagConfig.MediaInfoTargetType || (tagConfig.MediaInfoSeasonMode ? 'Season' : '');
@@ -2804,6 +2817,20 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <input is="emby-input" class="txtMediaInfoLimit" type="number" value="${mediaInfoLimit}" min="0" style="width:90px;" />
                             <button type="button" is="emby-button" class="btnMiPreview raised" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
                             <button type="button" is="emby-button" class="btnMiHelp raised" style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">help_outline</i><span>How to (filter guide)</span></button>
+                        </div>
+                        <div class="nw-settings" style="display:${sourceType === 'NextWatch' ? 'block' : 'none'}; margin-bottom:14px;">
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <label style="font-size:0.9em; white-space:nowrap; margin:0;">History window (days)</label>
+                                <input is="emby-input" class="txtNwSeedDays" type="number" value="${nwSeedDays}" min="7" max="730" style="width:90px;" />
+                            </div>
+                            <div class="fieldDescription">Titles each user finished in this many days are their taste (a quiet stretch is topped up with older history). Default 90.</div>
+                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:10px; margin-bottom:0;">
+                                <label>
+                                    <input is="emby-checkbox" type="checkbox" class="chkNwUseTaste" ${nwUseTaste ? 'checked' : ''} />
+                                    <span>Use favourites and ratings</span>
+                                </label>
+                                <div class="fieldDescription">Watched favourites and titles a user rated 7 or higher count as taste, unwatched favourites are suggested, and titles rated low are ignored. Off: only what was watched counts.</div>
+                            </div>
                         </div>
                         <div class="mi-toggle-row" style="display:${sourceType === 'MediaInfo' || mediaFilters.length > 0 ? 'none' : 'block'}; padding-top:14px; border-top:1px solid var(--line-color);">
                             <button type="button" is="emby-button" class="btnToggleAdditionalFilters raised" style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.85em;"><i class="md-icon" style="font-size:1em; margin-right:4px;">filter_list</i><span>Add filters (optional)</span></button>
@@ -3304,6 +3331,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var miPresetsSection = row.querySelector('.mi-presets-section');
                 if (miPresetsSection) miPresetsSection.style.display = isMi ? 'block' : 'none';
                 if (miLimitRow) miLimitRow.style.display = isMi || type === 'NextWatch' ? 'flex' : 'none';
+                var nwSettings = row.querySelector('.nw-settings');
+                if (nwSettings) nwSettings.style.display = type === 'NextWatch' ? 'block' : 'none';
                 var miLimitInput = row.querySelector('.txtMediaInfoLimit');
                 if (type === 'NextWatch' && miLimitInput && !(parseInt(miLimitInput.value, 10) > 0)) miLimitInput.value = '50';
                 if (type === 'NextWatch') {
@@ -5263,7 +5292,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 PlaylistPosterOptions: readPlaylistLook(row).PlaylistPosterOptions, PlaylistBackgroundOptions: readPlaylistLook(row).PlaylistBackgroundOptions,
                 PlaylistUserIds:  plUserIds2,
                 PlaylistMappings: (function() { try { return JSON.parse(decodeURIComponent((plTab2 && plTab2.dataset.plMappings) || '%5B%5D')); } catch { return []; } })(),
-                NextWatchUsersMigrated: row.dataset.nwMigrated === '1'
+                NextWatchUsersMigrated: row.dataset.nwMigrated === '1',
+                NextWatchSeedDays: readNwSeedDays(row), NextWatchUseTaste: readNwUseTaste(row)
             };
 
             if (st === 'External') {
@@ -5609,6 +5639,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     PlaylistUserIds:  t.PlaylistUserIds  || [],
                     PlaylistMappings: t.PlaylistMappings || [],
                     NextWatchUsersMigrated: !!t.NextWatchUsersMigrated,
+                    NextWatchSeedDays: t.NextWatchSeedDays > 0 ? t.NextWatchSeedDays : 90, NextWatchUseTaste: t.NextWatchUseTaste !== false,
                     LastRuns: [],
                 };
             }

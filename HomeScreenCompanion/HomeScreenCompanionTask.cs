@@ -3276,7 +3276,7 @@ namespace HomeScreenCompanion
                 if (user == null) { _log.Debug($"  User {userId} no longer exists — skipped"); continue; }
                 try
                 {
-                    var r = _nextWatch.Recommend(user, limit, allow, blacklist);
+                    var r = _nextWatch.Recommend(user, limit, allow, blacklist, tagConfig.NextWatchSeedDays, tagConfig.NextWatchUseTaste);
                     // Preview lists the picks; a playlist gets a show's first episode (see FirstEpisode).
                     perUser[userId] = _preview != null ? r.Picks.Select(p => p.Item).ToList()
                         : r.Picks.Select(p => p.Item is MediaBrowser.Controller.Entities.TV.Series ? _nextWatch.FirstEpisode(p.Item) : p.Item)

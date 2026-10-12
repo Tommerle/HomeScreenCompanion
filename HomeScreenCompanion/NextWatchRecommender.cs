@@ -14,8 +14,9 @@ namespace HomeScreenCompanion
     /// <summary>
     /// "Your Next Watch" (source type NextWatch): per user, the titles most like what they watched
     /// recently. No AI — local "more like this" scoring:
-    ///   seed       = titles finished in the last 90 days (or the last 50 when that is too few; a show
-    ///                counts once an episode was watched), favourites and titles rated 7+;
+    ///   seed       = titles finished in the last 90 days (the source's history window; or the last 50
+    ///                when that is too few; a show counts once an episode was watched), favourites and
+    ///                titles rated 7+ (unless the source turns favourites and ratings off);
     ///   candidates = movies and shows the user can open (Emby's per-user query, so library access
     ///                and parental rating apply), not watched or started, one item per film;
     ///   score      = weighted overlap with the seed on genres, top-billed people, studios and
@@ -38,7 +39,9 @@ namespace HomeScreenCompanion
     internal sealed class NextWatchRecommender
     {
         internal const int DefaultLimit = 50;
-        private const int SeedDays = 90, SeedMin = 30, SeedFallback = 50, SeedMax = 150, MinSeed = 3, SimilarUsers = 25;
+        // SeedDays: the default history window, and the window of the "recently popular" signal.
+        internal const int SeedDays = 90, MinSeedDays = 7, MaxSeedDays = 730;
+        private const int SeedMin = 30, SeedFallback = 50, SeedMax = 150, MinSeed = 3, SimilarUsers = 25;
         private const int MaxActors = 5, MaxCrew = 3;
 
         private readonly ILibraryManager _libraryManager;
@@ -272,13 +275,18 @@ PrepareSummary = $"{_groups.Count:N0} titles ({_titles.Count:N0} items), {_genre
 
         // ── Per user ──────────────────────────────────────────────────────────────────────────
         /// <param name="allow">Extra filter conditions of the source (null = all).</param>
-        public NextWatchResult Recommend(User user, int limit, Func<BaseItem, bool>? allow, HashSet<string> blacklist)
+        /// <param name="seedDays">History window: titles finished in the last this many days are the seed.</param>
+        /// <param name="useTaste">Favourites and the user's own ratings count (seed, boosts, "want to watch").</param>
+        public NextWatchResult Recommend(User user, int limit, Func<BaseItem, bool>? allow, HashSet<string> blacklist,
+            int seedDays = SeedDays, bool useTaste = true)
         {
             Prepare();
             var sw = Stopwatch.StartNew();
             if (limit <= 0) limit = DefaultLimit;
+            seedDays = seedDays <= 0 ? SeedDays : Math.Max(MinSeedDays, Math.Min(MaxSeedDays, seedDays));
             var result = new NextWatchResult();
             if (!_history.TryGetValue(user.InternalId, out var hist)) hist = new History();
+            if (!useTaste) hist = hist.WithoutTaste();
 
             // Candidate pool: what this user can open (library access + parental rating).
             var access = AccessFor(user);
@@ -287,7 +295,7 @@ PrepareSummary = $"{_groups.Count:N0} titles ({_titles.Count:N0} items), {_genre
             // Seed.
             var dated = hist.ByGroup.Where(kv => kv.Value.Plays > 0 && kv.Value.Last.HasValue)
                 .OrderByDescending(kv => kv.Value.Last).ToList();
-            var recent = dated.Where(kv => kv.Value.Last >= now.AddDays(-SeedDays)).ToList();
+            var recent = dated.Where(kv => kv.Value.Last >= now.AddDays(-seedDays)).ToList();
             // Recent plays first; too few of them (a quiet month) → topped up from older history.
             var seedSource = recent.Count >= SeedMin ? recent.Take(SeedMax).ToList() : dated.Take(SeedFallback).ToList();
             var seed = new Dictionary<int, double>();
@@ -483,7 +491,7 @@ PrepareSummary = $"{_groups.Count:N0} titles ({_titles.Count:N0} items), {_genre
             var latest = dated.Take(3).Select(kv => Label(_groups[kv.Key].Rep)).ToList();
             result.SeedSummary = cold
                 ? $"Not enough watch history ({hist.Watched.Count} watched) — showing a mix of the server's most watched titles (all time) this user has not seen."
-                : $"Based on {seed.Count} titles ({recent.Count} watched in the last {SeedDays} days{(recent.Count >= SeedMin ? "" : "; topped up with older history")}{(favourites > 0 ? $", {favourites} older favourites/rated" : "")})."
+                : $"Based on {seed.Count} titles ({recent.Count} watched in the last {seedDays} days{(recent.Count >= SeedMin ? "" : "; topped up with older history")}{(favourites > 0 ? $", {favourites} older favourites/rated" : "")})."
                   + (latest.Count > 0 ? " Latest: " + string.Join(", ", latest) + "." : "")
                   + (topGenres.Count > 0 ? " Top genres: " + string.Join(", ", topGenres) + "." : "")
                   + (topPeople.Count > 0 ? " People: " + string.Join(", ", topPeople) + "." : "");
@@ -777,6 +785,15 @@ PrepareSummary = $"{_groups.Count:N0} titles ({_titles.Count:N0} items), {_genre
             public readonly Dictionary<int, Entry> ByGroup = new Dictionary<int, Entry>();
             public readonly HashSet<int> Watched = new HashSet<int>();
             public double Similarity;
+
+            // The same history with favourite marks and ratings left out (source setting).
+            public History WithoutTaste()
+            {
+                var h = new History();
+                foreach (var kv in ByGroup) { var e = kv.Value; e.Favourite = false; e.Rating = null; h.ByGroup[kv.Key] = e; }
+                h.Watched.UnionWith(Watched);
+                return h;
+            }
         }
 
         private sealed class Vocab

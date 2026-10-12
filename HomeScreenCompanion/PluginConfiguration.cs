@@ -161,6 +161,10 @@ namespace HomeScreenCompanion
         // Playlist tab (HomeScreenCompanionTask.NormalizeNextWatch) has been done, so an emptied
         // Playlist user list stays empty.
         public bool NextWatchUsersMigrated { get; set; } = false;
+        // Your Next Watch: the history window in days (titles finished in it are the user's taste),
+        // and whether favourites and the user's own ratings count.
+        public int NextWatchSeedDays { get; set; } = 90;
+        public bool NextWatchUseTaste { get; set; } = true;
         // The look of every playlist this source makes (same for all its users, also Your Next
         // Watch): Overview, and a Primary / Backdrop image, generated in a CollectionArtRenderer
         // style or uploaded (style "" = the uploaded image; none = Emby's own). Title as CollectionArtTitle.
