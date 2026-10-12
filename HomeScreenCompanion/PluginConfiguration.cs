@@ -159,5 +159,19 @@ namespace HomeScreenCompanion
         public DateTime? Start { get; set; }
         public DateTime? End { get; set; }
         public string DayOfWeek { get; set; } = "Friday";
+        // "TimeOfDay" only: active from FromTime to ToTime ("HH:mm", server time) on the days in
+        // DayOfWeek (empty = every day). A window past midnight (22:00 → 02:00) is allowed.
+        public string FromTime { get; set; } = "";
+        public string ToTime { get; set; } = "";
+        // "MovingDate" (Yearly weekday) and "Easter": every year around a date that moves — the
+        // Occurrence-th ("1".."4" or "last") DayOfWeek (one weekday name) of Month, or for "Easter"
+        // (or a MovingDate with Occurrence "easter") Western Easter Sunday, weekday and month ignored;
+        // active from DaysBefore days before to DaysAfter days after. "Advent" (first Sunday of
+        // Advent through Christmas Day) and "Friday13" (every Friday the 13th) use the same
+        // DaysBefore / DaysAfter.
+        public string Occurrence { get; set; } = "1";
+        public int Month { get; set; } = 1;
+        public int DaysBefore { get; set; } = 0;
+        public int DaysAfter { get; set; } = 0;
     }
 }

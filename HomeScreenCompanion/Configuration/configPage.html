@@ -1632,7 +1632,7 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">calendar_month</i> Schedule tab</div>
-                        Limit when this source is active — for example only between certain dates or on specific recurring days. Add a <em>Priority Override</em> to make this source take over from other sources that share the same tag when it is active.
+                        Limit when this source is active — for example only between certain dates, on specific recurring days, around a date that moves every year (like Easter), or at a time of day. Ready-made <em>Holiday presets</em> add a rule in one click. Add a <em>Priority Override</em> to make this source take over from other sources that share the same tag when it is active.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">block</i> Blacklist tab</div>
@@ -1699,9 +1699,25 @@
                     <i class="md-icon help-feat-icon">repeat</i>
                     <div><strong>Recurring</strong> — Active on specific days every week, month, or year. You can stack multiple intervals on the same source — for example "every Friday" and "every Saturday".</div>
                 </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">event</i>
+                    <div><strong>Yearly weekday</strong> — For days that fall on a set weekday, so their date changes every year. Pick the 1st, 2nd, 3rd, 4th or Last weekday of a month, and with <em>Days before</em> and <em>Days after</em> (0–60) how long around it the source is active. Both ends are included, and a window may cross New Year. Example: <em>Last Friday of November</em>, Days after 3.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">event</i>
+                    <div><strong>Easter, Advent and Friday the 13th</strong> — Dates worked out for each year: <em>Easter</em> is Easter Sunday (Western Easter), <em>Advent</em> runs from the first Sunday of Advent through Christmas Day, and <em>Friday the 13th</em> is every Friday that falls on the 13th. <em>Days before</em> and <em>Days after</em> (0–60) widen the window; both ends are included. Example: Easter weekend (Good Friday to Easter Monday) is Easter with Days before 2, Days after 1.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">schedule</i>
+                    <div><strong>Time of Day</strong> — Active between two times (server time), on the chosen days or every day. A window may run past midnight, e.g. 22:00 to 02:00; it belongs to the day it starts on, so Friday 22:00 to 02:00 is still active at 01:00 on Saturday. The <em>Schedule Switch</em> task checks every 15 minutes and runs the sync when a schedule starts or ends.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">celebration</i>
+                    <div><strong>Holiday presets</strong> — Adds a ready-made rule for Christmas, New Year, Valentine's Day, Star Wars Day, Halloween, Easter, Advent or Friday the 13th. It is an ordinary rule, so you can change its dates afterwards.</div>
+                </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">workspace_premium</i>
-                    <div><strong>Priority Override</strong> — When this source is in-schedule, it takes over from any other sources that share the same tag. The other sources are temporarily suppressed. Example: a "Spotlight" source runs all year, but a "Spotlight Halloween" source with Priority Override takes over during October — the Halloween list replaces the regular one automatically.</div>
+                    <div><strong>Priority Override</strong> — When this source is in-schedule, it takes over from any other sources that share the same tag. The other sources are temporarily suppressed. Example: a "Spotlight" source runs all year, but a "Spotlight Halloween" source with Priority Override takes over during October — the Halloween list replaces the regular one automatically. When two priority sources for the same tag are active at once, the one higher in the list wins (if it finds no items, the next one is used).</div>
                 </div>
 
                 <!-- 6. MEDIAINFO FILTERS -->

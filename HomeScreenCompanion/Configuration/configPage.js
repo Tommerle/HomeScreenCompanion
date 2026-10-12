@@ -625,6 +625,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return null;
     }
 
+    // Rule types that are a date (or dates) plus "days before / after".
+    function isMovingType(type) {
+        return type === 'MovingDate' || type === 'Easter' || type === 'Advent' || type === 'Friday13';
+    }
+
+    function movingHint(type) {
+        if (type === 'Easter') return 'Around Easter Sunday (Western), every year.';
+        if (type === 'Advent') return 'From the first Sunday of Advent through Christmas Day, every year.';
+        if (type === 'Friday13') return 'Every Friday the 13th.';
+        if (type === 'MovingDate') return 'e.g. the 2nd Sunday of May, every year.';
+        return '';
+    }
+
     function getDateRowHtml(interval) {
         var type = interval.Type || 'SpecificDate';
         if (type === 'EveryYear') console.log('[HSC schedule] raw interval from server:', JSON.stringify(interval));
@@ -641,6 +654,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         sDay = Math.min(sDay, sMaxDay);
         eDay = Math.min(eDay, eMaxDay);
         var dayOfWeek = interval.DayOfWeek || '';
+        // "MovingDate" (Yearly weekday, e.g. last Monday of May) and "Easter": an anchor date plus a
+        // window of days around it. A MovingDate saved with Occurrence "easter" shows as Easter.
+        var movOcc = String(interval.Occurrence || '1').toLowerCase();
+        if (type === 'MovingDate' && movOcc === 'easter') type = 'Easter';
+        if (movOcc === 'easter') movOcc = '1';
+        var movWeekday = type === 'MovingDate' && dayOfWeek ? dayOfWeek.split(',')[0].trim() : 'Monday';
+        var movMonth = +interval.Month >= 1 && +interval.Month <= 12 ? +interval.Month : 1;
+        var movBefore = Math.max(0, Math.min(60, +interval.DaysBefore || 0));
+        var movAfter = Math.max(0, Math.min(60, +interval.DaysAfter || 0));
 
         return `
             <div class="date-row date-row-container" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 15px;">
@@ -650,7 +672,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <select is="emby-select" class="selDateType" style="width:100%;">
                         <option value="SpecificDate" ${type === 'SpecificDate' ? 'selected' : ''}>Specific Date</option>
                         <option value="EveryYear" ${type === 'EveryYear' ? 'selected' : ''}>Recurring</option>
+                        <option value="MovingDate" ${type === 'MovingDate' ? 'selected' : ''}>Yearly weekday</option>
+                        <option value="Easter" ${type === 'Easter' ? 'selected' : ''}>Easter</option>
+                        <option value="Advent" ${type === 'Advent' ? 'selected' : ''}>Advent</option>
+                        <option value="Friday13" ${type === 'Friday13' ? 'selected' : ''}>Friday the 13th</option>
                         <option value="Weekly" ${type === 'Weekly' ? 'selected' : ''}>Week Days</option>
+                        <option value="TimeOfDay" ${type === 'TimeOfDay' ? 'selected' : ''}>Time of Day</option>
                     </select>
                 </div>
                 
@@ -691,11 +718,56 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     </div>
                 </div>
 
+                <div class="inputs-moving" style="display: ${isMovingType(type) ? 'flex' : 'none'}; gap: 8px; flex-grow: 1; align-items: flex-start; flex-wrap: wrap;">
+                    <div class="mov-wd-month" style="display:${type === 'MovingDate' ? 'flex' : 'none'}; gap:5px; align-items:flex-start;">
+                        <div style="width:80px;">
+                            <label class="selectLabel">Which</label>
+                            <select is="emby-select" class="selMovOccurrence" style="width:100%;">${[['1', '1st'], ['2', '2nd'], ['3', '3rd'], ['4', '4th'], ['last', 'Last']].map(function (o) { return `<option value="${o[0]}" ${movOcc === o[0] ? 'selected' : ''}>${o[1]}</option>`; }).join('')}</select>
+                        </div>
+                        <div style="width:120px;">
+                            <label class="selectLabel">Day</label>
+                            <select is="emby-select" class="selMovWeekday" style="width:100%;">${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(function (d) { return `<option value="${d}" ${movWeekday === d ? 'selected' : ''}>${d}</option>`; }).join('')}</select>
+                        </div>
+                        <span style="opacity:0.5; padding-top:32px;">of</span>
+                        <div style="width:120px;">
+                            <label class="selectLabel">Month</label>
+                            <select is="emby-select" class="selMovMonth" style="width:100%;">${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(function (m, i) { return `<option value="${i + 1}" ${movMonth === i + 1 ? 'selected' : ''}>${m}</option>`; }).join('')}</select>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:5px; align-items:flex-start;">
+                        <div style="width:90px;">
+                            <label class="selectLabel">Days before</label>
+                            <input type="number" class="txtMovBefore emby-input" min="0" max="60" step="1" style="box-sizing:border-box; width:100%; height:31px; padding:0 8px;" value="${movBefore}" title="Active from this many days before (0–60)" />
+                        </div>
+                        <div style="width:90px;">
+                            <label class="selectLabel">Days after</label>
+                            <input type="number" class="txtMovAfter emby-input" min="0" max="60" step="1" style="box-sizing:border-box; width:100%; height:31px; padding:0 8px;" value="${movAfter}" title="Active until this many days after (0–60)" />
+                        </div>
+                    </div>
+                    <div class="mov-hint" style="width:100%; font-size:0.8em; opacity:0.6; margin-top:-4px;">${movingHint(type)}</div>
+                </div>
+
                 <div class="inputs-weekly" style="display: ${type === 'Weekly' ? 'flex' : 'none'}; flex-grow: 1; align-items: center; gap: 5px; flex-wrap: wrap;">
                     <div style="width:100%;">
                         <label class="selectLabel">Active On Days</label>
                         <div class="week-btn-container" style="display:flex; gap:5px; margin-top:2px;">
                             ${getWeekButtons(dayOfWeek)}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inputs-time" style="display: ${type === 'TimeOfDay' ? 'flex' : 'none'}; flex-grow: 1; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
+                    <div style="width:110px;">
+                        <input is="emby-input" type="time" class="txtFromTime" label="From" value="${interval.FromTime || '20:00'}" />
+                    </div>
+                    <span style="opacity:0.5; padding-top:32px;">to</span>
+                    <div style="width:110px;">
+                        <input is="emby-input" type="time" class="txtToTime" label="To" value="${interval.ToTime || '23:00'}" />
+                    </div>
+                    <div style="width:100%;">
+                        <label class="selectLabel">On Days <span style="opacity:0.6;">(none = every day)</span></label>
+                        <div class="week-btn-container" style="display:flex; gap:5px; margin-top:2px;">
+                            ${getWeekButtons(type === 'TimeOfDay' ? dayOfWeek : '')}
                         </div>
                     </div>
                 </div>
@@ -737,23 +809,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var collPoster = row.querySelector('.hiddenPosterPath') ? row.querySelector('.hiddenPosterPath').value : '';
         var st = row.querySelector('.selSourceType').value;
 
-        var intervals = [];
-        row.querySelectorAll('.date-row').forEach(function(dr) {
-            var type = dr.querySelector('.selDateType').value;
-            var s = null, e = null, days = '';
-            if (type === 'SpecificDate') {
-                s = dr.querySelector('.txtFullStartDate').value;
-                e = dr.querySelector('.txtFullEndDate').value;
-            } else if (type === 'EveryYear') {
-                var sM = dr.querySelector('.selStartMonth').value, sD = dr.querySelector('.selStartDay').value;
-                var eM = dr.querySelector('.selEndMonth').value, eD = dr.querySelector('.selEndDay').value;
-                s = '2000-' + sM.padStart(2, '0') + '-' + sD.padStart(2, '0');
-                e = '2000-' + eM.padStart(2, '0') + '-' + eD.padStart(2, '0');
-            } else if (type === 'Weekly') {
-                days = Array.from(dr.querySelectorAll('.day-toggle.active')).map(function(b) { return b.dataset.day; }).join(',');
-            }
-            intervals.push({ Type: type, Start: s || null, End: e || null, DayOfWeek: days });
-        });
+        var intervals = readIntervalsFromRow(row);
 
         var miFilters = [];
         row.querySelectorAll('.mediainfo-filter-group').forEach(function(group, gi) {
@@ -951,6 +1007,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         ContentRating: 'exact', AudioLanguage: 'exact', FolderPath: 'contains', Country: 'contains'
     };
     var _miUsers = null;
+    // Holiday presets on the Schedule tab: each adds one ordinary rule that can be edited afterwards.
+    // International only (no single-country holidays).
+    var SCHEDULE_PRESETS = [
+        { name: 'Christmas',        interval: { Type: 'EveryYear', Start: '2000-12-01', End: '2000-12-26', DayOfWeek: '' } },
+        { name: 'New Year',         interval: { Type: 'EveryYear', Start: '2000-12-30', End: '2000-01-01', DayOfWeek: '' } },
+        { name: "Valentine's Day",  interval: { Type: 'EveryYear', Start: '2000-02-07', End: '2000-02-14', DayOfWeek: '' } },
+        { name: 'Star Wars Day',    interval: { Type: 'EveryYear', Start: '2000-05-04', End: '2000-05-04', DayOfWeek: '' } },
+        { name: 'Halloween',        interval: { Type: 'EveryYear', Start: '2000-10-01', End: '2000-10-31', DayOfWeek: '' } },
+        { name: 'Easter',           interval: { Type: 'Easter', Occurrence: 'easter', DaysBefore: 7, DaysAfter: 1 } },
+        { name: 'Advent',           interval: { Type: 'Advent', DaysBefore: 0, DaysAfter: 0 } },
+        { name: 'Friday the 13th',  interval: { Type: 'Friday13', DaysBefore: 0, DaysAfter: 0 } }
+    ];
+
     var MI_PRESETS = [
         { label: 'Resolution', presets: [
             { name: 'Movies in 4K',
@@ -1296,33 +1365,112 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
     }
 
+    function westernEaster(y) {
+        var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+        var f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+        var i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+        var n = h + l - 7 * m + 114;
+        return new Date(y, Math.floor(n / 31) - 1, n % 31 + 1);
+    }
+
+    function movingDateAnchor(iv, y) {
+        var occ = String(iv.Occurrence || '1').trim().toLowerCase();
+        if (iv.Type === 'Easter' || occ === 'easter') return westernEaster(y);
+        var month = +iv.Month;
+        if (!(month >= 1 && month <= 12)) return null;
+        var wd = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].indexOf((iv.DayOfWeek || '').split(',')[0].trim());
+        if (wd < 0) return null;
+        if (occ === 'last') {
+            var last = new Date(y, month, 0);
+            return new Date(y, month - 1, last.getDate() - (last.getDay() - wd + 7) % 7);
+        }
+        var nth = parseInt(occ, 10);
+        if (!(nth >= 1 && nth <= 4)) return null;
+        var first = new Date(y, month - 1, 1);
+        return new Date(y, month - 1, 1 + (wd - first.getDay() + 7) % 7 + 7 * (nth - 1));
+    }
+
+    function movingDateActive(iv, now) {
+        var before = Math.max(0, Math.min(60, +iv.DaysBefore || 0)), after = Math.max(0, Math.min(60, +iv.DaysAfter || 0));
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        for (var y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) {
+            var a = movingDateAnchor(iv, y);
+            if (!a) return false;
+            var s = new Date(a.getFullYear(), a.getMonth(), a.getDate() - before);
+            var e = new Date(a.getFullYear(), a.getMonth(), a.getDate() + after);
+            if (today >= s && today <= e) return true;
+        }
+        return false;
+    }
+
     function isScheduleCurrentlyActive(intervals) {
         if (!intervals || intervals.length === 0) return false;
         var now = new Date();
         var dowNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         var todayName = dowNames[now.getDay()];
         return intervals.some(function(iv) {
+            if (iv.Type === 'TimeOfDay') {
+                var fp = (iv.FromTime || '').split(':'), tp = (iv.ToTime || '').split(':');
+                if (fp.length < 2 || tp.length < 2) return false;
+                var from = +fp[0] * 60 + +fp[1], to = +tp[0] * 60 + +tp[1], t = now.getHours() * 60 + now.getMinutes();
+                var dayOk = function (d) { return !iv.DayOfWeek || iv.DayOfWeek.split(',').map(function (x) { return x.trim(); }).indexOf(dowNames[d]) >= 0; };
+                if (from < to) return dayOk(now.getDay()) && t >= from && t < to;
+                if (from === to) return dayOk(now.getDay());
+                return (t >= from && dayOk(now.getDay())) || (t < to && dayOk((now.getDay() + 6) % 7));
+            }
             if (iv.Type === 'Weekly') {
                 var days = (iv.DayOfWeek || '').split(',').map(function(d) { return d.trim(); });
                 return days.indexOf(todayName) >= 0;
             }
-            // Compare calendar dates (Y/M/D) only — both ends are inclusive, matching the server.
-            var s = parseDateYMD(iv.Start);
-            var e = parseDateYMD(iv.End);
+            if (iv.Type === 'MovingDate' || iv.Type === 'Easter') return movingDateActive(iv, now);
+            if (iv.Type === 'Advent') return adventActive(iv, now);
+            if (iv.Type === 'Friday13') return friday13Active(iv, now);
+            if (!iv.Start || !iv.End) return false;
+            var s = new Date(iv.Start);
+            var e = new Date(iv.End);
             if (iv.Type === 'EveryYear') {
-                if (!s || !e) return false;
+                // Same as the server: month/day as stored (day clamped to this year's month length,
+                // e.g. Feb 29 → 28); a window that wraps the new year (Dec 27 → Jan 3) is active from
+                // its start through Dec 31 and again from Jan 1 through its end.
+                var sp = parseDateYMD(iv.Start), ep = parseDateYMD(iv.End);
+                if (!sp || !ep) return false;
+                var dim = function (m) { return new Date(now.getFullYear(), m, 0).getDate(); };
                 var nowMD = (now.getMonth() + 1) * 100 + now.getDate();
-                var sMD  = s.month * 100 + s.day;
-                var eMD  = e.month * 100 + e.day;
-                // A window that wraps the new year (e.g. Dec 27 → Jan 3)
-                return eMD >= sMD ? sMD <= nowMD && nowMD <= eMD : nowMD >= sMD || nowMD <= eMD;
+                var sMD = sp.month * 100 + Math.min(sp.day, dim(sp.month));
+                var eMD = ep.month * 100 + Math.min(ep.day, dim(ep.month));
+                return eMD >= sMD ? (sMD <= nowMD && nowMD <= eMD) : (nowMD >= sMD || nowMD <= eMD);
             }
-            // SpecificDate (an open start or end is unbounded, as on the server)
-            if (!s && !e) return false;
-            var nowYMD = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-            return (!s || s.year * 10000 + s.month * 100 + s.day <= nowYMD)
-                && (!e || nowYMD <= e.year * 10000 + e.month * 100 + e.day);
+            // SpecificDate
+            e.setHours(23, 59, 59, 999);
+            return s <= now && now <= e;
         });
+    }
+
+    function firstAdvent(y) {
+        var christmas = new Date(y, 11, 25);
+        var back = christmas.getDay() === 0 ? 7 : christmas.getDay();
+        return new Date(y, 11, 25 - back - 21);
+    }
+
+    function adventActive(iv, now) {
+        var before = Math.max(0, Math.min(60, +iv.DaysBefore || 0)), after = Math.max(0, Math.min(60, +iv.DaysAfter || 0));
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        for (var y = now.getFullYear() - 1; y <= now.getFullYear(); y++) {
+            var a = firstAdvent(y);
+            var s = new Date(a.getFullYear(), a.getMonth(), a.getDate() - before);
+            var e = new Date(y, 11, 25 + after);
+            if (today >= s && today <= e) return true;
+        }
+        return false;
+    }
+
+    function friday13Active(iv, now) {
+        var before = Math.max(0, Math.min(60, +iv.DaysBefore || 0)), after = Math.max(0, Math.min(60, +iv.DaysAfter || 0));
+        for (var i = -after; i <= before; i++) {
+            var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+            if (d.getDate() === 13 && d.getDay() === 5) return true;
+        }
+        return false;
     }
 
     function readIntervalsFromRow(row) {
@@ -1340,10 +1488,25 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var eD = (dr.querySelector('.selEndDay') || {}).value || '1';
                 s = '2000-' + sM.padStart(2, '0') + '-' + sD.padStart(2, '0');
                 e = '2000-' + eM.padStart(2, '0') + '-' + eD.padStart(2, '0');
-            } else if (type === 'Weekly') {
-                days = Array.from(dr.querySelectorAll('.day-toggle.active')).map(function(b) { return b.dataset.day; }).join(',');
+            } else if (type === 'Weekly' || type === 'TimeOfDay') {
+                var daysBox = dr.querySelector(type === 'Weekly' ? '.inputs-weekly' : '.inputs-time');
+                days = Array.from(daysBox.querySelectorAll('.day-toggle.active')).map(function(b) { return b.dataset.day; }).join(',');
+            } else if (type === 'MovingDate') {
+                days = (dr.querySelector('.selMovWeekday') || {}).value || 'Monday';
             }
-            intervals.push({ Type: type, Start: s, End: e, DayOfWeek: days });
+            var iv = { Type: type, Start: s, End: e, DayOfWeek: days };
+            if (isMovingType(type)) {
+                var clampDays = function (sel) { var n = parseInt((dr.querySelector(sel) || {}).value, 10); return isNaN(n) ? 0 : Math.max(0, Math.min(60, n)); };
+                iv.Occurrence = type === 'Easter' ? 'easter' : type === 'MovingDate' ? ((dr.querySelector('.selMovOccurrence') || {}).value || '1') : '1';
+                iv.Month = type === 'MovingDate' ? (parseInt((dr.querySelector('.selMovMonth') || {}).value, 10) || 1) : 1;
+                iv.DaysBefore = clampDays('.txtMovBefore');
+                iv.DaysAfter = clampDays('.txtMovAfter');
+            }
+            if (type === 'TimeOfDay') {
+                iv.FromTime = (dr.querySelector('.txtFromTime') || {}).value || '';
+                iv.ToTime = (dr.querySelector('.txtToTime') || {}).value || '';
+            }
+            intervals.push(iv);
         });
         return intervals;
     }
@@ -1687,6 +1850,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <p style="margin:0 0 15px 0; font-size:0.9em; opacity:0.8;">Define when this tag should be active. If empty, it's always active.</p>
                     <div class="date-list-container">${intervals.map(i => getDateRowHtml(i)).join('')}</div>
                     <button is="emby-button" type="button" class="btnAddDate" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary); margin-top:10px;"><i class="md-icon" style="margin-right:5px;">event</i>Add Schedule Rule</button>
+                    <button type="button" is="emby-button" class="btnSchedulePresets raised btn-neutral" style="width:100%; margin-top:6px; background:transparent; border:1px solid var(--line-color); color:var(--theme-text-secondary); display:flex; align-items:center; justify-content:space-between;"><span><i class="md-icon" style="margin-right:5px;">celebration</i>Holiday presets</span><i class="md-icon mi-expand-icon" style="transition:transform 0.2s; font-size:1.2em;">expand_more</i></button>
+                    <div class="schedule-preset-panel" style="display:none; border:1px solid var(--line-color); border-radius:6px; padding:10px 12px; margin-top:6px; background:rgba(128,128,128,0.06);">
+                        <div style="font-size:0.8em; color:var(--theme-text-secondary); margin-bottom:10px;">Select a holiday to add it as a rule (you can change the dates afterwards):</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                            ${SCHEDULE_PRESETS.map(function(p, pi) {
+                                return '<button type="button" class="btnApplySchedulePreset" data-preset="' + pi + '"' +
+                                    ' style="border:1.5px solid #000; border-radius:14px; padding:4px 12px; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' + p.name + '</button>';
+                            }).join('')}
+                        </div>
+                    </div>
                     <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:16px; ${intervals.length === 0 ? 'opacity:0.4;' : ''}">
                         <label>
                             <input is="emby-checkbox" type="checkbox" class="chkOverrideWhenActive" ${overrideChecked} ${intervals.length === 0 ? 'disabled' : ''} />
@@ -2016,6 +2189,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 dateRow.querySelector('.inputs-specific').style.display = type === 'SpecificDate' ? 'flex' : 'none';
                 dateRow.querySelector('.inputs-annual').style.display = type === 'EveryYear' ? 'flex' : 'none';
                 dateRow.querySelector('.inputs-weekly').style.display = type === 'Weekly' ? 'flex' : 'none';
+                dateRow.querySelector('.inputs-time').style.display = type === 'TimeOfDay' ? 'flex' : 'none';
+                dateRow.querySelector('.inputs-moving').style.display = isMovingType(type) ? 'flex' : 'none';
+                // Easter, Advent and Friday the 13th are their own dates: only the days before/after apply.
+                dateRow.querySelector('.mov-wd-month').style.display = type === 'MovingDate' ? 'flex' : 'none';
+                dateRow.querySelector('.mov-hint').textContent = movingHint(type);
             }
             if (e.target.classList.contains('selStartMonth') || e.target.classList.contains('selEndMonth')) {
                 var isStart = e.target.classList.contains('selStartMonth');
@@ -2151,6 +2329,26 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (e.target.closest('.btnRemoveDate')) {
                 e.target.closest('.date-row').remove();
                 updateBadges(row);
+            }
+
+            if (e.target.closest('.btnSchedulePresets')) {
+                var spBtn = e.target.closest('.btnSchedulePresets');
+                var spPanel = row.querySelector('.schedule-preset-panel');
+                var spOpen = spPanel.style.display === 'none';
+                spPanel.style.display = spOpen ? '' : 'none';
+                var spIcon = spBtn.querySelector('.mi-expand-icon');
+                if (spIcon) spIcon.style.transform = spOpen ? 'rotate(180deg)' : '';
+                return;
+            }
+            if (e.target.closest('.btnApplySchedulePreset')) {
+                var sp = SCHEDULE_PRESETS[+e.target.closest('.btnApplySchedulePreset').dataset.preset];
+                row.querySelector('.date-list-container').insertAdjacentHTML('beforeend', getDateRowHtml(Object.assign({}, sp.interval)));
+                row.querySelector('.schedule-preset-panel').style.display = 'none';
+                var spIcon2 = row.querySelector('.btnSchedulePresets .mi-expand-icon');
+                if (spIcon2) spIcon2.style.transform = '';
+                updateBadges(row);
+                setTimeout(checkFormState, 0);
+                return;
             }
 
             if (e.target.closest('.btnPremadeFilters')) {
@@ -3420,26 +3618,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var collDescription = row.querySelector('.txtCollectionDescription') ? row.querySelector('.txtCollectionDescription').value : '';
             var collPoster = row.querySelector('.hiddenPosterPath') ? row.querySelector('.hiddenPosterPath').value : '';
 
-            var intervals = [];
-            row.querySelectorAll('.date-row').forEach(dr => {
-                var type = dr.querySelector('.selDateType').value;
-                var s = null, e = null, days = "";
-
-                if (type === 'SpecificDate') {
-                    s = dr.querySelector('.txtFullStartDate').value;
-                    e = dr.querySelector('.txtFullEndDate').value;
-                } else if (type === 'EveryYear') {
-                    var sM = dr.querySelector('.selStartMonth').value, sD = dr.querySelector('.selStartDay').value;
-                    var eM = dr.querySelector('.selEndMonth').value, eD = dr.querySelector('.selEndDay').value;
-                    s = `2000-${sM.padStart(2, '0')}-${sD.padStart(2, '0')}`;
-                    e = `2000-${eM.padStart(2, '0')}-${eD.padStart(2, '0')}`;
-                } else if (type === 'Weekly') {
-                    var activeBtns = Array.from(dr.querySelectorAll('.day-toggle.active')).map(b => b.dataset.day);
-                    days = activeBtns.join(',');
-                }
-
-                intervals.push({ Type: type, Start: s || null, End: e || null, DayOfWeek: days });
-            });
+            var intervals = readIntervalsFromRow(row);
 
             var currentLastMod = row.dataset.lastModified || new Date().toISOString();
             
@@ -6945,7 +7124,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             form.addEventListener('click', (e) => {
                 var dayBtn = e.target.closest('.day-toggle');
                 if (dayBtn) dayBtn.classList.toggle('active');
-                if (e.target.closest('.btnRemoveUrl, .btnAddUrl, .btnRemoveLocal, .btnAddLocal, .btnRemoveDate, .btnAddDate, .btnRemoveFilterGroup, .btnAddMediaInfoFilter, .btnClearAllFilters, .btnGroupOpChoice, .btnGroupInnerOpChoice, .btnAddMiRule, .btnRemoveMiRule, .btnRemoveGroup, .day-toggle, .btnRemovePoster, .btnApplyMiPreset')) {
+                if (e.target.closest('.btnRemoveUrl, .btnAddUrl, .btnRemoveLocal, .btnAddLocal, .btnRemoveDate, .btnAddDate, .btnRemoveFilterGroup, .btnAddMediaInfoFilter, .btnClearAllFilters, .btnGroupOpChoice, .btnGroupInnerOpChoice, .btnAddMiRule, .btnRemoveMiRule, .btnRemoveGroup, .day-toggle, .btnRemovePoster, .btnApplyMiPreset, .btnApplySchedulePreset')) {
                     changeHandler();
                 }
             }, { signal: _signal });

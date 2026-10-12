@@ -341,6 +341,7 @@ namespace HomeScreenCompanion
                         .Select(c => c.Length > 0 && c[0] == '!' ? c.Substring(1) : c)
                         .Where(c => c.StartsWith("Collection:", StringComparison.OrdinalIgnoreCase) || c.StartsWith("Playlist:", StringComparison.OrdinalIgnoreCase))
                         .Distinct(StringComparer.OrdinalIgnoreCase);
+                    Dictionary<string, List<long>>? versionIdsByKey = null;
                     foreach (var crit in allCollPlCriteria)
                     {
                         var colonIdx = crit.IndexOf(':');
@@ -366,6 +367,7 @@ namespace HomeScreenCompanion
                             foreach (var m in members)
                             {
                                 ids.Add(m.InternalId);
+                                AddOtherVersions(ids, m, allItems, ref versionIdsByKey);
                                 if (m.GetType().Name.Contains("Series"))
                                 {
                                     foreach (var ep in _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Parent = m, Recursive = true, IsVirtualItem = false }))
@@ -394,6 +396,10 @@ namespace HomeScreenCompanion
 
                 var activeTagOverrides = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var activeCollectionOverrides = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                // When several overrides for one tag (or collection) are in schedule at once, the first
+                // one in the list that finds items owns it; the others are skipped.
+                var overrideOwnerByTag = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var overrideOwnerByCollection = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var tc in config.Tags)
                 {
                     if (!tc.Active || !tc.OverrideWhenActive || string.IsNullOrWhiteSpace(tc.Tag)) continue;
@@ -570,6 +576,16 @@ namespace HomeScreenCompanion
                     {
                         gs.Skipped = true;
                         gs.SkipReason = "overridden by a priority group with the same tag";
+                        statsList.Add(gs);
+                        WriteFetchLine(gs);
+                        continue;
+                    }
+                    if (tagConfig.OverrideWhenActive &&
+                        ((overrideOwnerByTag.TryGetValue(tagName, out var _tagOwner) && _tagOwner != GroupKey(tagConfig)) ||
+                         (tagConfig.EnableCollection && overrideOwnerByCollection.TryGetValue(cName, out var _collOwner) && _collOwner != GroupKey(tagConfig))))
+                    {
+                        gs.Skipped = true;
+                        gs.SkipReason = "another priority group higher in the list is active for the same tag";
                         statsList.Add(gs);
                         WriteFetchLine(gs);
                         continue;
@@ -979,6 +995,11 @@ namespace HomeScreenCompanion
                         {
                             activeTagOverrides.Remove(tagName);
                             if (tagConfig.EnableCollection) activeCollectionOverrides.Remove(cName);
+                        }
+                        else if (tagConfig.OverrideWhenActive)
+                        {
+                            if (!overrideOwnerByTag.ContainsKey(tagName)) overrideOwnerByTag[tagName] = GroupKey(tagConfig);
+                            if (tagConfig.EnableCollection && !overrideOwnerByCollection.ContainsKey(cName)) overrideOwnerByCollection[cName] = GroupKey(tagConfig);
                         }
 
                         // For External and AI sources: if the remote returned zero items and the user has
@@ -1746,6 +1767,7 @@ namespace HomeScreenCompanion
                     .Select(c => c.Length > 0 && c[0] == '!' ? c.Substring(1) : c)
                     .Where(c => c.StartsWith("Collection:", StringComparison.OrdinalIgnoreCase) || c.StartsWith("Playlist:", StringComparison.OrdinalIgnoreCase))
                     .Distinct(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, List<long>>? versionIdsByKey = null;
                 foreach (var crit in singleTagCollPlCriteria)
                 {
                     var colonIdx = crit.IndexOf(':');
@@ -1771,6 +1793,7 @@ namespace HomeScreenCompanion
                         foreach (var m in members)
                         {
                             ids.Add(m.InternalId);
+                            AddOtherVersions(ids, m, allItems, ref versionIdsByKey);
                             if (m.GetType().Name.Contains("Series"))
                             {
                                 foreach (var ep in _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Parent = m, Recursive = true, IsVirtualItem = false }))
@@ -2853,6 +2876,9 @@ namespace HomeScreenCompanion
                                 try
                                 {
                                     var uid = _userManager.GetInternalId(tracking.UserId);
+                                    // Switched off by its schedule (or made inactive): remember where the row
+                                    // was, so it comes back at the same place when it switches on again.
+                                    if (tc.EnableHomeSection) RememberRowPosition(hsKey, tracking.UserId, uid, tracking.SectionId, cancellationToken);
                                     DeleteSectionForUser(uid, tracking.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken);
                                     _removedHs++;
                                 }
@@ -3040,6 +3066,7 @@ namespace HomeScreenCompanion
                                 .Where(s => !string.IsNullOrEmpty(s.Id) && !beforeIds.Contains(s.Id))
                                 .Select(s => s.Id).FirstOrDefault() ?? "";
                             trackId = !string.IsNullOrEmpty(newId) ? newId : sectionMarker;
+                            if (!string.IsNullOrEmpty(newId)) RestoreRowPosition(hsKey, userId, userInternalId, newId, cancellationToken);
                         }
 
                         _hsSectionDone:
@@ -3081,6 +3108,79 @@ namespace HomeScreenCompanion
 
             if (configChanged)
                 Plugin.Instance.SaveConfiguration();
+        }
+
+        // Where a scheduled home row was when it was removed, per group and user (plugin data file),
+        // so it is put back at that place instead of at the bottom. Shared (static) with show
+        // top-lists, whose rows are removed while "Top lists for TV shows" is off.
+        private static readonly object _rowPositionsLock = new object();
+        private static Dictionary<string, int>? _rowPositions;
+        private static string RowPositionsFile => Path.Combine(Plugin.Instance!.DataFolderPath, "home_row_positions.json");
+
+        private static Dictionary<string, int> RowPositions(IJsonSerializer json)
+        {
+            if (_rowPositions != null) return _rowPositions;
+            try
+            {
+                if (File.Exists(RowPositionsFile))
+                    _rowPositions = json.DeserializeFromFile<Dictionary<string, int>>(RowPositionsFile);
+            }
+            catch { }
+            return _rowPositions ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static void SaveRowPositions(IJsonSerializer json)
+        {
+            try { json.SerializeToFile(RowPositions(json), RowPositionsFile); } catch { }
+        }
+
+        private void RememberRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+            => RememberRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
+
+        private void RestoreRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+            => RestoreRowPosition(_userManager, _jsonSerializer, groupKey, userId, userInternalId, sectionId, cancellationToken);
+
+        internal static void RememberRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(sectionId) || sectionId.StartsWith("hsc__")) return;
+                var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                int index = Array.FindIndex(sections, s => s.Id == sectionId);
+                if (index < 0) return;
+                lock (_rowPositionsLock)
+                {
+                    RowPositions(json)[groupKey + "\u001F" + userId] = index;
+                    SaveRowPositions(json);
+                }
+            }
+            catch { }
+        }
+
+        internal static void ForgetRowPosition(IJsonSerializer json, string groupKey, string userId)
+        {
+            lock (_rowPositionsLock)
+                if (RowPositions(json).Remove(groupKey + "\u001F" + userId)) SaveRowPositions(json);
+        }
+
+        internal static void RestoreRowPosition(IUserManager userManager, IJsonSerializer json, string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
+        {
+            var key = groupKey + "\u001F" + userId;
+            int index;
+            lock (_rowPositionsLock)
+                if (!RowPositions(json).TryGetValue(key, out index)) return;
+            try
+            {
+                var count = (userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>()).Length;
+                if (count > 0 && index < count - 1)
+                    userManager.MoveHomeSections(userInternalId, new[] { sectionId }, index, cancellationToken);
+            }
+            catch { }
+            lock (_rowPositionsLock)
+            {
+                RowPositions(json).Remove(key);
+                SaveRowPositions(json);
+            }
         }
 
         private void DeleteSectionForUser(long userInternalId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken)
@@ -3567,6 +3667,10 @@ namespace HomeScreenCompanion
             {
                 bool match = false;
                 if (interval.Type == "Weekly") { if (!string.IsNullOrEmpty(interval.DayOfWeek) && interval.DayOfWeek.IndexOf(now.DayOfWeek.ToString(), StringComparison.OrdinalIgnoreCase) >= 0) match = true; }
+                else if (interval.Type == "TimeOfDay") match = TimeOfDayMatches(interval, now);
+                else if (interval.Type == "MovingDate" || interval.Type == "Easter") match = MovingDateMatches(interval, now);
+                else if (interval.Type == "Advent") match = AdventMatches(interval, now);
+                else if (interval.Type == "Friday13") match = Friday13Matches(interval, now);
                 else if (interval.Type == "EveryYear")
                 {
                     if (interval.Start.HasValue && interval.End.HasValue)
@@ -3585,6 +3689,94 @@ namespace HomeScreenCompanion
                 if (match) return true;
             }
             return false;
+        }
+
+        // A "MovingDate" window: the anchor date (e.g. last Monday of May, or Easter Sunday) of last
+        // year, this year and next year, each widened by DaysBefore/DaysAfter (0–60), so a window
+        // that crosses New Year works. Inclusive on both ends, whole days (server time).
+        private static bool MovingDateMatches(DateInterval interval, DateTime now)
+        {
+            int before = Math.Max(0, Math.Min(60, interval.DaysBefore));
+            int after = Math.Max(0, Math.Min(60, interval.DaysAfter));
+            var today = now.Date;
+            for (int y = now.Year - 1; y <= now.Year + 1; y++)
+            {
+                var anchor = MovingDateAnchor(interval, y);
+                if (anchor == null) return false;
+                if (today >= anchor.Value.AddDays(-before) && today <= anchor.Value.AddDays(after)) return true;
+            }
+            return false;
+        }
+
+        internal static DateTime? MovingDateAnchor(DateInterval interval, int year)
+        {
+            var occ = (interval.Occurrence ?? "1").Trim().ToLowerInvariant();
+            if (interval.Type == "Easter" || occ == "easter") return WesternEaster(year);
+            if (interval.Month < 1 || interval.Month > 12) return null;
+            if (!Enum.TryParse<DayOfWeek>((interval.DayOfWeek ?? "").Split(',')[0].Trim(), true, out var wd)) return null;
+            if (occ == "last")
+            {
+                var last = new DateTime(year, interval.Month, DateTime.DaysInMonth(year, interval.Month));
+                return last.AddDays(-(((int)last.DayOfWeek - (int)wd + 7) % 7));
+            }
+            if (!int.TryParse(occ, out var n) || n < 1 || n > 4) return null;
+            var first = new DateTime(year, interval.Month, 1);
+            return first.AddDays(((int)wd - (int)first.DayOfWeek + 7) % 7 + 7 * (n - 1));
+        }
+
+        // Western (Gregorian) Easter Sunday: the anonymous Gregorian algorithm (Meeus/Jones/Butcher).
+        internal static DateTime WesternEaster(int year)
+        {
+            int a = year % 19, b = year / 100, c = year % 100, d = b / 4, e = b % 4;
+            int f = (b + 8) / 25, g = (b - f + 1) / 3, h = (19 * a + b - d - g + 15) % 30;
+            int i = c / 4, k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = (a + 11 * h + 22 * l) / 451;
+            int month = (h + l - 7 * m + 114) / 31, day = (h + l - 7 * m + 114) % 31 + 1;
+            return new DateTime(year, month, day);
+        }
+
+        // First Sunday of Advent: the fourth Sunday before Christmas Day (Nov 27 – Dec 3).
+        internal static DateTime FirstAdvent(int year)
+        {
+            var christmas = new DateTime(year, 12, 25);
+            int back = (int)christmas.DayOfWeek == 0 ? 7 : (int)christmas.DayOfWeek;
+            return christmas.AddDays(-back - 21);
+        }
+
+        // An "Advent" window: from the first Sunday of Advent through Christmas Day, widened by
+        // DaysBefore/DaysAfter (0–60).
+        private static bool AdventMatches(DateInterval interval, DateTime now)
+        {
+            int before = Math.Max(0, Math.Min(60, interval.DaysBefore));
+            int after = Math.Max(0, Math.Min(60, interval.DaysAfter));
+            var today = now.Date;
+            for (int y = now.Year - 1; y <= now.Year; y++)
+                if (today >= FirstAdvent(y).AddDays(-before) && today <= new DateTime(y, 12, 25).AddDays(after)) return true;
+            return false;
+        }
+
+        // A "Friday13" window: every Friday the 13th, widened by DaysBefore/DaysAfter (0–60).
+        private static bool Friday13Matches(DateInterval interval, DateTime now)
+        {
+            int before = Math.Max(0, Math.Min(60, interval.DaysBefore));
+            int after = Math.Max(0, Math.Min(60, interval.DaysAfter));
+            var today = now.Date;
+            // Today is in the window when a Friday the 13th lies between today - after and today + before.
+            for (var d = today.AddDays(-after); d <= today.AddDays(before); d = d.AddDays(1))
+                if (d.Day == 13 && d.DayOfWeek == DayOfWeek.Friday) return true;
+            return false;
+        }
+
+        // A "TimeOfDay" window. One that runs past midnight (22:00 → 02:00) belongs to the day it
+        // starts on, so Friday 22:00 → 02:00 is still active at 01:00 on Saturday.
+        private static bool TimeOfDayMatches(DateInterval interval, DateTime now)
+        {
+            if (!TimeSpan.TryParse(interval.FromTime ?? "", out var from) || !TimeSpan.TryParse(interval.ToTime ?? "", out var to)) return false;
+            bool DayOk(DayOfWeek d) => string.IsNullOrWhiteSpace(interval.DayOfWeek)
+                || interval.DayOfWeek.IndexOf(d.ToString(), StringComparison.OrdinalIgnoreCase) >= 0;
+            var t = now.TimeOfDay;
+            if (from < to) return DayOk(now.DayOfWeek) && t >= from && t < to;
+            if (from == to) return DayOk(now.DayOfWeek);
+            return (t >= from && DayOk(now.DayOfWeek)) || (t < to && DayOk(now.AddDays(-1).DayOfWeek));
         }
 
         private BaseItem ResolveItemForMediaInfo(BaseItem item, Dictionary<long, BaseItem> seriesEpisodeCache)
@@ -4091,6 +4283,35 @@ namespace HomeScreenCompanion
         private static bool MatchesAny(string[] values, string search) =>
             values != null && values.Any(v =>
                 v.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0);
+
+        // What makes two movie items versions of one film: the same IMDb id, else the same PresentationUniqueKey.
+        private static string? VersionKey(BaseItem item)
+        {
+            var imdb = item.GetProviderId("Imdb");
+            return !string.IsNullOrEmpty(imdb) ? "imdb:" + imdb
+                : !string.IsNullOrEmpty(item.PresentationUniqueKey) ? "puk:" + item.PresentationUniqueKey : null;
+        }
+
+        // A playlist or collection holds one version of a film; its other versions count as members too,
+        // so a "Playlist:" / "Collection:" rule (or its "not in" form) treats the film as a whole.
+        private static void AddOtherVersions(HashSet<long> ids, BaseItem member, List<BaseItem> allItems, ref Dictionary<string, List<long>>? versionIdsByKey)
+        {
+            if (!(member is MediaBrowser.Controller.Entities.Movies.Movie)) return;
+            var key = VersionKey(member);
+            if (key == null) return;
+            if (versionIdsByKey == null)
+            {
+                versionIdsByKey = new Dictionary<string, List<long>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in allItems.Where(i => i is MediaBrowser.Controller.Entities.Movies.Movie))
+                {
+                    var k = VersionKey(item);
+                    if (k == null) continue;
+                    if (!versionIdsByKey.TryGetValue(k, out var list)) versionIdsByKey[k] = list = new List<long>();
+                    list.Add(item.InternalId);
+                }
+            }
+            if (versionIdsByKey.TryGetValue(key, out var versions)) ids.UnionWith(versions);
+        }
 
         private static string[] SplitCommaValues(string val) =>
             val.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
