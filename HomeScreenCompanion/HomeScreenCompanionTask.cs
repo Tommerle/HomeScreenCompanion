@@ -3128,6 +3128,11 @@ namespace HomeScreenCompanion
             catch { return new List<BaseItem>(); }
         }
 
+        // A playlist is removed with its folder (userplaylists\<name> [playlist]\<name>.m3u): left
+        // behind, Emby indexes the .m3u again as a new playlist that no user owns.
+        private void DeletePlaylist(BaseItem playlist)
+            => _libraryManager.DeleteItem(playlist, new DeleteOptions { DeleteFileLocation = true });
+
         private int PlaylistEntryCount(BaseItem playlist)
         {
             try { return _libraryManager.GetItemList(new InternalItemsQuery { ListIds = new[] { playlist.InternalId } }).Length; }
@@ -3535,7 +3540,7 @@ namespace HomeScreenCompanion
                                 }
                                 try
                                 {
-                                    _libraryManager.DeleteItem(dup, new DeleteOptions { DeleteFileLocation = false });
+                                    DeletePlaylist(dup);
                                     _log.Info($"  Playlist \"{plName}\": removed duplicate playlist of {plUser.Name} (id {dup.Id})");
                                 }
                                 catch (Exception ex) { _log.Warn($"Playlist \"{plName}\": duplicate of {plUser.Name} could not be removed: {ex.Message}"); }
@@ -4230,7 +4235,7 @@ namespace HomeScreenCompanion
                             var pl = _libraryManager.GetItemById(guid);
                             if (pl != null && !dryRun)
                             {
-                                try { _libraryManager.DeleteItem(pl, new DeleteOptions { DeleteFileLocation = false }); }
+                                try { DeletePlaylist(pl); }
                                 catch (Exception ex) { _log.Warn($"Playlist '{pl.Name}' could not be removed: {ex.Message}"); }
                             }
                         }
@@ -4251,7 +4256,7 @@ namespace HomeScreenCompanion
                             var pl = _libraryManager.GetItemById(guid);
                             if (pl != null && !dryRun)
                             {
-                                try { _libraryManager.DeleteItem(pl, new DeleteOptions { DeleteFileLocation = false }); }
+                                try { DeletePlaylist(pl); }
                                 catch (Exception ex) { _log.Warn($"Playlist '{pl.Name}' could not be removed: {ex.Message}"); }
                             }
                         }
