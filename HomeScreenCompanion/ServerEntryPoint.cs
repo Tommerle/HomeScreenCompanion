@@ -1,6 +1,7 @@
 ﻿using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
@@ -23,14 +24,17 @@ namespace HomeScreenCompanion
         private readonly IProviderManager _providerManager;
         private readonly IFileSystem _fileSystem;
         private readonly ICollectionManager _collectionManager;
+        private readonly IItemRepository _itemRepository;
+        private readonly IMediaSourceManager _mediaSourceManager;
 
         private readonly object _strmLock = new object();
         // Keyed by InternalId, not Id: Emby derives the Guid from the path, so a top-list entry that
         // is deleted and re-created at the same path (list rebuilt / re-created under the same name)
         // keeps its Guid but gets a new InternalId — and must be linked again.
         private readonly HashSet<long> _processedStrmIds = new HashSet<long>();
+        private readonly HashSet<long> _showCopiesInFlight = new HashSet<long>();
 
-        public ServerEntryPoint(ILibraryManager libraryManager, ILogManager logManager, IJsonSerializer jsonSerializer, IProviderManager providerManager, IFileSystem fileSystem, ICollectionManager collectionManager)
+        public ServerEntryPoint(ILibraryManager libraryManager, ILogManager logManager, IJsonSerializer jsonSerializer, IProviderManager providerManager, IFileSystem fileSystem, ICollectionManager collectionManager, IItemRepository itemRepository, IMediaSourceManager mediaSourceManager)
         {
             _libraryManager = libraryManager;
             _logger = logManager.GetLogger("HomeScreenCompanion_RealTime");
@@ -38,6 +42,8 @@ namespace HomeScreenCompanion
             _providerManager = providerManager;
             _fileSystem = fileSystem;
             _collectionManager = collectionManager;
+            _itemRepository = itemRepository;
+            _mediaSourceManager = mediaSourceManager;
         }
 
         public void Run()
@@ -46,6 +52,7 @@ namespace HomeScreenCompanion
             RunAutoMigration();
             TagCacheManager.Instance.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
             TopListCollectionMirror.Initialize(_libraryManager, _collectionManager, _logger);
+            ShowTopList.Initialize(_itemRepository, _mediaSourceManager);
 
             // Last run logs survive a restart (shown in the log modal and "Last run").
             LogStore.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
@@ -144,10 +151,19 @@ namespace HomeScreenCompanion
 
         private void ProcessItem(BaseItem item)
         {
+            if (item.IsVirtualItem) return;
+
+            // Show top-list copies (series, seasons, episodes): rank, ranked images and the
+            // originals' images, as soon as Emby indexes them.
+            if ((item is MediaBrowser.Controller.Entities.TV.Series || item is MediaBrowser.Controller.Entities.TV.Season
+                 || item is MediaBrowser.Controller.Entities.TV.Episode) && ShowTopList.IsCopy(item))
+            {
+                ProcessShowCopy(item);
+                return;
+            }
+
             if (!(item is MediaBrowser.Controller.Entities.Movies.Movie) && !(item is MediaBrowser.Controller.Entities.TV.Series))
                 return;
-
-            if (item.IsVirtualItem) return;
 
             // Items under the top-list folder are .strm virtual copies. Never tag them, but DO
             // link each one to its original movie (as an alternate version) and force a media
@@ -263,6 +279,34 @@ namespace HomeScreenCompanion
             {
                 _logger.Error("[TopList] ProcessTopListStrmItem error: " + ex.Message);
             }
+        }
+
+        // Runs off the event thread (events fire synchronously during a library scan). Our own
+        // UpdateItem raises ItemUpdated again; the in-flight set and Refresh's "nothing to do"
+        // check keep that from looping.
+        private void ProcessShowCopy(BaseItem item)
+        {
+            var internalId = item.InternalId;
+            lock (_strmLock)
+            {
+                if (!_showCopiesInFlight.Add(internalId)) return;
+            }
+            Task.Run(() =>
+            {
+                try
+                {
+                    var current = _libraryManager.GetItemById(internalId);
+                    if (current != null) ShowTopList.Refresh(current, _libraryManager, _jsonSerializer);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn("[TopList] Show copy '" + item.Name + "' could not be updated: " + ex.Message);
+                }
+                finally
+                {
+                    lock (_strmLock) { _showCopiesInFlight.Remove(internalId); }
+                }
+            });
         }
 
         public void Dispose()

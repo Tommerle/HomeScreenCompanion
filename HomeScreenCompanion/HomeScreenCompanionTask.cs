@@ -222,6 +222,7 @@ namespace HomeScreenCompanion
                 var allScannedSeasonItems = new Dictionary<Guid, BaseItem>();
                 var desiredCollectionsMap = new Dictionary<string, HashSet<long>>(StringComparer.OrdinalIgnoreCase);
                 var collectionDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var collectionSortNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 var collectionPosters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 var managedTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var activeCollections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -234,8 +235,16 @@ namespace HomeScreenCompanion
                 // Groups where a source failed / returned nothing — their playlists are left untouched
                 var playlistGroupsToSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+                // managedTags = tags of every configured group + tags from the history file. The
+                // history holds tags of groups that have since been deleted, so this run can take
+                // them off the items once; afterwards they are dropped from the history (see
+                // below) and the tag is free to be used by hand again.
                 var previouslyManagedTags = LoadFileHistory("homescreencompanion_history.txt");
                 foreach (var t in previouslyManagedTags) managedTags.Add(t);
+                var configuredTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                // Tags of deleted groups that could not be taken off every item — kept in the
+                // history so the next run tries again.
+                var orphanCleanupFailed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 var previouslyManagedCollections = LoadFileHistory("homescreencompanion_collections.txt");
                 // Also track collection names from inactive groups so they get cleaned up
@@ -497,6 +506,7 @@ namespace HomeScreenCompanion
                     if (string.IsNullOrWhiteSpace(tagConfig.Tag)) continue;
                     string tagName = tagConfig.Tag.Trim();
                     managedTags.Add(tagName); // track all groups (active or inactive) so cleanup always runs
+                    configuredTags.Add(tagName);
 
                     if (!tagConfig.Active) continue;
 
@@ -567,6 +577,7 @@ namespace HomeScreenCompanion
                     if (tagConfig.EnableCollection)
                     {
                         activeCollections.Add(cName);
+                        collectionSortNames[cName] = (tagConfig.CollectionSortName ?? "").Trim();
                         if (!string.IsNullOrWhiteSpace(tagConfig.CollectionDescription))
                             collectionDescriptions[cName] = tagConfig.CollectionDescription;
                         if (!string.IsNullOrWhiteSpace(tagConfig.CollectionPosterPath) && File.Exists(tagConfig.CollectionPosterPath))
@@ -1095,7 +1106,6 @@ namespace HomeScreenCompanion
                     foreach (var kvp in rankIdsByTag)
                         WriteRankFile(kvp.Key, kvp.Value);
                     TagCacheManager.Instance.Save();
-                    SaveFileHistory("homescreencompanion_history.txt", managedTags.ToList());
                 }
 
                 // Collect episodes that currently carry managed tags so they can be cleaned up
@@ -1154,7 +1164,11 @@ namespace HomeScreenCompanion
                         foreach (var t in toRemove) { item.RemoveTag(t); tagsRemoved++; tagRemovedByTag[t] = tagRemovedByTag.GetValueOrDefault(t) + 1; }
                         foreach (var t in toAdd) { item.AddTag(t); tagsAdded++; tagAddedByTag[t] = tagAddedByTag.GetValueOrDefault(t) + 1; }
                         try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); }
-                        catch (Exception ex) { _log.Warn($"Could not save tags for '{item.Name}': {ex.Message}"); }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Could not save tags for '{item.Name}': {ex.Message}");
+                            foreach (var t in toRemove) if (!configuredTags.Contains(t)) orphanCleanupFailed.Add(t);
+                        }
                         if (++updateCount % 25 == 0)
                             await Task.Yield();
                     }
@@ -1188,7 +1202,11 @@ namespace HomeScreenCompanion
                         foreach (var t in toRemove) { item.RemoveTag(t); tagsRemoved++; tagRemovedByTag[t] = tagRemovedByTag.GetValueOrDefault(t) + 1; }
                         foreach (var t in toAdd) { item.AddTag(t); tagsAdded++; tagAddedByTag[t] = tagAddedByTag.GetValueOrDefault(t) + 1; }
                         try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); }
-                        catch (Exception ex) { _log.Warn($"Could not save tags for '{item.Name}': {ex.Message}"); }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Could not save tags for '{item.Name}': {ex.Message}");
+                            foreach (var t in toRemove) if (!configuredTags.Contains(t)) orphanCleanupFailed.Add(t);
+                        }
                         if (++updateCount % 25 == 0)
                             await Task.Yield();
                     }
@@ -1222,7 +1240,11 @@ namespace HomeScreenCompanion
                         foreach (var t in toRemove) { item.RemoveTag(t); tagsRemoved++; tagRemovedByTag[t] = tagRemovedByTag.GetValueOrDefault(t) + 1; }
                         foreach (var t in toAdd) { item.AddTag(t); tagsAdded++; tagAddedByTag[t] = tagAddedByTag.GetValueOrDefault(t) + 1; }
                         try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); }
-                        catch (Exception ex) { _log.Warn($"Could not save tags for season '{item.Name}': {ex.Message}"); }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Could not save tags for season '{item.Name}': {ex.Message}");
+                            foreach (var t in toRemove) if (!configuredTags.Contains(t)) orphanCleanupFailed.Add(t);
+                        }
                         if (++updateCount % 25 == 0)
                             await Task.Yield();
                     }
@@ -1233,6 +1255,12 @@ namespace HomeScreenCompanion
                         foreach (var t in toRemove) tagRemovedByTag[t] = tagRemovedByTag.GetValueOrDefault(t) + 1;
                     }
                 }
+                // Saved after the clean-up above, not before: a deleted group's tag stays in the
+                // history only until it has been taken off its items. Keeping every tag ever
+                // managed made the plugin strip a name forever, even when it was later added by hand.
+                if (!dryRun)
+                    SaveFileHistory("homescreencompanion_history.txt", configuredTags.Concat(orphanCleanupFailed).ToList());
+
                 foreach (var gs in statsList)
                 {
                     if (gs.TagName != null)
@@ -1276,6 +1304,7 @@ namespace HomeScreenCompanion
                                 _log.Debug($"  {cName}  →  created ({desiredIds.Count} items)");
                                 if (collectionDescriptions.ContainsKey(cName) || collectionPosters.ContainsKey(cName))
                                     ApplyCollectionMeta(createdRef, cName, collectionDescriptions, collectionPosters, debug);
+                                ApplyCollectionSortName(createdRef, cName, collectionSortNames.GetValueOrDefault(cName));
                             }
                         }
                         else
@@ -1313,6 +1342,8 @@ namespace HomeScreenCompanion
                             }
                             if (!dryRun && (collectionDescriptions.ContainsKey(cName) || collectionPosters.ContainsKey(cName)))
                                 ApplyCollectionMeta(existingColl, cName, collectionDescriptions, collectionPosters, debug);
+                            if (!dryRun)
+                                ApplyCollectionSortName(existingColl, cName, collectionSortNames.GetValueOrDefault(cName));
                         }
                     }
                     catch (Exception ex)
@@ -2358,11 +2389,12 @@ namespace HomeScreenCompanion
                     var existingColl = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault();
                     if (existingColl == null)
                     {
-                        await _collectionManager.CreateCollection(new CollectionCreationOptions { Name = cName, IsLocked = false, ItemIdList = desiredIds.ToArray() });
+                        var createdColl = await _collectionManager.CreateCollection(new CollectionCreationOptions { Name = cName, IsLocked = false, ItemIdList = desiredIds.ToArray() });
                         collResult = 1;
                         _collCreated = true;
                         _collItemsAdded = desiredIds.Count;
                         _log.Debug($"  {cName}  →  created ({desiredIds.Count} items)");
+                        if (createdColl != null) ApplyCollectionSortName(createdColl, cName, tagConfig.CollectionSortName);
                     }
                     else
                     {
@@ -2372,6 +2404,7 @@ namespace HomeScreenCompanion
                         var toRemove = currentMembers.Where(id => !desiredIds.Contains(id)).ToList();
                         if (toAdd.Count > 0) await _collectionManager.AddToCollection(existingColl.InternalId, toAdd.ToArray());
                         if (toRemove.Count > 0 && existingColl is BoxSet boxSet) _collectionManager.RemoveFromCollection(boxSet, toRemove.ToArray());
+                        ApplyCollectionSortName(existingColl, cName, tagConfig.CollectionSortName);
                         collResult = toAdd.Count + toRemove.Count;
                         _collItemsAdded = toAdd.Count;
                         _collItemsRemoved = toRemove.Count;
@@ -4788,6 +4821,68 @@ namespace HomeScreenCompanion
                 _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null);
         }
 
+        // Sets a collection's sort title, locked so Emby's metadata refreshes keep it. When the
+        // field is emptied, Emby's own sort order is restored — but only if the collection still
+        // has the sort title the plugin gave it, so one set by hand in Emby is never touched.
+        // homescreencompanion_sorttitles.json remembers which sort title the plugin set.
+        private void ApplyCollectionSortName(BaseItem coll, string cName, string? sortTitle)
+        {
+            sortTitle = (sortTitle ?? "").Trim();
+            var record = LoadSortTitleRecord();
+            var locked = (coll.LockedFields ?? Array.Empty<MetadataFields>()).ToList();
+            bool isLocked = locked.Contains(MetadataFields.SortName);
+
+            if (sortTitle.Length > 0)
+            {
+                if (!string.Equals(coll.SortName, sortTitle, StringComparison.Ordinal) || !isLocked)
+                {
+                    coll.SortName = sortTitle;
+                    if (!isLocked) { locked.Add(MetadataFields.SortName); coll.LockedFields = locked.ToArray(); }
+                    _libraryManager.UpdateItem(coll, coll.Parent, ItemUpdateType.MetadataEdit, null);
+                    _log.Debug($"  {cName}  →  sort title \"{sortTitle}\"");
+                }
+                if (!record.TryGetValue(cName, out var known) || known != sortTitle)
+                {
+                    record[cName] = sortTitle;
+                    SaveSortTitleRecord(record);
+                }
+            }
+            else if (record.TryGetValue(cName, out var applied))
+            {
+                if (string.Equals(coll.SortName, applied, StringComparison.Ordinal))
+                {
+                    locked.Remove(MetadataFields.SortName);
+                    coll.LockedFields = locked.ToArray();
+                    coll.SortName = null; // Emby derives it from the name again
+                    _libraryManager.UpdateItem(coll, coll.Parent, ItemUpdateType.MetadataEdit, null);
+                    _log.Debug($"  {cName}  →  sort title removed");
+                }
+                record.Remove(cName);
+                SaveSortTitleRecord(record);
+            }
+        }
+
+        private Dictionary<string, string> LoadSortTitleRecord()
+        {
+            try
+            {
+                var path = Path.Combine(Plugin.Instance.DataFolderPath, "homescreencompanion_sorttitles.json");
+                if (File.Exists(path))
+                {
+                    var saved = _jsonSerializer.DeserializeFromFile<Dictionary<string, string>>(path);
+                    if (saved != null) return new Dictionary<string, string>(saved, StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void SaveSortTitleRecord(Dictionary<string, string> record)
+        {
+            try { _jsonSerializer.SerializeToFile(record, Path.Combine(Plugin.Instance.DataFolderPath, "homescreencompanion_sorttitles.json")); }
+            catch { }
+        }
+
         private void SyncTopListFolders(PluginConfiguration config, bool dryRun)
         {
             var dataPath = Plugin.Instance.DataFolderPath;
@@ -4851,10 +4946,13 @@ namespace HomeScreenCompanion
                 StringComparer.OrdinalIgnoreCase
             );
 
+            SyncShowTopListFolders(config, topListsPath, managedTagNames);
+
             // Recreate .strm/.nfo files for each tag-based top-list
             foreach (var tl in config.TopLists ?? new List<TopListHomeSection>())
             {
                 if (string.IsNullOrWhiteSpace(tl.TagName)) continue;
+                if (ShowTopList.IsShows(tl)) continue;
                 if (!managedTagNames.Contains(tl.TagName)) continue;
 
                 var sanitized = SanitizeTopListFolderName(tl.TagName);
@@ -5018,6 +5116,53 @@ namespace HomeScreenCompanion
                 catch { }
 
                 _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "movie")} synced to its library folder");
+            }
+        }
+
+        // Show top-lists are rebuilt on every sync, manual ones too: their series get new episodes,
+        // and each episode is a file in the list's folder. Tag-based lists also pick up the tag's
+        // new members and order. Only changed files are touched (see ShowTopList.WriteFolder).
+        private void SyncShowTopListFolders(PluginConfiguration config, string topListsPath, HashSet<string> managedTagNames)
+        {
+            foreach (var tl in (config.TopLists ?? new List<TopListHomeSection>()).Where(ShowTopList.IsShows))
+            {
+                if (string.IsNullOrWhiteSpace(tl.TagName)) continue;
+                try
+                {
+                    var folderPath = Path.Combine(topListsPath, SanitizeTopListFolderName(tl.TagName));
+                    var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
+                            settings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settings;
+                    }
+                    catch { }
+                    var badgeStyle = settings.TryGetValue("BadgeStyle", out var bs) && !string.IsNullOrEmpty(bs) ? bs : "neutral";
+                    int maxItems = tl.MaxItems;
+                    if (maxItems <= 0 && settings.TryGetValue("MaxItems", out var mi) && int.TryParse(mi, out var parsed)) maxItems = parsed;
+
+                    List<BaseItem> series;
+                    if (managedTagNames.Contains(tl.TagName))
+                        series = ShowTopList.SeriesForTag(_libraryManager, _jsonSerializer, tl.TagName);
+                    else
+                    {
+                        // Manual list: its series are the ones in the folder's manifest.
+                        var manifest = ShowTopList.ReadManifest(folderPath, _jsonSerializer);
+                        if (manifest.Count == 0) { _log.Skip($"Top-list '{tl.TagName}': no shows saved for this list"); continue; }
+                        series = ShowTopList.ResolveSeries(_libraryManager, manifest.Select(e => (e.SeriesId, e.ImdbId)));
+                    }
+                    if (maxItems > 0) series = series.Take(maxItems).ToList();
+
+                    var count = ShowTopList.WriteFolder(folderPath, series, badgeStyle,
+                        _libraryManager, _jsonSerializer, _httpClient, _providerManager, _fileSystem, m => _log.Warn(m));
+                    try { _libraryMonitor?.ReportFileSystemChanged(folderPath); } catch { }
+                    ShowTopList.ApplyIndexed(folderPath, _libraryManager, _jsonSerializer);
+                    _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "show")} synced to its library folder");
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn($"Top-list '{tl.TagName}': shows could not be synced — {ex.Message}");
+                }
             }
         }
 

@@ -73,6 +73,21 @@ namespace HomeScreenCompanion
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public int Count { get; set; }
+        public int InLibraryCount { get; set; }
+        public List<SourceTestItem> Items { get; set; } = new List<SourceTestItem>();
+    }
+
+    public class SourceTestItem
+    {
+        public string Name { get; set; } = "";
+        public int? Year { get; set; }
+        public string Imdb { get; set; } = "";
+        public bool InLibrary { get; set; }
+        public bool MatchedByTitle { get; set; }
+        public string LibraryItemId { get; set; } = "";
+        public string LibraryName { get; set; } = "";
+        public int? LibraryYear { get; set; }
+        public string ItemType { get; set; } = "";
     }
 
     public class StatusResponse
@@ -110,7 +125,7 @@ namespace HomeScreenCompanion
     [Route("/HomeScreenCompanion/Manage/Tags", "GET")]
     [Authenticated(Roles = "Admin")]
     public class GetManagedTagsRequest : IReturn<GetManagedTagsResponse> { }
-    public class ManagedTagInfo { public string Id { get; set; } = ""; public string Name { get; set; } = ""; public int ItemCount { get; set; } public int MovieCount { get; set; } public List<string> ItemTypes { get; set; } = new List<string>(); }
+    public class ManagedTagInfo { public string Id { get; set; } = ""; public string Name { get; set; } = ""; public int ItemCount { get; set; } public int MovieCount { get; set; } public int SeriesCount { get; set; } public List<string> ItemTypes { get; set; } = new List<string>(); }
     public class GetManagedTagsResponse { public List<ManagedTagInfo> Tags { get; set; } = new List<ManagedTagInfo>(); }
 
     [Route("/HomeScreenCompanion/Manage/Collections", "GET")]
@@ -152,6 +167,7 @@ namespace HomeScreenCompanion
         public string TagName { get; set; } = "";
         public int MaxItems { get; set; } = 0;
         public string BadgeStyle { get; set; } = "neutral";
+        public string ContentType { get; set; } = "Movies";
     }
     public class PrepareTopListFolderResponse
     {
@@ -185,6 +201,7 @@ namespace HomeScreenCompanion
         public string ImageType { get; set; } = "";
         public string BadgeStyle { get; set; } = "neutral";
         public List<string> UserIds { get; set; } = new List<string>();
+        public string ContentType { get; set; } = "Movies";
         public string Message { get; set; } = "";
     }
 
@@ -269,6 +286,11 @@ namespace HomeScreenCompanion
         public List<MovieItem> Movies { get; set; } = new List<MovieItem>();
     }
 
+    // Series for the manual show top-list picker (same shape as AllMovies).
+    [Route("/HomeScreenCompanion/TopList/AllSeries", "GET")]
+    [Authenticated(Roles = "Admin")]
+    public class GetAllSeriesRequest : IReturn<GetAllMoviesResponse> { }
+
     [Route("/HomeScreenCompanion/TopList/GrantLibraryAccess", "POST")]
     [Authenticated(Roles = "Admin")]
     public class GrantTopListLibraryAccessRequest : IReturn<GrantTopListLibraryAccessResponse>
@@ -314,6 +336,7 @@ namespace HomeScreenCompanion
         public string ListName { get; set; } = "";
         public List<ManualTopListItem> Items { get; set; } = new List<ManualTopListItem>();
         public string BadgeStyle { get; set; } = "neutral";
+        public string ContentType { get; set; } = "Movies";
     }
     public class ManualTopListItem
     {
@@ -389,7 +412,7 @@ namespace HomeScreenCompanion
     {
         public TopListHomeSection Config { get; set; } = new TopListHomeSection();
         public bool IsManual { get; set; }
-        // Manual lists only: movies in rank order. Tag-based lists are rebuilt from the tag on the next sync.
+        // Manual lists only: movies (or shows) in rank order. Tag-based lists are rebuilt from the tag on the next sync.
         public List<BackupTopListItem> Items { get; set; } = new List<BackupTopListItem>();
     }
 
@@ -435,6 +458,7 @@ namespace HomeScreenCompanion
         public int MaxItems { get; set; }
         public List<string> UserIds { get; set; } = new List<string>();
         public string FolderPath { get; set; } = "";
+        public string ContentType { get; set; } = "Movies";
     }
 
 public class HomeScreenCompanionService : IService
@@ -612,17 +636,82 @@ public class HomeScreenCompanionService : IService
                     return new TestUrlResponse { Success = false, Message = "No items found. Check URL and API Keys." };
                 }
 
+                var library = BuildTestLibraryIndex();
+                var results = items.Select(i => MatchTestItem(library, i.Name, null, i.Imdb, false)).ToList();
+                int inLibrary = results.Count(r => r.InLibrary);
+
                 return new TestUrlResponse
                 {
                     Success = true,
                     Count = items.Count,
-                    Message = $"Successfully found {items.Count} items."
+                    InLibraryCount = inLibrary,
+                    Items = results,
+                    Message = $"Successfully found {items.Count} items ({inLibrary} in library)."
                 };
             }
             catch (Exception ex)
             {
                 return new TestUrlResponse { Success = false, Message = $"Error: {ex.Message}" };
             }
+        }
+
+        private sealed class TestLibraryIndex
+        {
+            public Dictionary<string, BaseItem> ByImdb = new Dictionary<string, BaseItem>(StringComparer.OrdinalIgnoreCase);
+            public List<BaseItem> Items = new List<BaseItem>();
+        }
+
+        // Same matching rules as the sync task: IMDb id first, top-list .strm copies excluded,
+        // and title+year as a fallback for AI sources only.
+        private TestLibraryIndex BuildTestLibraryIndex()
+        {
+            var index = new TestLibraryIndex();
+            var topListsFolder = Path.Combine(Plugin.Instance.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
+            var allItems = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { "Movie", "Series" },
+                Recursive = true,
+                IsVirtualItem = false
+            });
+            foreach (var item in allItems)
+            {
+                if (!string.IsNullOrEmpty(item.Path) &&
+                    item.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                index.Items.Add(item);
+                if (item.LocationType != LocationType.FileSystem) continue;
+                var imdb = item.GetProviderId("Imdb");
+                if (!string.IsNullOrEmpty(imdb) && !index.ByImdb.ContainsKey(imdb))
+                    index.ByImdb[imdb] = item;
+            }
+            return index;
+        }
+
+        private static SourceTestItem MatchTestItem(TestLibraryIndex index, string name, int? year, string imdb, bool allowTitleMatch)
+        {
+            imdb = (imdb ?? "").Trim();
+            var result = new SourceTestItem { Name = name ?? "", Year = year, Imdb = imdb };
+
+            BaseItem match = null;
+            if (!string.IsNullOrEmpty(imdb)) index.ByImdb.TryGetValue(imdb, out match);
+            if (match == null && allowTitleMatch && !string.IsNullOrWhiteSpace(name))
+            {
+                match = index.Items.FirstOrDefault(i =>
+                    string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && (year == null || !i.ProductionYear.HasValue || i.ProductionYear == year));
+                result.MatchedByTitle = match != null;
+            }
+
+            if (match != null)
+            {
+                result.InLibrary = true;
+                result.LibraryItemId = match.InternalId.ToString();
+                result.LibraryName = match.Name ?? "";
+                result.LibraryYear = match.ProductionYear;
+                result.ItemType = match.GetType().Name.Contains("Series") ? "Series" : "Movie";
+                if (string.IsNullOrEmpty(result.Name)) result.Name = match.Name ?? "";
+            }
+            return result;
         }
 
         public async Task<object> Post(RunEntryRequest request)
@@ -715,11 +804,18 @@ public class HomeScreenCompanionService : IService
                     .Select(i => string.IsNullOrEmpty(i.imdb_id) ? i.title : $"{i.title} — {i.imdb_id}")
                     .ToList();
 
+                var library = BuildTestLibraryIndex();
+                var results = aiItems.Where(i => !string.IsNullOrWhiteSpace(i.title))
+                    .Select(i => MatchTestItem(library, i.title, i.year, i.imdb_id, true)).ToList();
+                int inLibrary = results.Count(r => r.InLibrary);
+
                 return new TestAiSourceResponse
                 {
                     Success = true,
                     Count = aiItems.Count,
-                    Message = $"AI returned {aiItems.Count} items.",
+                    InLibraryCount = inLibrary,
+                    Items = results,
+                    Message = $"AI returned {aiItems.Count} items ({inLibrary} in library).",
                     Preview = preview
                 };
             }
@@ -1063,11 +1159,17 @@ public class HomeScreenCompanionService : IService
 
             var tagCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var tagMovieKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var tagSeriesIds = new Dictionary<string, HashSet<long>>(StringComparer.OrdinalIgnoreCase);
             var tagTypes = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in allItems)
             {
                 if (item.Tags == null) continue;
                 var typeKey = GetItemTypeKey(item);
+                // Show top-lists can be built from a tag on series, seasons or episodes.
+                long seriesId = ShowTopList.IsCopy(item) ? 0
+                    : item is MediaBrowser.Controller.Entities.TV.Series ? item.InternalId
+                    : (item as MediaBrowser.Controller.Entities.TV.Season)?.SeriesId
+                      ?? (item as MediaBrowser.Controller.Entities.TV.Episode)?.SeriesId ?? 0;
                 var isMovie = item is MediaBrowser.Controller.Entities.Movies.Movie;
                 string movieKey = null;
                 if (isMovie)
@@ -1087,6 +1189,12 @@ public class HomeScreenCompanionService : IService
                         if (!tagMovieKeys.TryGetValue(tag, out var seen))
                             tagMovieKeys[tag] = seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         seen.Add(movieKey);
+                    }
+                    if (seriesId > 0)
+                    {
+                        if (!tagSeriesIds.TryGetValue(tag, out var seriesSet))
+                            tagSeriesIds[tag] = seriesSet = new HashSet<long>();
+                        seriesSet.Add(seriesId);
                     }
                     if (!tagTypes.TryGetValue(tag, out var typeSet))
                         tagTypes[tag] = typeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1109,6 +1217,7 @@ public class HomeScreenCompanionService : IService
                     Name = kv.Key,
                     ItemCount = kv.Value,
                     MovieCount = tagMovieKeys.TryGetValue(kv.Key, out var movieSet) ? movieSet.Count : 0,
+                    SeriesCount = tagSeriesIds.TryGetValue(kv.Key, out var seriesIdSet) ? seriesIdSet.Count : 0,
                     Id = tagIdMap.TryGetValue(kv.Key, out var tid) ? tid : "",
                     ItemTypes = tagTypes.TryGetValue(kv.Key, out var typeSet2) ? typeSet2.ToList() : new List<string>()
                 })
@@ -1287,9 +1396,11 @@ public class HomeScreenCompanionService : IService
 
                 // Polled every 2 s — let the database narrow to the folder instead of loading every
                 // movie. The Where() stays as a safety net and keeps the result exact.
+                // Show lists count their series copies; those are identified by the nfo the
+                // plugin writes, so any provider id means done.
                 var items = _libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    IncludeItemTypes = new[] { "Movie" },
+                    IncludeItemTypes = new[] { "Movie", "Series" },
                     Recursive = true,
                     IsVirtualItem = false,
                     PathStartsWith = folderPrefix
@@ -1301,7 +1412,9 @@ public class HomeScreenCompanionService : IService
                 {
                     Success = true,
                     Indexed = items.Count,
-                    Identified = items.Count(i => !string.IsNullOrEmpty(i.GetProviderId("Imdb")))
+                    Identified = items.Count(i => i is MediaBrowser.Controller.Entities.TV.Series
+                        ? (i.ProviderIds?.Count ?? 0) > 0
+                        : !string.IsNullOrEmpty(i.GetProviderId("Imdb")))
                 };
             }
             catch (Exception ex)
@@ -1318,6 +1431,15 @@ public class HomeScreenCompanionService : IService
                 var sanitized = SanitizeFolderName(request.TagName);
                 var folderPath = Path.Combine(dataPath, "toplists", sanitized);
                 Directory.CreateDirectory(folderPath);
+
+                if (ShowTopList.IsShows(request.ContentType))
+                {
+                    var series = ShowTopList.SeriesForTag(_libraryManager, _jsonSerializer, request.TagName);
+                    if (request.MaxItems > 0) series = series.Take(request.MaxItems).ToList();
+                    var written = WriteShowFolder(folderPath, series, request.BadgeStyle);
+                    return new PrepareTopListFolderResponse { Success = true, FolderPath = folderPath, FilesCreated = written };
+                }
+                ShowTopList.ClearShowFolder(folderPath);
 
                 // Remove stale files from a previous run
                 foreach (var f in Directory.GetFiles(folderPath, "*.strm"))
@@ -1447,6 +1569,38 @@ public class HomeScreenCompanionService : IService
                 return new GetAllMoviesResponse { Movies = movies };
             }
             catch { return new GetAllMoviesResponse { Movies = new List<MovieItem>() }; }
+        }
+
+        public object Get(GetAllSeriesRequest request)
+        {
+            try
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var series = ShowTopList.AllSeries(_libraryManager)
+                    .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(i => i.ProductionYear)
+                    .Select(i => new MovieItem
+                    {
+                        Name   = i.Name ?? "",
+                        Year   = i.ProductionYear,
+                        ImdbId = i.GetProviderId("Imdb") ?? "",
+                        ItemId = i.Id.ToString("N")
+                    })
+                    // The same show in several libraries is offered once.
+                    .Where(m => seen.Add(!string.IsNullOrEmpty(m.ImdbId) ? m.ImdbId : $"{m.Name}|{m.Year}"))
+                    .ToList();
+                return new GetAllMoviesResponse { Movies = series };
+            }
+            catch { return new GetAllMoviesResponse { Movies = new List<MovieItem>() }; }
+        }
+
+        // Writes a show list's folder and updates the copies Emby has already indexed.
+        private int WriteShowFolder(string folderPath, List<BaseItem> series, string badgeStyle)
+        {
+            var written = ShowTopList.WriteFolder(folderPath, series, badgeStyle,
+                _libraryManager, _jsonSerializer, _httpClient, _providerManager, _fileSystem, m => _logger.Info(m));
+            ShowTopList.ApplyIndexed(folderPath, _libraryManager, _jsonSerializer);
+            return written;
         }
 
         public object Post(GrantTopListLibraryAccessRequest request)
@@ -1760,6 +1914,15 @@ public class HomeScreenCompanionService : IService
                 var sanitized  = SanitizeFolderName(request.ListName);
                 var folderPath = Path.Combine(dataPath, "toplists", sanitized);
                 Directory.CreateDirectory(folderPath);
+
+                if (ShowTopList.IsShows(request.ContentType))
+                {
+                    var series = ShowTopList.ResolveSeries(_libraryManager,
+                        (request.Items ?? new List<ManualTopListItem>()).Select(i => (i.ItemId ?? "", i.ImdbId ?? "")));
+                    var written = WriteShowFolder(folderPath, series, request.BadgeStyle);
+                    return new PrepareTopListFolderResponse { Success = true, FolderPath = folderPath, FilesCreated = written };
+                }
+                ShowTopList.ClearShowFolder(folderPath);
 
                 foreach (var f in Directory.GetFiles(folderPath, "*.strm")) File.Delete(f);
                 foreach (var f in Directory.GetFiles(folderPath, "*.nfo"))  File.Delete(f);
@@ -2129,7 +2292,9 @@ public class HomeScreenCompanionService : IService
                     {
                         var name = Path.GetFileName(dir);
                         folderNames.Add(name);
-                        movieCounts[name.ToLowerInvariant()] = Directory.GetFiles(dir, "*.strm").Length;
+                        movieCounts[name.ToLowerInvariant()] = ShowTopList.IsShowFolder(dir)
+                            ? ShowTopList.ReadManifest(dir, _jsonSerializer).Count
+                            : Directory.GetFiles(dir, "*.strm").Length;
                     }
                 }
                 return new GetTopListsResponse { FolderNames = folderNames, MovieCounts = movieCounts };
@@ -2172,7 +2337,8 @@ public class HomeScreenCompanionService : IService
                     userIds = tlConfig.HomeSectionUserIds ?? new List<string>();
                 }
 
-                var movies = ReadTopListMovies(folderPath);
+                var isShows = ShowTopList.IsShows(tlConfig) || ShowTopList.IsShowFolder(folderPath);
+                var movies = isShows ? ReadTopListShows(folderPath) : ReadTopListMovies(folderPath);
 
                 return new GetManualTopListItemsResponse
                 {
@@ -2182,7 +2348,8 @@ public class HomeScreenCompanionService : IService
                     DisplayMode = displayMode,
                     ImageType   = imageType,
                     BadgeStyle  = badgeStyle,
-                    UserIds     = userIds
+                    UserIds     = userIds,
+                    ContentType = isShows ? ShowTopList.ContentTypeShows : "Movies"
                 };
             }
             catch (Exception ex)
@@ -2198,6 +2365,16 @@ public class HomeScreenCompanionService : IService
                 var dataPath = Plugin.Instance.DataFolderPath;
                 var sanitized = SanitizeFolderName(request.TagName);
                 var folderPath = Path.Combine(dataPath, "toplists", sanitized);
+
+                // A show list's library was kept out of every user's "Latest" — undo that while
+                // the library can still be found by its folder (the UI removes it afterwards).
+                if (ShowTopList.IsShowFolder(folderPath))
+                {
+                    var libGuid = FindLibraryGuidByPath(folderPath);
+                    if (!string.IsNullOrEmpty(libGuid))
+                        TopListSyncTask.SetLatestExclusion(_userManager, libGuid!, false, _logger);
+                }
+
                 if (Directory.Exists(folderPath))
                     Directory.Delete(folderPath, true);
 
@@ -2573,7 +2750,7 @@ public class HomeScreenCompanionService : IService
                     if (entry.IsManual)
                     {
                         var folderPath = Path.Combine(dataPath, "toplists", SanitizeFolderName(tl.TagName));
-                        entry.Items = ReadTopListMovies(folderPath)
+                        entry.Items = (ShowTopList.IsShows(tl) ? ReadTopListShows(folderPath) : ReadTopListMovies(folderPath))
                             .Select(m => new BackupTopListItem { ImdbId = m.ImdbId, ItemId = m.ItemId, Name = m.Name, Year = m.Year })
                             .ToList();
                     }
@@ -2743,21 +2920,21 @@ public class HomeScreenCompanionService : IService
                                     .ToList();
                                 if (items.Count > 0)
                                 {
-                                    var r = Post(new PrepareManualTopListFolderRequest { ListName = tl.TagName, BadgeStyle = badgeStyle, Items = items }) as PrepareTopListFolderResponse;
+                                    var r = Post(new PrepareManualTopListFolderRequest { ListName = tl.TagName, BadgeStyle = badgeStyle, Items = items, ContentType = tl.ContentType ?? "Movies" }) as PrepareTopListFolderResponse;
                                     if (r == null || !r.Success)
                                         response.Warnings.Add($"Top-list '{tl.TagName}': files could not be rebuilt ({r?.Message ?? "unknown error"}).");
                                     else if (r.FilesCreated < items.Count)
-                                        response.Warnings.Add($"Top-list '{tl.TagName}': {items.Count - r.FilesCreated} of {items.Count} movie(s) were not found in the library and were skipped.");
+                                        response.Warnings.Add($"Top-list '{tl.TagName}': {items.Count - r.FilesCreated} of {items.Count} {(ShowTopList.IsShows(tl) ? "show(s)" : "movie(s)")} were not found in the library and were skipped.");
                                 }
                                 else
                                 {
                                     Directory.CreateDirectory(folderPath);
-                                    response.Warnings.Add($"Top-list '{tl.TagName}': the backup contains no movies for this manual list.");
+                                    response.Warnings.Add($"Top-list '{tl.TagName}': the backup contains no {(ShowTopList.IsShows(tl) ? "shows" : "movies")} for this manual list.");
                                 }
                             }
                             else
                             {
-                                var r = Post(new PrepareTopListFolderRequest { TagName = tl.TagName, MaxItems = tl.MaxItems, BadgeStyle = badgeStyle }) as PrepareTopListFolderResponse;
+                                var r = Post(new PrepareTopListFolderRequest { TagName = tl.TagName, MaxItems = tl.MaxItems, BadgeStyle = badgeStyle, ContentType = tl.ContentType ?? "Movies" }) as PrepareTopListFolderResponse;
                                 if (r == null || !r.Success)
                                     response.Warnings.Add($"Top-list '{tl.TagName}': files could not be rebuilt ({r?.Message ?? "unknown error"}).");
                             }
@@ -2780,7 +2957,8 @@ public class HomeScreenCompanionService : IService
                                 BadgeStyle  = badgeStyle,
                                 MaxItems    = tl.MaxItems,
                                 UserIds     = tl.HomeSectionUserIds.ToList(),
-                                FolderPath  = folderPath
+                                FolderPath  = folderPath,
+                                ContentType = ShowTopList.IsShows(tl) ? ShowTopList.ContentTypeShows : "Movies"
                             });
                         }
                         else
@@ -2995,6 +3173,24 @@ public class HomeScreenCompanionService : IService
                 }
             }
             return movies;
+        }
+
+        // A show list folder's series in rank order, as the manual list editor and backups use them.
+        private List<MovieItem> ReadTopListShows(string folderPath) =>
+            ShowTopList.ReadManifest(folderPath, _jsonSerializer)
+                .Select(e => new MovieItem { Name = e.Name, Year = e.Year, ImdbId = e.ImdbId, ItemId = e.SeriesId })
+                .ToList();
+
+        // GUID (no dashes) of the library whose location is this folder, or null.
+        private string? FindLibraryGuidByPath(string folderPath)
+        {
+            static string Norm(string p) => (p ?? "").Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+            var target = Norm(folderPath);
+            var folder = _libraryManager.GetVirtualFolders()
+                .FirstOrDefault(f => (f.Locations ?? Array.Empty<string>()).Any(l => Norm(l) == target));
+            if (folder == null) return null;
+            if (Guid.TryParse(folder.Guid, out var g)) return g.ToString("N");
+            return long.TryParse(folder.ItemId, out var id) ? _libraryManager.GetItemById(id)?.Id.ToString("N") : null;
         }
 
         // Movies outside the top-list folder keyed by IMDb id — lets manual top-lists be restored

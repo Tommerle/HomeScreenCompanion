@@ -219,6 +219,8 @@ namespace HomeScreenCompanion
         public string Message { get; set; } = "";
         public int Count { get; set; }
         public List<string> Preview { get; set; } = new List<string>();
+        public int InLibraryCount { get; set; }
+        public List<SourceTestItem> Items { get; set; } = new List<SourceTestItem>();
     }
 
     public class TmdbListResponse

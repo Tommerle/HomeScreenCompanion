@@ -180,6 +180,18 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             border: 1px solid rgba(180,140,50,0.4);
         }
 
+        .tag-indicator.ct-movies {
+            color: #a8927c;
+            background: rgba(168,146,124,0.10);
+            border: 1px solid rgba(168,146,124,0.28);
+        }
+
+        .tag-indicator.ct-shows {
+            color: #8f8aa8;
+            background: rgba(143,138,168,0.10);
+            border: 1px solid rgba(143,138,168,0.28);
+        }
+
         .tag-indicator.source {
             color: #78909c;
             background: rgba(120,144,156,0.15);
@@ -720,6 +732,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             ? Array.from(_plTab.querySelectorAll('.chkPlaylistUser:checked')).map(function(c) { return c.value; })
             : (function() { try { return JSON.parse(decodeURIComponent((_plTab && _plTab.dataset.plUserids) || '%5B%5D')); } catch { return []; } })();
         var collName = row.querySelector('.txtCollectionName').value;
+        var collSortName = row.querySelector('.txtCollectionSortName') ? row.querySelector('.txtCollectionSortName').value.trim() : '';
         var collDesc = row.querySelector('.txtCollectionDescription') ? row.querySelector('.txtCollectionDescription').value : '';
         var collPoster = row.querySelector('.hiddenPosterPath') ? row.querySelector('.hiddenPosterPath').value : '';
         var st = row.querySelector('.selSourceType').value;
@@ -830,7 +843,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         return {
             Name: entryLabel, Tag: tagName, Active: active, Blacklist: bl, ActiveIntervals: intervals,
-            EnableTag: enableTag, EnableCollection: enableColl, CollectionName: collName,
+            EnableTag: enableTag, EnableCollection: enableColl, CollectionName: collName, CollectionSortName: collSortName,
             CollectionDescription: collDesc, CollectionPosterPath: collPoster,
             OverrideWhenActive: overrideWhenActive, SourceType: st,
             Urls: urls, LocalSources: localSources, Limit: miLimit,
@@ -1293,18 +1306,22 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var days = (iv.DayOfWeek || '').split(',').map(function(d) { return d.trim(); });
                 return days.indexOf(todayName) >= 0;
             }
-            if (!iv.Start || !iv.End) return false;
-            var s = new Date(iv.Start);
-            var e = new Date(iv.End);
+            // Compare calendar dates (Y/M/D) only — both ends are inclusive, matching the server.
+            var s = parseDateYMD(iv.Start);
+            var e = parseDateYMD(iv.End);
             if (iv.Type === 'EveryYear') {
-                var nowMD = now.getMonth() * 100 + now.getDate();
-                var sMD  = s.getMonth() * 100 + s.getDate();
-                var eMD  = e.getMonth() * 100 + e.getDate();
-                return sMD <= nowMD && nowMD <= eMD;
+                if (!s || !e) return false;
+                var nowMD = (now.getMonth() + 1) * 100 + now.getDate();
+                var sMD  = s.month * 100 + s.day;
+                var eMD  = e.month * 100 + e.day;
+                // A window that wraps the new year (e.g. Dec 27 → Jan 3)
+                return eMD >= sMD ? sMD <= nowMD && nowMD <= eMD : nowMD >= sMD || nowMD <= eMD;
             }
-            // SpecificDate
-            e.setHours(23, 59, 59, 999);
-            return s <= now && now <= e;
+            // SpecificDate (an open start or end is unbounded, as on the server)
+            if (!s && !e) return false;
+            var nowYMD = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+            return (!s || s.year * 10000 + s.month * 100 + s.day <= nowYMD)
+                && (!e || nowYMD <= e.year * 10000 + e.month * 100 + e.day);
         });
     }
 
@@ -1365,6 +1382,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var overrideChecked = tagConfig.OverrideWhenActive ? 'checked' : '';
 
         var collName = tagConfig.CollectionName || '';
+        var collSortName = String(tagConfig.CollectionSortName || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         var collDescription = tagConfig.CollectionDescription || '';
         var collPosterPath = tagConfig.CollectionPosterPath || '';
 
@@ -1692,6 +1710,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         <div class="inputContainer">
                             <input is="emby-input" type="text" class="txtCollectionName" label="Collection Name" value="${collName}" placeholder="${labelName}" />
                             <div class="fieldDescription">Leave empty to use Display Name.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" class="txtCollectionSortName" label="Sort Title" value="${collSortName}" />
+                            <div class="fieldDescription">Optional. Used instead of the name when collections are sorted by name, e.g. "001" to show this collection first. Leave empty to sort by the collection name.</div>
                         </div>
 
                         <div class="mi-coll-target-section" style="margin-top:10px;">
@@ -2264,7 +2287,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }
 
             if (e.target.closest('.btnRemoveGroup')) {
-                if (confirm("Delete this tag group?")) {
+                // Name the group so a click on the wrong row is easy to spot.
+                var delLabel = (row.querySelector('.txtEntryLabel').value || '').trim();
+                var delTag = (row.querySelector('.txtTagName').value || '').trim();
+                var delName = delLabel && delTag && delLabel.toLowerCase() !== delTag.toLowerCase()
+                    ? '"' + delLabel + '" (tag: ' + delTag + ')'
+                    : (delLabel || delTag) ? '"' + (delLabel || delTag) + '"' : '';
+                if (confirm(delName ? 'Delete the tag group ' + delName + '?' : 'Delete this tag group?')) {
                     row.remove();
                 }
             }
@@ -2323,9 +2352,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var limitVal = parseInt(uRow.querySelector('.txtUrlLimit').value, 10) || 0;
 
                 btnTest.disabled = true;
+                var urlModal = openSourceTestModal('Source test', url);
                 window.ApiClient.getJSON(window.ApiClient.getUrl("HomeScreenCompanion/TestUrl", { Url: url, Limit: limitVal })).then(result => {
-                    window.Dashboard.alert(result.Message);
-                }).finally(() => btnTest.disabled = false);
+                    if (result.Success) urlModal.show(result);
+                    else urlModal.fail(result.Message);
+                }).catch(() => urlModal.fail('Request failed. Check server logs.'))
+                .finally(() => btnTest.disabled = false);
             }
 
             var btnTestAi = e.target.closest('.btnTestAiSource');
@@ -2342,6 +2374,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 btnTestAi.disabled = true;
                 if (resultSpan) resultSpan.textContent = 'Testing...';
+                var aiModal = openSourceTestModal('AI source test', aiProvider + ' · ' + aiPrompt);
 
                 fetch(window.ApiClient.getUrl('HomeScreenCompanion/TestAiSource'), {
                     method: 'POST',
@@ -2356,13 +2389,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 }).then(function(r) { return r.json(); })
                 .then(function(result) {
                     if (resultSpan) resultSpan.textContent = result.Success ? result.Message : ('Failed: ' + result.Message);
-                    if (result.Success && result.Preview && result.Preview.length > 0) {
-                        window.Dashboard.alert('AI returned ' + result.Count + ' items:\n\n' + result.Preview.join('\n'));
-                    } else if (!result.Success) {
-                        window.Dashboard.alert('AI test failed:\n' + result.Message);
-                    }
+                    if (result.Success) aiModal.show(result);
+                    else aiModal.fail('AI test failed: ' + result.Message);
                 }).catch(function(err) {
                     if (resultSpan) resultSpan.textContent = 'Error: ' + err.message;
+                    aiModal.fail('Error: ' + err.message);
                 }).finally(function() { btnTestAi.disabled = false; });
             }
         });
@@ -2611,6 +2642,124 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         if (stickToBottom || wasEmpty) container.scrollTop = container.scrollHeight;
     }
 
+    // Popup for the "Test" buttons on list/AI sources: shows every item the source returned and
+    // whether it exists in the library. Opens in a loading state; call .show(result) or .fail(msg).
+    function openSourceTestModal(title, subtitle) {
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+        var overlay = document.createElement('div');
+        overlay.className = 'modal-backdrop';
+        overlay.innerHTML =
+            '<div class="modal-content stm-content">' +
+                '<div class="modal-header-bar stm-header">' +
+                    '<i class="md-icon modal-header-icon">fact_check</i>' +
+                    '<div style="min-width:0;">' +
+                        '<h2 class="modal-header-title">' + esc(title) + '</h2>' +
+                        (subtitle ? '<span class="stm-sub">' + esc(subtitle) + '</span>' : '') +
+                    '</div>' +
+                    '<button type="button" class="stm-close" title="Close"><i class="md-icon">close</i></button>' +
+                '</div>' +
+                '<div class="stm-body" style="display:flex;flex-direction:column;min-height:0;flex:1;">' +
+                    '<div class="stm-empty"><i class="md-icon" style="font-size:2em;display:block;margin-bottom:8px;">hourglass_empty</i>Fetching source…</div>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { overlay.classList.add('modal-visible'); });
+
+        function close() {
+            overlay.classList.remove('modal-visible');
+            document.removeEventListener('keydown', onKey);
+            setTimeout(function () { overlay.remove(); }, 300);
+        }
+        function onKey(e) { if (e.key === 'Escape') close(); }
+        document.addEventListener('keydown', onKey);
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay || e.target.closest('.stm-close') || e.target.closest('.stm-done')) close();
+        });
+
+        var body = overlay.querySelector('.stm-body');
+
+        function show(result) {
+            var items = result.Items || [];
+            var inCount = items.filter(function (i) { return i.InLibrary; }).length;
+            var outCount = items.length - inCount;
+            var pct = items.length ? Math.round(inCount * 100 / items.length) : 0;
+            var filter = 'all';
+
+            function rowHtml(item, idx) {
+                var poster = item.InLibrary && item.LibraryItemId
+                    ? '<div class="stm-poster" style="background-image:url(&quot;' + esc(window.ApiClient.getImageUrl(item.LibraryItemId, { type: 'Primary', maxHeight: 100 })) + '&quot;)"></div>'
+                    : '<div class="stm-poster"><i class="md-icon">movie</i></div>';
+                var year = item.Year || item.LibraryYear;
+                var meta = [];
+                if (year) meta.push(year);
+                if (item.ItemType) meta.push(item.ItemType === 'Series' ? 'Series' : 'Movie');
+                if (item.Imdb) meta.push('<a href="https://www.imdb.com/title/' + encodeURIComponent(item.Imdb) + '/" target="_blank" rel="noopener">' + esc(item.Imdb) + '</a>');
+                else meta.push('no IMDb id');
+                if (item.MatchedByTitle) meta.push('matched by title');
+                if (item.InLibrary && item.LibraryName && item.LibraryName.toLowerCase() !== (item.Name || '').toLowerCase())
+                    meta.push('as “' + esc(item.LibraryName) + '”');
+                return '<div class="stm-row ' + (item.InLibrary ? 'found' : 'missing') + '" style="animation-delay:' + Math.min(idx * 15, 400) + 'ms">' +
+                    '<div class="stm-rank">' + (idx + 1) + '</div>' +
+                    poster +
+                    '<div class="stm-info">' +
+                        '<div class="stm-title" title="' + esc(item.Name) + '">' + esc(item.Name || '(untitled)') + '</div>' +
+                        '<div class="stm-meta">' + meta.join(' · ') + '</div>' +
+                    '</div>' +
+                    '<div class="stm-status ' + (item.InLibrary ? 'in' : 'out') + '" title="' + (item.InLibrary ? 'In library' : 'Not in library') + '">' +
+                        '<i class="md-icon">' + (item.InLibrary ? 'check' : 'close') + '</i>' +
+                    '</div>' +
+                '</div>';
+            }
+
+            function renderList() {
+                var html = '';
+                items.forEach(function (item, idx) {
+                    if (filter === 'in' && !item.InLibrary) return;
+                    if (filter === 'out' && item.InLibrary) return;
+                    html += rowHtml(item, idx);
+                });
+                body.querySelector('.stm-list').innerHTML = html || '<div class="stm-empty">Nothing to show.</div>';
+                body.querySelectorAll('.stm-chip').forEach(function (c) { c.classList.toggle('active', c.dataset.filter === filter); });
+            }
+
+            body.innerHTML =
+                '<div class="stm-summary">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
+                        '<span><strong style="font-size:1.4em;">' + inCount + '</strong> <span style="opacity:0.7;">of ' + items.length + ' in your library</span></span>' +
+                        '<span style="font-weight:bold;color:' + (pct >= 50 ? '#52B54B' : '#e6c15a') + ';">' + pct + '%</span>' +
+                    '</div>' +
+                    '<div class="stm-bar"><div class="stm-bar-fill" style="width:0%"></div></div>' +
+                    '<div class="stm-filters">' +
+                        '<button type="button" class="stm-chip" data-filter="all"><i class="md-icon">list</i>All ' + items.length + '</button>' +
+                        '<button type="button" class="stm-chip stm-chip-in" data-filter="in"><i class="md-icon">check_circle</i>In library ' + inCount + '</button>' +
+                        '<button type="button" class="stm-chip stm-chip-out" data-filter="out"><i class="md-icon">cancel</i>Missing ' + outCount + '</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="stm-list"></div>' +
+                '<div class="stm-footer"><span>Matched by IMDb id' + (items.some(function (i) { return i.MatchedByTitle; }) ? ', with title + year as fallback' : '') + '</span><button type="button" class="stm-done">Close</button></div>';
+
+            body.querySelector('.stm-filters').addEventListener('click', function (e) {
+                var chip = e.target.closest('.stm-chip');
+                if (!chip) return;
+                filter = chip.dataset.filter;
+                renderList();
+            });
+            renderList();
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () { body.querySelector('.stm-bar-fill').style.width = pct + '%'; });
+            });
+        }
+
+        function fail(message) {
+            body.innerHTML =
+                '<div class="stm-empty"><i class="md-icon" style="font-size:2.4em;display:block;margin-bottom:8px;color:#e57373;">error_outline</i>' + esc(message) + '</div>' +
+                '<div class="stm-footer"><button type="button" class="stm-done">Close</button></div>';
+        }
+
+        return { show: show, fail: fail };
+    }
+
     // Picks which task's log to show (running task, else the most recently started one, unless the
     // user chose a tab), updates the tab bar and renders that single log.
     function renderLogModal(view) {
@@ -2730,12 +2879,53 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
     }
 
+    // "Select all" row for a list of user checkboxes. Its checkbox has no value, and the
+    // hsc-select-all class keeps it out of every selector that reads the chosen users.
+    function buildSelectAllRowHtml(rowClass) {
+        return '<div class="' + (rowClass || 'checkboxContainer') + ' hsc-select-all-row" style="margin:2px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line-color,rgba(128,128,128,0.2));">' +
+            '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;width:100%;">' +
+            '<input type="checkbox" is="emby-checkbox" class="hsc-select-all" />' +
+            '<span style="font-weight:600;">Select all</span></label></div>';
+    }
+
+    // Wires the select-all box in container to the checkboxes matching itemSelector. Each box
+    // it flips fires its own change event, so dirty checks and button states react as if the
+    // user had clicked it. Disabled boxes (the Home Screen Sync source user) are left alone.
+    // Returns a function that re-reads the state after boxes were changed from code.
+    function wireSelectAll(container, itemSelector) {
+        var all = container && container.querySelector('.hsc-select-all');
+        if (!all) return function () {};
+        function items() {
+            return Array.from(container.querySelectorAll(itemSelector)).filter(function (c) { return !c.disabled; });
+        }
+        function sync() {
+            var list = items();
+            var n = list.filter(function (c) { return c.checked; }).length;
+            all.checked = list.length > 0 && n === list.length;
+            all.indeterminate = n > 0 && n < list.length;
+        }
+        all.addEventListener('change', function () {
+            var want = all.checked;
+            items().forEach(function (c) {
+                if (c.checked === want) return;
+                c.checked = want;
+                c.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            sync();
+        });
+        container.addEventListener('change', function (e) {
+            if (e.target !== all && e.target.matches && e.target.matches(itemSelector)) sync();
+        });
+        sync();
+        return sync;
+    }
+
     function buildUserMultiSelectHtml(users, selectedIds, checkboxClass) {
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         if (!users || users.length === 0) return '<em style="opacity:0.5">No users found</em>';
         var sel = selectedIds || [];
-        var rows = users.map(function(u) {
+        var rows = buildSelectAllRowHtml() + users.map(function(u) {
             var chk = sel.indexOf(u.Id) !== -1 ? ' checked' : '';
             return '<div class="checkboxContainer" style="margin:2px 0;">' +
                 '<label><input type="checkbox" is="emby-checkbox" class="' + escAttr(checkboxClass) + '" value="' + escAttr(u.Id) + '" data-name="' + escAttr(u.Name) + '"' + chk + '>' +
@@ -2766,9 +2956,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var panel  = wrapper.querySelector('.filter-dropdown-panel');
         var lbl    = wrapper.querySelector('.hsc-user-dropdown-label');
         var caret  = wrapper.querySelector('.hsc-user-dropdown-caret');
+        var userBoxSelector = 'input[type="checkbox"]:not(.hsc-select-all)';
         function updateLabel() {
-            var allBoxes     = panel.querySelectorAll('input[type="checkbox"]');
-            var checkedBoxes = panel.querySelectorAll('input[type="checkbox"]:checked');
+            var allBoxes     = panel.querySelectorAll(userBoxSelector);
+            var checkedBoxes = panel.querySelectorAll(userBoxSelector + ':checked');
             if (checkedBoxes.length === 0) {
                 lbl.textContent = 'No users selected';
             } else if (checkedBoxes.length === allBoxes.length) {
@@ -2784,9 +2975,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var open = panel.classList.toggle('open');
             caret.textContent = open ? 'expand_less' : 'expand_more';
         });
-        panel.querySelectorAll('input[type="checkbox"]').forEach(function(chk) {
+        panel.querySelectorAll(userBoxSelector).forEach(function(chk) {
             chk.addEventListener('change', updateLabel);
         });
+        wireSelectAll(panel, userBoxSelector);
         document.addEventListener('click', function closeUserDrop(e) {
             if (!wrapper.isConnected) { document.removeEventListener('click', closeUserDrop); return; }
             if (!panel.contains(e.target) && e.target !== btn) {
@@ -3224,6 +3416,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var overrideWhenActive = !!(row.querySelector('.chkOverrideWhenActive') || {}).checked;
 
             var collName = row.querySelector('.txtCollectionName').value;
+            var collSortName = row.querySelector('.txtCollectionSortName') ? row.querySelector('.txtCollectionSortName').value.trim() : '';
             var collDescription = row.querySelector('.txtCollectionDescription') ? row.querySelector('.txtCollectionDescription').value : '';
             var collPoster = row.querySelector('.hiddenPosterPath') ? row.querySelector('.hiddenPosterPath').value : '';
 
@@ -3322,7 +3515,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             var baseTag = {
                 Name: entryLabel, Tag: name, Active: active, Blacklist: bl, ActiveIntervals: intervals,
-                EnableTag: enableTagChk, EnableCollection: enableColl, CollectionName: collName, CollectionDescription: collDescription, CollectionPosterPath: collPoster, OnlyCollection: false, OverrideWhenActive: overrideWhenActive, LastModified: currentLastMod,
+                EnableTag: enableTagChk, EnableCollection: enableColl, CollectionName: collName, CollectionSortName: collSortName, CollectionDescription: collDescription, CollectionPosterPath: collPoster, OnlyCollection: false, OverrideWhenActive: overrideWhenActive, LastModified: currentLastMod,
                 SourceType: st, MediaInfoFilters: miFilters, MediaInfoConditions: [],
                 TagTargetEpisode:        !!(row.querySelector('.chkTagTargetEpisode')  || {}).checked,
                 TagTargetSeason:         !!(row.querySelector('.chkTagTargetSeason')   || {}).checked,
@@ -3590,7 +3783,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (!grouped[key]) {
                 grouped[key] = {
                     Tag: t.Tag, Name: t.Name || '', Urls: [], LocalSources: [], Active: t.Active !== false, Blacklist: t.Blacklist, ActiveIntervals: t.ActiveIntervals,
-                    EnableTag: t.EnableTag !== false, EnableCollection: t.EnableCollection, CollectionName: t.CollectionName, CollectionDescription: t.CollectionDescription || '', CollectionPosterPath: t.CollectionPosterPath || '', OnlyCollection: t.OnlyCollection, OverrideWhenActive: t.OverrideWhenActive || false, LastModified: t.LastModified,
+                    EnableTag: t.EnableTag !== false, EnableCollection: t.EnableCollection, CollectionName: t.CollectionName, CollectionSortName: t.CollectionSortName || '', CollectionDescription: t.CollectionDescription || '', CollectionPosterPath: t.CollectionPosterPath || '', OnlyCollection: t.OnlyCollection, OverrideWhenActive: t.OverrideWhenActive || false, LastModified: t.LastModified,
                     SourceType: t.SourceType || "External", MediaInfoConditions: t.MediaInfoConditions || [], MediaInfoFilters: t.MediaInfoFilters || [],
                     Limit: t.Limit || 0,
                     EnableHomeSection: t.EnableHomeSection || false, HomeSectionLibraryId: t.HomeSectionLibraryId || 'auto',
@@ -3666,7 +3859,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<h3 class="hsc-section-title">Sync to</h3>',
             '<p class="textMuted" style="font-size:0.88em;margin-bottom:12px;">These users will receive the source user\'s home screen layout on each sync.</p>',
             '<div class="hsc-user-list" id="hscTargetList">',
-            targetRows || '<p class="textMuted" style="font-size:0.85em;">No users found.</p>',
+            targetRows ? buildSelectAllRowHtml('hsc-user-row') + targetRows : '<p class="textMuted" style="font-size:0.85em;">No users found.</p>',
             '</div>',
             '</div>',
 
@@ -3701,6 +3894,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 renderHscTab(container, lastHscConfig, users || []);
 
                 enforceHscSourceTargetConflict(container);
+                var syncTargetSelectAll = wireSelectAll(container.querySelector('#hscTargetList'), '.hsc-target-chk');
 
                 var enableChk = container.querySelector('#chkHscEnabled');
                 if (enableChk) {
@@ -3718,6 +3912,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 if (sourceSelect) {
                     sourceSelect.addEventListener('change', function () {
                         enforceHscSourceTargetConflict(container);
+                        syncTargetSelectAll();
                         setTimeout(checkFormState, 0);
                     });
                 }
@@ -3797,7 +3992,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<div id="cwbUserListWrap" style="display:' + cwbUsersDisp + '">',
             '<p class="textMuted" style="font-size:0.88em;margin:12px 0;">Bump Continue Watching for these users:</p>',
             '<div class="hsc-user-list" id="cwbUserList">',
-            cwbUserRows || '<p class="textMuted" style="font-size:0.85em;">No users found.</p>',
+            cwbUserRows ? buildSelectAllRowHtml('hsc-user-row') + cwbUserRows : '<p class="textMuted" style="font-size:0.85em;">No users found.</p>',
             '</div>',
             '</div>',
             '</div>',
@@ -3826,6 +4021,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         window.ApiClient.getJSON(window.ApiClient.getUrl('Users', { IsDisabled: false }))
             .then(function (users) {
                 renderHstTab(container, lastHscConfig, users || []);
+                wireSelectAll(container.querySelector('#cwbUserList'), '.cwb-user-chk');
 
                 var cwbEnableChk = container.querySelector('#chkCwbEnabled');
                 if (cwbEnableChk) {
@@ -4453,6 +4649,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var errEl      = ui.errEl;
         var modal      = ui.modal;
         var badgeStyle = ui.badgeStyle || 'neutral';
+        var isShows    = ui.contentType === 'Shows';
         var tok = window.ApiClient.accessToken ? window.ApiClient.accessToken() : '';
         var snapshotId = null;
         var pendingLibraryId = null;
@@ -4503,24 +4700,36 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 return { folders: existingFolders, preCreationIds: new Set() };
             }
             // Library doesn't exist yet — create it, then re-fetch the updated list.
+            // A show list's library only holds copies the plugin writes complete (nfo + images
+            // linked from the originals), so it needs no online metadata, and it stays out of
+            // search where every show would otherwise appear twice.
+            var libraryOptions = isShows
+                ? {
+                    EnableInternetProviders: false,
+                    ExcludeFromSearch: true,
+                    TypeOptions: ['Series', 'Season', 'Episode'].map(function (t) {
+                        return { Type: t, MetadataFetchers: ['Nfo'], MetadataFetcherOrder: ['Nfo'], ImageFetchers: [], ImageFetcherOrder: [] };
+                    })
+                }
+                : {
+                    EnableInternetProviders: true,
+                    TypeOptions: [{
+                        Type: 'Movie',
+                        MetadataFetchers: ['Nfo', 'TheMovieDb', 'TheTVDB'],
+                        MetadataFetcherOrder: ['Nfo', 'TheMovieDb', 'TheTVDB'],
+                        ImageFetchers: ['TheMovieDb', 'TheTVDB'],
+                        ImageFetcherOrder: ['TheMovieDb', 'TheTVDB']
+                    }]
+                };
             return fetch(window.ApiClient.getUrl('Library/VirtualFolders'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Emby-Token': tok },
                 body: JSON.stringify({
                     Name: customName,
-                    CollectionType: 'movies',
+                    CollectionType: isShows ? 'tvshows' : 'movies',
                     RefreshLibrary: false,
                     Paths: [prepareResult.FolderPath],
-                    LibraryOptions: {
-                        EnableInternetProviders: true,
-                        TypeOptions: [{
-                            Type: 'Movie',
-                            MetadataFetchers: ['Nfo', 'TheMovieDb', 'TheTVDB'],
-                            MetadataFetcherOrder: ['Nfo', 'TheMovieDb', 'TheTVDB'],
-                            ImageFetchers: ['TheMovieDb', 'TheTVDB'],
-                            ImageFetcherOrder: ['TheMovieDb', 'TheTVDB']
-                        }]
-                    }
+                    LibraryOptions: libraryOptions
                 })
             }).catch(function () {})
             .then(function () {
@@ -4610,7 +4819,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     SortBy: 'SortName',
                     SortOrder: 'Ascending',
                     ScrollDirection: '',
-                    ItemTypes: JSON.stringify(['Movie']),
+                    ItemTypes: JSON.stringify([isShows ? 'Series' : 'Movie']),
                     _queryIsPlayed: '',
                     _queryExcludeViewIds: ctx.excludedViewIds,
                     ExcludedFolders: ctx.excludedViewIds
@@ -4621,6 +4830,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     existing.HomeSectionSettings = hseSettings;
                     existing.HomeSectionTracked = existing.HomeSectionTracked || [];
                     existing.MaxItems = maxItems;
+                    existing.ContentType = isShows ? 'Shows' : 'Movies';
                 } else {
                     topLists.push({
                         TagName: tagName,
@@ -4628,7 +4838,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         HomeSectionUserIds: selectedUserIds,
                         HomeSectionLibraryId: ctx.libraryItemId || 'auto',
                         HomeSectionSettings: hseSettings,
-                        HomeSectionTracked: []
+                        HomeSectionTracked: [],
+                        ContentType: isShows ? 'Shows' : 'Movies'
                     });
                 }
                 config.TopLists = topLists;
@@ -4693,7 +4904,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     .catch(function () { return null; })
                     .then(function (st) {
                         if (!st || !st.Success) return;
-                        saveBtn.innerHTML = 'Identifying movies (' + Math.min(st.Identified, expected) + '/' + expected + ') <span class="tc-dot-loader"><span></span><span></span><span></span></span>';
+                        saveBtn.innerHTML = 'Identifying ' + (isShows ? 'shows' : 'movies') + ' (' + Math.min(st.Identified, expected) + '/' + expected + ') <span class="tc-dot-loader"><span></span><span></span><span></span></span>';
                         if (st.Indexed >= expected && st.Identified >= st.Indexed) return;
                         if (Date.now() > deadline) {
                             console.warn('[HSC] Top-list scan still running after timeout — ' + st.Indexed + '/' + expected + ' indexed, ' + st.Identified + ' identified.');
@@ -4775,7 +4986,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="text-align:center;padding:10px 0 20px;">' +
                 '<i class="md-icon" style="font-size:2.5em;color:#52B54B;display:block;margin-bottom:12px;">check_circle</i>' +
                 '<p style="margin:0 0 6px;font-size:1.05em;font-weight:500;">Top-list created!</p>' +
-                '<p style="margin:0;opacity:0.65;font-size:0.9em;">' + prepareResult.FilesCreated + ' movie' + (prepareResult.FilesCreated !== 1 ? 's' : '') + ' included.</p>' +
+                '<p style="margin:0;opacity:0.65;font-size:0.9em;">' + prepareResult.FilesCreated + (isShows ? ' show' : ' movie') + (prepareResult.FilesCreated !== 1 ? 's' : '') + ' included.</p>' +
                 '<p style="margin:8px 0 0;opacity:0.5;font-size:0.82em;font-style:italic;">Finishing touches will continue in the background.</p>' +
                 '</div>' +
                 '<div style="display:flex;justify-content:center;padding-top:16px;border-top:1px solid var(--line-color);margin-top:20px;">' +
@@ -4840,7 +5051,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return checked ? checked.value : 'neutral';
     }
 
-    function showTopListModal(tagName, displayName, onSuccess, existingData) {
+    // contentType: 'Movies' (default) or 'Shows'
+    function showTopListModal(tagName, displayName, onSuccess, existingData, contentType) {
+        var isShows = contentType === 'Shows';
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -4872,7 +5085,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             var html =
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">' +
-                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">' + (existingData ? 'Edit' : 'Create') + ' Top-List: ' + escHtml(displayName) + '</h3>' +
+                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">' + (existingData ? 'Edit' : 'Create') + (isShows ? ' TV Show' : '') + ' Top-List: ' + escHtml(displayName) + '</h3>' +
                 '<button type="button" class="btnTlmClose" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
                 '</div>' +
 
@@ -4956,14 +5169,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/PrepareFolder'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Emby-Token': tok },
-                    body: JSON.stringify({ TagName: tagName, MaxItems: maxItems, BadgeStyle: badgeStyle })
+                    body: JSON.stringify({ TagName: tagName, MaxItems: maxItems, BadgeStyle: badgeStyle, ContentType: isShows ? 'Shows' : 'Movies' })
                 })
                 .then(function (r) { return r.json(); })
                 .then(function (prepareResult) {
                     if (!prepareResult.Success) throw new Error(prepareResult.Message || 'Failed to create folder.');
+                    if (isShows && !prepareResult.FilesCreated) throw new Error('No shows with episode files carry this tag.');
                     executeTopListCreationSteps(
                         tagName, displayName, selectedUserIds, displayMode, customName, imageType, maxItems,
-                        prepareResult, { saveBtn: saveBtn, errEl: errEl, modal: modal, badgeStyle: badgeStyle }, onSuccess
+                        prepareResult, { saveBtn: saveBtn, errEl: errEl, modal: modal, badgeStyle: badgeStyle, contentType: isShows ? 'Shows' : 'Movies' }, onSuccess
                     );
                 })
                 .catch(function (err) {
@@ -4980,10 +5194,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     }
 
     // existingData = { listName, customName, displayMode, imageType, userIds: [], movies: [{ItemId,ImdbId,Name,Year}] }
-    function showManualTopListModal(onSuccess, existingData) {
+    // contentType: 'Movies' (default) or 'Shows' — for shows, "movies" below are series.
+    function showManualTopListModal(onSuccess, existingData, contentType) {
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+        var isShows = contentType === 'Shows';
+        var itemWord = isShows ? 'show' : 'movie';
         var isEdit = !!existingData;
         var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
         var labelStyle = 'font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:5px;';
@@ -5007,7 +5224,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var tok = window.ApiClient.accessToken ? window.ApiClient.accessToken() : '';
 
         Promise.all([
-            fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/AllMovies'), {
+            fetch(window.ApiClient.getUrl(isShows ? 'HomeScreenCompanion/TopList/AllSeries' : 'HomeScreenCompanion/TopList/AllMovies'), {
                 headers: { 'X-MediaBrowser-Token': tok }
             }).then(function (r) { return r.json(); }),
             getHseUsers()
@@ -5043,7 +5260,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 return '<option value="' + escAttr(o.val) + '"' + (o.val === presetImageType ? ' selected' : '') + '>' + escHtml(o.label) + '</option>';
             }).join('');
 
-            var titleText    = isEdit ? 'Edit Manual Top-List' : 'Create Manual Top-List';
+            var titleText    = (isEdit ? 'Edit Manual ' : 'Create Manual ') + (isShows ? 'TV Show ' : '') + 'Top-List';
             var createBtnLabel = isEdit ? 'Save changes' : 'Create top-list';
 
             var innerBox = modal.querySelector('div');
@@ -5084,10 +5301,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 // RIGHT column: movie list
                 '<div style="flex:1;min-width:0;padding-left:20px;">' +
-                '<div style="' + colHeaderStyle + '"><i class="md-icon" style="font-size:0.9em;vertical-align:middle;margin-right:5px;">format_list_numbered</i>Movie List</div>' +
+                '<div style="' + colHeaderStyle + '"><i class="md-icon" style="font-size:0.9em;vertical-align:middle;margin-right:5px;">format_list_numbered</i>' + (isShows ? 'Show List' : 'Movie List') + '</div>' +
 
                 '<div style="' + fieldStyle + '">' +
-                '<label style="' + labelStyle + '">Add Movie</label>' +
+                '<label style="' + labelStyle + '">' + (isShows ? 'Add Show' : 'Add Movie') + '</label>' +
                 '<div style="position:relative;">' +
                 '<input type="text" class="mtlMovieSearch" autocomplete="off" style="' + inputStyle + '" placeholder="Type to search…" />' +
                 '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:4px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.45);"></div>' +
@@ -5126,7 +5343,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function renderSelectedList() {
                 var listEl = modal.querySelector('.mtlSelectedList');
                 if (selectedMovies.length === 0) {
-                    listEl.innerHTML = '<div style="padding:8px 4px;opacity:0.5;font-size:0.9em;">No movies added yet.</div>';
+                    listEl.innerHTML = '<div style="padding:8px 4px;opacity:0.5;font-size:0.9em;">No ' + itemWord + 's added yet.</div>';
                     return;
                 }
                 listEl.innerHTML = selectedMovies.map(function (m, idx) {
@@ -5247,7 +5464,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 if (!listName)                    { errEl.textContent = 'Please enter a name for the list.'; return; }
                 if (selectedUserIds.length === 0) { errEl.textContent = 'Please select at least one target user.'; return; }
-                if (selectedMovies.length === 0)  { errEl.textContent = 'Please add at least one movie.'; return; }
+                if (selectedMovies.length === 0)  { errEl.textContent = 'Please add at least one ' + itemWord + '.'; return; }
 
                 createBtn.disabled = true;
                 createBtn.innerHTML = 'Preparing files <span class="tc-dot-loader"><span></span><span></span><span></span></span>';
@@ -5259,15 +5476,17 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     body: JSON.stringify({
                         ListName: listName,
                         BadgeStyle: badgeStyle,
+                        ContentType: isShows ? 'Shows' : 'Movies',
                         Items: selectedMovies.map(function (m) { return { ImdbId: m.ImdbId, ItemId: m.ItemId }; })
                     })
                 })
                 .then(function (r) { return r.json(); })
                 .then(function (prepareResult) {
                     if (!prepareResult.Success) throw new Error(prepareResult.Message || 'Failed to create folder.');
+                    if (isShows && !prepareResult.FilesCreated) throw new Error('None of the selected shows has episode files.');
                     executeTopListCreationSteps(
                         listName, customNameVal, selectedUserIds, displayMode, customNameVal, imageType, 0,
-                        prepareResult, { saveBtn: createBtn, errEl: errEl, modal: modal, badgeStyle: badgeStyle }, function () {
+                        prepareResult, { saveBtn: createBtn, errEl: errEl, modal: modal, badgeStyle: badgeStyle, contentType: isShows ? 'Shows' : 'Movies' }, function () {
                             document.removeEventListener('keydown', onEsc);
                             if (typeof onSuccess === 'function') onSuccess();
                         }
@@ -5298,6 +5517,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var tagName     = editJson.tagName     || '';
         var isManual    = !!editJson.isManual;
         var displayName = editJson.displayName || editJson.customName || tagName;
+        var isShows     = editJson.contentType === 'Shows';
+        var contentType = isShows ? 'Shows' : 'Movies';
+        var itemWord    = isShows ? 'show' : 'movie';
 
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -5314,7 +5536,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         if (isManual) {
             Promise.all([
-                fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/AllMovies'), {
+                fetch(window.ApiClient.getUrl(isShows ? 'HomeScreenCompanion/TopList/AllSeries' : 'HomeScreenCompanion/TopList/AllMovies'), {
                     headers: { 'X-MediaBrowser-Token': tok }
                 }).then(function (r) { return r.json(); }),
                 getHseUsers(),
@@ -5383,10 +5605,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '</div>' +
 
                     '<div style="flex:1;min-width:0;padding-left:20px;">' +
-                    '<div style="' + colHeaderStyle + '"><i class="md-icon" style="font-size:0.9em;vertical-align:middle;margin-right:5px;">format_list_numbered</i>Movie List</div>' +
+                    '<div style="' + colHeaderStyle + '"><i class="md-icon" style="font-size:0.9em;vertical-align:middle;margin-right:5px;">format_list_numbered</i>' + (isShows ? 'Show List' : 'Movie List') + '</div>' +
 
                     '<div style="' + fieldStyle + '">' +
-                    '<label style="' + labelStyle + '">Add Movie</label>' +
+                    '<label style="' + labelStyle + '">' + (isShows ? 'Add Show' : 'Add Movie') + '</label>' +
                     '<div style="position:relative;">' +
                     '<input type="text" class="mtlMovieSearch" autocomplete="off" style="' + inputStyle + '" placeholder="Type to search…" />' +
                     '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:4px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.45);"></div>' +
@@ -5417,7 +5639,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 function renderSelectedList() {
                     var listEl = wrapper.querySelector('.mtlSelectedList');
                     if (selectedMovies.length === 0) {
-                        listEl.innerHTML = '<div style="padding:8px 4px;opacity:0.5;font-size:0.9em;">No movies added yet.</div>';
+                        listEl.innerHTML = '<div style="padding:8px 4px;opacity:0.5;font-size:0.9em;">No ' + itemWord + 's added yet.</div>';
                         updateManualDirty();
                         return;
                     }
@@ -5525,14 +5747,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         var userIds         = Array.from(wrapper.querySelectorAll('.chkMtlUser:checked')).map(function (c) { return c.value; });
 
                         if (userIds.length === 0)      { reject(new Error('Please select at least one target user.')); return; }
-                        if (selectedMovies.length === 0) { reject(new Error('Please add at least one movie.')); return; }
+                        if (selectedMovies.length === 0) { reject(new Error('Please add at least one ' + itemWord + '.')); return; }
 
                         var tok2 = window.ApiClient.accessToken ? window.ApiClient.accessToken() : '';
                         fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/PrepareManualFolder'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-Emby-Token': tok2 },
                             body: JSON.stringify({
-                                ListName: tagName, BadgeStyle: badgeStyle,
+                                ListName: tagName, BadgeStyle: badgeStyle, ContentType: contentType,
                                 Items: selectedMovies.map(function (m) { return { ImdbId: m.ImdbId, ItemId: m.ItemId }; })
                             })
                         })
@@ -5543,7 +5765,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             var errEl = wrapper.querySelector('.mtl-error');
                             executeTopListCreationSteps(
                                 tagName, customNameVal, userIds, displayMode, customNameVal, imageType, 0,
-                                prepareResult, { saveBtn: fakeBtn, errEl: errEl, modal: body, innerBox: wrapper, badgeStyle: badgeStyle, closeHandler: resolve, silent: true },
+                                prepareResult, { saveBtn: fakeBtn, errEl: errEl, modal: body, innerBox: wrapper, badgeStyle: badgeStyle, closeHandler: resolve, silent: true, contentType: contentType },
                                 resolve
                             );
                         })
@@ -5653,7 +5875,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/PrepareFolder'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-Emby-Token': tok2 },
-                            body: JSON.stringify({ TagName: tagName, MaxItems: maxItems, BadgeStyle: badgeStyle })
+                            body: JSON.stringify({ TagName: tagName, MaxItems: maxItems, BadgeStyle: badgeStyle, ContentType: contentType })
                         })
                         .then(function (r) { return r.json(); })
                         .then(function (prepareResult) {
@@ -5662,7 +5884,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             var errEl = wrapper.querySelector('.tlm-error');
                             executeTopListCreationSteps(
                                 tagName, customNameVal, userIds, displayMode, customNameVal, imageType, maxItems,
-                                prepareResult, { saveBtn: fakeBtn, errEl: errEl, modal: body, innerBox: wrapper, badgeStyle: badgeStyle, closeHandler: resolve, silent: true },
+                                prepareResult, { saveBtn: fakeBtn, errEl: errEl, modal: body, innerBox: wrapper, badgeStyle: badgeStyle, closeHandler: resolve, silent: true, contentType: contentType },
                                 resolve
                             );
                         })
@@ -5676,7 +5898,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
     }
 
-    function showCreateTopListChooser(tagsData, existingTopLists, onSuccess) {
+    // existingTypes: sanitized list name (lower case) → 'Movies' | 'Shows'
+    function showCreateTopListChooser(tagsData, existingTopLists, onSuccess, existingTypes) {
+        existingTypes = existingTypes || {};
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         function sanitizeName(name) {
@@ -5696,19 +5920,29 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;' +
             'padding:28px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;';
 
+        var contentType = 'Movies';
+
         function renderStep1() {
+            var isShows = contentType === 'Shows';
+            var segBase = 'flex:1;cursor:pointer;border:none;padding:8px 12px;font-size:0.9em;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;';
+            var segOn  = segBase + 'background:#52B54B;color:#fff;';
+            var segOff = segBase + 'background:transparent;color:inherit;opacity:0.75;';
             modal.innerHTML =
                 '<div style="' + innerStyle + '">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">' +
                 '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">Create Top-List</h3>' +
                 '<button type="button" class="btnChooserClose" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
                 '</div>' +
+                '<div style="display:flex;border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:6px;overflow:hidden;margin-bottom:20px;">' +
+                '<button type="button" class="btnChooseType" data-type="Movies" style="' + (isShows ? segOff : segOn) + '"><i class="md-icon" style="font-size:1.1em;">movie</i>Movies</button>' +
+                '<button type="button" class="btnChooseType" data-type="Shows" style="' + (isShows ? segOn : segOff) + '"><i class="md-icon" style="font-size:1.1em;">tv</i>TV Shows</button>' +
+                '</div>' +
                 '<p style="margin:0 0 20px;font-size:0.9em;color:var(--theme-text-secondary);">How do you want to create this top-list?</p>' +
                 '<div style="display:flex;gap:16px;">' +
                 '<button type="button" class="btnChooseManual" style="flex:1;cursor:pointer;background:var(--plugin-input-bg,rgba(255,255,255,0.05));border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:8px;padding:20px 16px;text-align:left;color:inherit;">' +
                 '<div style="font-size:1.4em;margin-bottom:10px;color:#52B54B;"><i class="md-icon">format_list_numbered</i></div>' +
                 '<div style="font-weight:600;font-size:0.95em;margin-bottom:6px;">Manual</div>' +
-                '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Pick movies manually and build a custom list</div>' +
+                '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Pick ' + (isShows ? 'shows' : 'movies') + ' manually and build a custom list</div>' +
                 '</button>' +
                 '<button type="button" class="btnChooseByTag" style="flex:1;cursor:pointer;background:var(--plugin-input-bg,rgba(255,255,255,0.05));border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:8px;padding:20px 16px;text-align:left;color:inherit;">' +
                 '<div style="font-size:1.4em;margin-bottom:10px;color:#52B54B;"><i class="md-icon">label</i></div>' +
@@ -5719,6 +5953,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</div>';
 
             modal.querySelector('.btnChooserClose').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
+
+            modal.querySelectorAll('.btnChooseType').forEach(function (btn) {
+                btn.addEventListener('click', function () { contentType = this.dataset.type; renderStep1(); });
+            });
 
             var btnManualCard = modal.querySelector('.btnChooseManual');
             var btnByTagCard  = modal.querySelector('.btnChooseByTag');
@@ -5731,21 +5969,24 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             btnManualCard.addEventListener('click', function () {
                 modal.remove();
                 document.removeEventListener('keydown', onEsc);
-                showManualTopListModal(onSuccess);
+                showManualTopListModal(onSuccess, null, contentType);
             });
 
             btnByTagCard.addEventListener('click', function () { renderStep2(); });
         }
 
         function renderStep2() {
-            var tags = (tagsData.Tags || []);
+            var isShows = contentType === 'Shows';
+            // Show lists need a tag on shows (or their seasons/episodes).
+            var tags = (tagsData.Tags || []).filter(function (t) { return !isShows || (t.SeriesCount || 0) > 0; });
             var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
 
             var tagRowsHtml = tags.length === 0
-                ? '<p style="padding:12px 4px;color:var(--theme-text-secondary);font-size:0.88em;font-style:italic;">No tags found.</p>'
+                ? '<p style="padding:12px 4px;color:var(--theme-text-secondary);font-size:0.88em;font-style:italic;">' + (isShows ? 'No tags on TV shows found.' : 'No tags found.') + '</p>'
                 : tags.map(function (tag) {
                     var name  = tag.Name || '';
-                    var count = tag.MovieCount != null ? tag.MovieCount : (tag.ItemCount != null ? tag.ItemCount : 0);
+                    var count = isShows ? (tag.SeriesCount || 0)
+                        : (tag.MovieCount != null ? tag.MovieCount : (tag.ItemCount != null ? tag.ItemCount : 0));
                     var hasTopList = existingTopLists.has(sanitizeName(name).toLowerCase());
                     var badge = hasTopList
                         ? '<span style="font-size:0.72em;background:rgba(180,140,50,0.18);color:#c9a84c;border-radius:3px;padding:1px 6px;margin-left:6px;white-space:nowrap;">top-list</span>'
@@ -5754,7 +5995,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         'style="width:100%;cursor:pointer;background:transparent;border:none;border-bottom:1px solid var(--line-color);' +
                         'padding:10px 4px;display:flex;align-items:center;color:inherit;text-align:left;">' +
                         '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(name) + badge + '</span>' +
-                        '<span style="margin-left:12px;white-space:nowrap;font-size:0.85em;color:var(--theme-text-secondary);">' + count + ' movies</span>' +
+                        '<span style="margin-left:12px;white-space:nowrap;font-size:0.85em;color:var(--theme-text-secondary);">' + count + (isShows ? ' shows' : ' movies') + '</span>' +
                         '</button>';
                 }).join('');
 
@@ -5790,9 +6031,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 btn.addEventListener('mouseout',  function () { this.style.background = 'transparent'; });
                 btn.addEventListener('click', function () {
                     var tagName = this.dataset.name;
+                    // One top-list per tag: its folder and settings are keyed by the tag name.
+                    var otherType = existingTypes[sanitizeName(tagName).toLowerCase()];
+                    if (otherType && otherType !== contentType) {
+                        alert('This tag already has a ' + (otherType === 'Shows' ? 'TV show' : 'movie') + ' top-list. A tag can have one top-list — delete that one first to create a ' + (contentType === 'Shows' ? 'TV show' : 'movie') + ' list.');
+                        return;
+                    }
                     modal.remove();
                     document.removeEventListener('keydown', onEsc);
-                    showTopListModal(tagName, tagName, onSuccess);
+                    showTopListModal(tagName, tagName, onSuccess, null, contentType);
                 });
             });
         }
@@ -5808,7 +6055,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         { key: 'ApiKeys',      label: 'API keys',                  desc: 'Trakt, MDBList, TMDB, OpenAI, Gemini, Claude. Stored in plain text in the file.' },
         { key: 'Tags',         label: 'Tag & collection groups',   desc: 'All source groups incl. schedules, blacklists, filters, collection settings, home sections and playlists.' },
         { key: 'SavedFilters', label: 'Saved media-info filters',  desc: 'Your saved filter presets.' },
-        { key: 'TopLists',     label: 'Top lists',                 desc: 'Top-list settings and the movie lists of manual top-lists.' },
+        { key: 'TopLists',     label: 'Top lists',                 desc: 'Top-list settings and the movie and show lists of manual top-lists.' },
         { key: 'HomeSync',     label: 'Home screen sync',          desc: 'Source user, target users, library-order sync and Continue Watching bump.' }
     ];
 
@@ -6040,7 +6287,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             executeTopListCreationSteps(
                                 tl.TagName, tl.CustomName || tl.TagName, tl.UserIds || [], tl.DisplayMode || '', tl.CustomName || tl.TagName,
                                 tl.ImageType || '', tl.MaxItems || 0, { FolderPath: tl.FolderPath, FilesCreated: 0 },
-                                { saveBtn: dummyBtn, errEl: dummyErr, modal: dummyModal, badgeStyle: tl.BadgeStyle || 'neutral', silent: true, closeHandler: resolve }
+                                { saveBtn: dummyBtn, errEl: dummyErr, modal: dummyModal, badgeStyle: tl.BadgeStyle || 'neutral', silent: true, closeHandler: resolve, contentType: tl.ContentType || 'Movies' }
                             ).catch(reject);
                         }).catch(function (err) {
                             failures.push((tl.CustomName || tl.TagName) + ': ' + (err && err.message ? err.message : err));
@@ -6141,6 +6388,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     tagName:     tl.TagName || '',
                     displayName: settings.CustomName || tl.TagName || '',
                     isManual:    !realTagNamesLower.has((tl.TagName || '').toLowerCase()),
+                    contentType: tl.ContentType === 'Shows' ? 'Shows' : 'Movies',
                     count:       (results[3].MovieCounts || {})[key] || 0,
                     userIds:     tl.HomeSectionUserIds || [],
                     customName:  settings.CustomName  || '',
@@ -6161,6 +6409,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var typeBadge = isManual
                         ? '<span class="tag-indicator toplist" style="margin-left:0;margin-right:12px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Manual</span>'
                         : '<span class="tag-indicator tag" style="margin-left:0;margin-right:12px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">label</i> ' + escHtml(item.tagName) + '</span>';
+                    var isShows = item.contentType === 'Shows';
+                    var contentBadge = isShows
+                        ? '<span class="tag-indicator ct-shows" style="margin-left:0;margin-right:8px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">tv</i> TV Shows</span>'
+                        : '<span class="tag-indicator ct-movies" style="margin-left:0;margin-right:8px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">movie</i> Movies</span>';
                     var displayModeLabel = ({'': 'Always', 'tv': 'TV mode only', 'mobile,desktop': 'Non-TV only'})[item.displayMode] || 'Always';
                     var imageTypeLabel = item.imageType || 'Auto';
                     var maxItemsLabel  = item.maxItems ? String(item.maxItems) : '0 (all)';
@@ -6168,6 +6420,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         tagName:     item.tagName,
                         displayName: item.displayName,
                         isManual:    item.isManual,
+                        contentType: item.contentType,
                         userIds:     item.userIds,
                         customName:  item.customName,
                         displayMode: item.displayMode,
@@ -6175,12 +6428,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         badgeStyle:  item.badgeStyle,
                         maxItems:    String(item.maxItems || '0')
                     }));
-                    return '<div class="tag-row" data-tlname="' + escAttr(item.tagName.toLowerCase()) + '" data-ismanual="' + (isManual ? '1' : '0') + '" data-count="' + item.count + '" data-editjson="' + editJson + '">' +
+                    return '<div class="tag-row" data-tlname="' + escAttr(item.tagName.toLowerCase()) + '" data-ismanual="' + (isManual ? '1' : '0') + '" data-isshows="' + (isShows ? '1' : '0') + '" data-count="' + item.count + '" data-editjson="' + editJson + '">' +
                         '<div class="tl-row-header tag-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px;cursor:pointer;">' +
                         '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">' +
-                        typeBadge +
+                        contentBadge + typeBadge +
                         '<span class="tag-title" style="font-weight:bold;font-size:1.1em;">' + escHtml(item.displayName) + '</span>' +
-                        '<span class="tag-indicator source" style="margin-left:8px;">' + item.count + ' movies</span>' +
+                        '<span class="tag-indicator source" style="margin-left:8px;">' + item.count + (isShows ? ' shows' : ' movies') + '</span>' +
                         '</div>' +
                         '<i class="md-icon expand-icon" style="flex-shrink:0;margin-left:12px;">expand_more</i>' +
                         '</div>' +
@@ -6200,7 +6453,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</button>' +
                 '</div>' +
                 '<div style="margin-bottom:16px;font-size:0.9em;color:var(--theme-text-secondary);line-height:1.5;">' +
-                'Create a top-list home section from a tag managed by the plugin. Top-lists only work with movies.' +
+                'Create a top-list home section from a tag managed by the plugin, or from movies or TV shows you pick yourself. Each list gets its own hidden library with numbered posters.' +
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">' +
                 '<input type="text" id="tlSearch" placeholder="Search…" style="' + searchInputStyle + '" />' +
@@ -6208,12 +6461,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<option value="all">All</option>' +
                 '<option value="manual">Manual</option>' +
                 '<option value="bytag">By tag</option>' +
+                '<option value="movies">Movies</option>' +
+                '<option value="shows">TV shows</option>' +
                 '</select>' +
                 '<select is="emby-select" id="tlSort" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:4px;font-size:0.9em;cursor:pointer;">' +
                 '<option value="name-asc">Name A–Z</option>' +
                 '<option value="name-desc">Name Z–A</option>' +
-                '<option value="count-desc">Most movies</option>' +
-                '<option value="count-asc">Fewest movies</option>' +
+                '<option value="count-desc">Most items</option>' +
+                '<option value="count-asc">Fewest items</option>' +
                 '</select>' +
                 '<button type="button" class="btnTlRefresh" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-secondary);border-radius:3px;padding:5px 10px;font-size:0.9em;"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
                 '</div>' +
@@ -6225,10 +6480,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var btnCreateNew = container.querySelector('#btnCreateNewTopList');
             if (btnCreateNew) {
                 btnCreateNew.addEventListener('click', function () {
+                    var existingTypes = {};
+                    (pluginConfig.TopLists || []).forEach(function (tl) {
+                        if (tl.TagName) existingTypes[sanitizeTlName(tl.TagName).toLowerCase()] = tl.ContentType === 'Shows' ? 'Shows' : 'Movies';
+                    });
                     showCreateTopListChooser(tagsData, existingTopLists, function () {
                         container.dataset.loaded = '';
                         loadTopListsTab(view);
-                    });
+                    }, existingTypes);
                 });
             }
 
@@ -6244,10 +6503,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 rows.forEach(function (row) {
                     var tlName   = row.dataset.tlname || '';
                     var isManual = row.dataset.ismanual === '1';
+                    var isShowList = row.dataset.isshows === '1';
                     var matchSearch = !query || tlName.indexOf(query) !== -1;
                     var matchFilter = true;
                     if (filter === 'manual') matchFilter = isManual;
                     if (filter === 'bytag')  matchFilter = !isManual;
+                    if (filter === 'movies') matchFilter = !isShowList;
+                    if (filter === 'shows')  matchFilter = isShowList;
                     row.style.display = (matchSearch && matchFilter) ? '' : 'none';
                 });
 
@@ -6297,7 +6559,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 if (btn.classList.contains('btnTlDelete')) {
                     var deleteName = btn.dataset.name;
-                    if (!confirm('Delete top-list for "' + deleteName + '"?\n\nThis will remove the folder, all .strm files, and the virtual library.')) return;
+                    if (!confirm('Delete top-list for "' + deleteName + '"?\n\nThis will remove the folder, all .strm files, and the virtual library. Your real movies and shows are not touched.')) return;
                     var deleteBtn = btn;
                     deleteBtn.disabled = true;
                     deleteBtn.textContent = 'Deleting…';
@@ -6628,6 +6890,17 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     return function (view) {
         view.addEventListener('viewshow', () => {
+            // Emby fires viewhide/viewshow when the app is paused/resumed (browser tab switch, window
+            // loses focus). Don't rebuild the form then, or unsaved edits and expanded rows are lost.
+            if (view._hscPaused && view.dataset.hscInit) {
+                view._hscPaused = false;
+                if (statusInterval) clearInterval(statusInterval);
+                refreshStatus(view);
+                statusInterval = setInterval(() => refreshStatus(view), 5000);
+                return;
+            }
+            view._hscPaused = false;
+
             if (!document.getElementById('homeScreenCompanionCustomCss')) {
                 document.body.insertAdjacentHTML('beforeend', customCss);
             }
@@ -6914,7 +7187,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
         });
 
-        view.addEventListener('viewhide', () => { if (statusInterval) clearInterval(statusInterval); });
+        view.addEventListener('viewhide', (e) => {
+            if (statusInterval) clearInterval(statusInterval);
+            // App pause hides the current view without a new one; real navigation always has newViewInfo.
+            view._hscPaused = !!(e.detail && e.detail.newViewInfo === null);
+        });
 
         view.querySelector('.HomeScreenCompanionForm').addEventListener('submit', e => {
             e.preventDefault();
@@ -7132,10 +7409,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
         window.addEventListener('beforeunload', beforeUnloadHandler);
 
-        view.addEventListener('viewhide', function () {
+        function onViewHideCleanup() {
+            if (view._hscPaused) return;
             document.removeEventListener('click', closeSpeedDial);
             window.removeEventListener('beforeunload', beforeUnloadHandler);
-        }, { once: true });
+            view.removeEventListener('viewhide', onViewHideCleanup);
+        }
+        view.addEventListener('viewhide', onViewHideCleanup);
 
         function loadConfig() {
             _hseLibraryCachePromise = null; // återställ cache så nya bibliotek (t.ex. ny top-list) hämtas

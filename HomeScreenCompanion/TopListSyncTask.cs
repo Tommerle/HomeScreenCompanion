@@ -445,6 +445,16 @@ namespace HomeScreenCompanion
 
             GrantTopListLibraryAccess(topLists, userManager, libraryManager, logger);
 
+            // A show list's episodes are copies of real ones. Emby applies a user's "Latest"
+            // exclusions to Continue Watching and Next Up too, so this keeps every copy out of all
+            // three, in every app.
+            foreach (var tl in topLists.Where(ShowTopList.IsShows))
+            {
+                if (string.IsNullOrEmpty(tl.HomeSectionLibraryId) || tl.HomeSectionLibraryId == "auto") continue;
+                var libGuid = ResolveLibraryGuid(tl.HomeSectionLibraryId.Trim(), libraryManager);
+                if (!string.IsNullOrEmpty(libGuid)) SetLatestExclusion(userManager, libGuid, true, logger);
+            }
+
             Plugin.Instance?.SaveConfiguration();
             var summary = $"Updated {totalUpdated} section(s) across {topLists.Count} top-list(s).";
             _log.Info($"    {RunLog.Plural(totalUpdated, "section")} updated across {RunLog.Plural(topLists.Count, "top-list")}{(totalErrors > 0 ? $", {RunLog.Plural(totalErrors, "error")}" : "")}  ·  {RunLog.Elapsed(DateTime.Now - startTime)}");
@@ -544,6 +554,28 @@ namespace HomeScreenCompanion
                     }
                     catch (Exception ex) { logger.Error($"[Access] Revoke error for '{user.Name}': {ex.GetBaseException().Message}"); }
                 }
+            }
+        }
+
+        // Adds (or removes) a library in every user's "Latest" exclusions (LatestItemsExcludes).
+        internal static void SetLatestExclusion(IUserManager userManager, string libGuid, bool exclude, ILogger logger)
+        {
+            var norm = libGuid.Replace("-", "").ToLowerInvariant();
+            foreach (var user in userManager.GetUserList(new UserQuery { IsDisabled = false }))
+            {
+                try
+                {
+                    var cfg = userManager.GetUserConfiguration(user);
+                    if (cfg == null) continue;
+                    var current = cfg.LatestItemsExcludes ?? Array.Empty<string>();
+                    bool has = current.Any(x => string.Equals((x ?? "").Replace("-", ""), norm, StringComparison.OrdinalIgnoreCase));
+                    if (has == exclude) continue;
+                    cfg.LatestItemsExcludes = exclude
+                        ? current.Concat(new[] { norm }).ToArray()
+                        : current.Where(x => !string.Equals((x ?? "").Replace("-", ""), norm, StringComparison.OrdinalIgnoreCase)).ToArray();
+                    userManager.UpdateConfiguration(user, cfg);
+                }
+                catch (Exception ex) { logger.Error($"[Access] Latest exclusion for '{user.Name}' failed: {ex.GetBaseException().Message}"); }
             }
         }
 

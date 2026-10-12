@@ -277,6 +277,45 @@
             overflow-y: auto;
         }
 
+        /* Source test results */
+        .stm-content { max-width: 640px; display: flex; flex-direction: column; max-height: 88vh; }
+        .stm-header { padding: 18px 20px; }
+        .stm-header .modal-header-title { font-size: 1.25em; }
+        .stm-sub { opacity: 0.85; font-size: 0.85em; display: block; margin-top: 2px; word-break: break-all; }
+        .stm-close { margin-left: auto; background: transparent; border: none; color: #fff; cursor: pointer; opacity: 0.8; padding: 4px; border-radius: 50%; line-height: 0; }
+        .stm-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .stm-summary { padding: 16px 20px 6px; }
+        .stm-bar { height: 8px; border-radius: 4px; background: rgba(229,115,115,0.35); overflow: hidden; }
+        .stm-bar-fill { height: 100%; background: #52B54B; border-radius: 4px; transition: width 0.6s ease; }
+        .stm-filters { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .stm-chip { cursor: pointer; border: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12)); background: transparent; color: inherit; border-radius: 16px; padding: 5px 12px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 6px; }
+        .stm-chip:hover { background: var(--plugin-popup-hover, rgba(255,255,255,0.08)); }
+        .stm-chip.active { background: var(--plugin-popup-badge, rgba(255,255,255,0.1)); border-color: currentColor; }
+        .stm-chip .md-icon { font-size: 1.1em; }
+        .stm-chip-in .md-icon { color: #52B54B; }
+        .stm-chip-out .md-icon { color: #e57373; }
+        .stm-list { overflow-y: auto; padding: 6px 12px 12px; flex: 1; min-height: 120px; }
+        .stm-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; animation: stmIn 0.25s ease both; }
+        .stm-row:hover { background: var(--plugin-popup-hover, rgba(255,255,255,0.08)); }
+        .stm-rank { width: 2em; text-align: right; font-size: 0.85em; color: var(--plugin-popup-muted, #aaa); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .stm-poster { width: 34px; height: 50px; border-radius: 4px; flex-shrink: 0; background: var(--plugin-popup-bg2, #333) center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--plugin-popup-muted, #aaa); }
+        .stm-poster .md-icon { font-size: 18px; opacity: 0.6; }
+        .stm-row.missing .stm-poster { opacity: 0.55; }
+        .stm-info { flex: 1; min-width: 0; }
+        .stm-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stm-row.missing .stm-title { opacity: 0.75; }
+        .stm-meta { font-size: 0.8em; color: var(--plugin-popup-muted, #aaa); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stm-meta a { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+        .stm-meta a:hover { color: #52b0db; }
+        .stm-status { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .stm-status .md-icon { font-size: 18px; }
+        .stm-status.in { background: rgba(82,181,75,0.18); color: #52B54B; }
+        .stm-status.out { background: rgba(229,115,115,0.15); color: #e57373; }
+        .stm-empty { text-align: center; padding: 30px; color: var(--plugin-popup-muted, #aaa); }
+        .stm-footer { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12)); font-size: 0.82em; color: var(--plugin-popup-muted, #aaa); }
+        .stm-footer button { margin-left: auto; cursor: pointer; border: none; background: #52B54B; color: #fff; border-radius: 4px; padding: 8px 20px; font-size: 1.1em; }
+        @keyframes stmIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
         /* Live execution log */
         #logContent { line-height: 1.5; }
         .log-line { white-space: pre-wrap; word-break: break-word; color: #d0d0d0; }
@@ -1741,11 +1780,11 @@
                     <span>Top-List</span>
                 </div>
                 <div class="step-text" style="margin-bottom:10px; font-size:0.92em;">
-                    A <strong>top-list</strong> is a ranked movie row on the home screen — like "My Top 10 Movies" — where each poster shows a numbered badge (1, 2, 3…) indicating its position. The plugin creates a separate Emby library containing shortcuts to the ranked movies (the actual files are not copied or moved), and shows that library as a dedicated home screen section. Found in the <strong>Top-Lists</strong> tab.
+                    A <strong>top-list</strong> is a ranked movie or TV show row on the home screen — like "My Top 10 Movies" — where each poster shows a numbered badge (1, 2, 3…) indicating its position. The plugin creates a separate Emby library containing shortcuts to the ranked titles (the actual files are not copied or moved), and shows that library as a dedicated home screen section. Found in the <strong>Top-Lists</strong> tab.
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">create_new_folder</i>
-                    <div><strong>Create top-list from a tag</strong> — Pick a tag managed by the plugin (movies only) and click <em>Create top-list</em>. The plugin builds the ranked library and sets up a home screen section for the users you choose. The order follows the original list order from the source (e.g. the order on a Trakt list). The list updates automatically whenever the plugin syncs that tag.</div>
+                    <div><strong>Create top-list from a tag</strong> — Choose <em>Movies</em> or <em>TV Shows</em>, pick a tag managed by the plugin and click <em>Create top-list</em>. The plugin builds the ranked library and sets up a home screen section for the users you choose. The order follows the original list order from the source (e.g. the order on a Trakt list). The list updates automatically whenever the plugin syncs that tag.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">edit_note</i>
@@ -1754,6 +1793,10 @@
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">block</i>
                     <div><strong>Automatic exclusions</strong> — Movies in a top-list are automatically hidden from all other tag-based home screen rows, so the same movie (with a number badge) never shows up in another row.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tv</i>
+                    <div><strong>TV show top-lists</strong> — Each ranked show gets a copy in the list's own library: a numbered poster and shortcuts to every episode. Watched status and resume points are shared with the real show, the same show can be in several lists, and new episodes are added on every sync. The copies are kept out of search, Latest, Continue Watching and Next Up for every user (the list's library is added to each user's "Latest" exclusions, which Emby also applies to Continue Watching and Next Up), so an episode never shows twice.</div>
                 </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">build</i>

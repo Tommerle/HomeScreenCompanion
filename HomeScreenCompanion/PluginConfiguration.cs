@@ -79,6 +79,8 @@ namespace HomeScreenCompanion
         public bool EnableTag { get; set; } = true;
         public bool EnableCollection { get; set; } = false;
         public string CollectionName { get; set; } = "";
+        // Optional sort title for the collection (empty = Emby sorts it by its name).
+        public string CollectionSortName { get; set; } = "";
         public string CollectionDescription { get; set; } = "";
         public string CollectionPosterPath { get; set; } = "";
         public bool OnlyCollection { get; set; } = false;
@@ -128,6 +130,8 @@ namespace HomeScreenCompanion
         public string HomeSectionLibraryId { get; set; } = "auto";
         public string HomeSectionSettings { get; set; } = "{}";
         public List<HomeSectionTracking> HomeSectionTracked { get; set; } = new List<HomeSectionTracking>();
+        // "Movies" (default) or "Shows" — see ShowTopList.
+        public string ContentType { get; set; } = "Movies";
     }
 
     public class HomeSectionTracking
