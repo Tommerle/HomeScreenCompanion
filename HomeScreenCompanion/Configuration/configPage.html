@@ -401,6 +401,17 @@
         .artc-dot { cursor:pointer; width:26px; height:20px; background:transparent; border:none; display:flex; align-items:center; justify-content:center; padding:0; }
         .artc-dot span { width:9px; height:9px; border-radius:50%; background:rgba(128,128,128,0.55); }
         .artc-dot.artc-on span { background:#52B54B; width:13px; height:13px; }
+        /* Top 10 tile layout: the tile with the number area, the poster card and a spot per place an extra can go. */
+        .artc-lay { position:relative; width:240px; border:2px solid rgba(128,128,128,0.55); border-radius:4px; background:rgba(128,128,128,0.12); overflow:hidden; }
+        .artc-lay-num { position:absolute; left:4%; bottom:2%; font:900 92px/1 Impact, sans-serif; color:transparent; -webkit-text-stroke:1.5px rgba(128,128,128,0.6); pointer-events:none; }
+        .artc-lay-card { position:absolute; border:2px solid rgba(128,128,128,0.6); border-radius:4px; background:rgba(128,128,128,0.22); box-sizing:border-box; }
+        .artc-layspot { position:absolute; cursor:pointer; min-width:22px; height:20px; padding:0 4px; margin:0; border:1px dashed rgba(128,128,128,0.9); border-radius:3px; background:transparent; color:#fff; font-size:10px; line-height:1.1; display:flex; flex-direction:column; align-items:center; justify-content:center; white-space:nowrap; box-sizing:border-box; }
+        .artc-layspot.artc-full { border:1px solid #3d8a38; background:#3d8a38; height:auto; min-height:20px; padding:2px 4px; }
+        .artc-layspot.artc-on { background:#52B54B; border-color:#52B54B; box-shadow:0 0 0 2px #fff, 0 0 0 3px #52B54B; }
+        /* Real posters: Emby's chip (green circle) in the corner, the top-right spot beside it. */
+        .artc-posposter .artc-pos-emby { position:absolute; z-index:2; right:2px; top:3px; font-size:16px; line-height:20px; font-weight:900; color:#52B54B; pointer-events:none; }
+        .artc-posposter.artc-emby .artc-pos-tr { right:12px; }
+        .artc-lay-emby { position:absolute; z-index:2; right:2px; top:2px; height:16px; padding:0 5px; border-radius:8px; background:#52B54B; color:#fff; font-size:9px; line-height:16px; font-weight:600; pointer-events:none; }
         .artc-colours { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
         .artc-swatch { cursor:pointer; width:24px; height:24px; border-radius:50%; border:2px solid rgba(128,128,128,0.5); padding:0; }
         .artc-swatch.artc-on { border-color:#52B54B; box-shadow:0 0 0 2px #52B54B; }
@@ -2206,7 +2217,7 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> Customise the Top 10 tile</div>
-                        With <em>Top 10 tile</em> selected, <em>⚙ Customise</em> under the badge choices opens a popup with a live preview (rank 7 on a stand-in poster): the number's font, style and colours, where it sits, the tile background, medal colours, a #1 special and extras (rank movement, weeks in list, plays, a red TOP 10 logo). <em>Reset</em> goes back to the standard tile. Nothing changes until you press <em>OK</em> and then <em>Save</em>; the next sync redraws the list. The colour badges and <em>No number</em> have nothing to customise. Lists with a Popular rule compare with where each title stood one week ago; other lists compare with the previous run.
+                        With <em>Top 10 tile</em> selected, <em>⚙ Customise</em> under the badge choices opens a popup with a live preview (rank 7 on a stand-in poster): the number's font, style and colours, where it sits, the tile background, medal colours, a #1 special and extras (rank movement, weeks in list, plays, a red TOP 10 logo). <em>Layout</em> puts each extra that is on in its own spot: a corner or the bottom centre of the poster, or the top left of the number area; picking a taken spot swaps the two. Emby draws its own unplayed count (shows) or ✓ (watched movies) in the tile's top-right corner, and the preview shows a sample of it. <em>Beside Emby's count</em> / <em>✓</em> moves an extra in the top-right spot just left of it; on by default for show lists. <em>Reset</em> goes back to the standard tile. Nothing changes until you press <em>OK</em> and then <em>Save</em>; the next sync redraws the list. The colour badges and <em>No number</em> have nothing to customise. Lists with a Popular rule compare with where each title stood one week ago; other lists compare with the previous run.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">verified</i> Real posters</div>
