@@ -7057,7 +7057,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     function posPickerHtml(spots, sel, emby) {
         var on = spots.some(function (p) { return p[0] === sel; }) ? sel : spots[0][0];
         var name = spots.filter(function (p) { return p[0] === on; })[0][1];
-        return '<div class="artc-posrow"><div class="artc-posposter' + (emby ? ' artc-emby' : '') + '" data-field="pos">' + (emby ? '<span class="artc-pos-emby">Emby</span>' : '') + spots.map(function (p) {
+        return '<div class="artc-posrow"><div class="artc-posposter' + (emby ? ' artc-emby' : '') + '" data-field="pos">' + (emby ? '<span class="artc-pos-emby" title="Emby">\u2713</span>' : '') + spots.map(function (p) {
             return '<button type="button" class="artc-posdot artc-pos-' + p[0] + (on === p[0] ? ' artc-on' : '') + '" data-value="' + p[0] + '" title="' + p[1] + '" aria-label="' + p[1] + '"><span></span></button>';
         }).join('') + '</div><span class="artc-posname">' + escapeHtml(name) + '</span></div>';
     }
