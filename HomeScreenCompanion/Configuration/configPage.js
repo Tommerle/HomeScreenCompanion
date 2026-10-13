@@ -5836,7 +5836,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             found += r.c; limit += lim;
         }
         if (!limit || found >= limit) return '';
-        return `<span class="tag-indicator short" title="Last run found ${found} of ${limit}"><i class="md-icon" style="font-size:1.1em;">warning</i> ${found} of ${limit}</span>`;
+        return `<span class="tag-indicator short" title="Last run found ${found} of ${limit}"><i class="md-icon" style="font-size:1.1em;">local_movies</i> ${found} of ${limit}</span>`;
     }
 
     function groupConfigTags(tags) {
