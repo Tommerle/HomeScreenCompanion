@@ -42,6 +42,8 @@ namespace HomeScreenCompanion
     public class VersionResponse
     {
         public string Version { get; set; } = "";
+        // "beta" for a beta build (ReleaseChannel in the .csproj), "" for a release.
+        public string Channel { get; set; } = "";
     }
 
     [Route("/HomeScreenCompanion/UploadCollectionImage", "POST")]
@@ -865,7 +867,20 @@ public class HomeScreenCompanionService : IService
 
         public object Get(VersionRequest request)
         {
-            return new VersionResponse { Version = Plugin.Instance?.Version.ToString() ?? "0.0.0" };
+            return new VersionResponse { Version = Plugin.Instance?.Version.ToString() ?? "0.0.0", Channel = ReleaseChannel() };
+        }
+
+        // The build's channel: the part after "-" in the informational version ("4.4.0.0-beta+abc123" → "beta").
+        private static string ReleaseChannel()
+        {
+            var info = typeof(HomeScreenCompanionService).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion ?? "";
+            var plus = info.IndexOf('+');
+            if (plus >= 0) info = info.Substring(0, plus);
+            var dash = info.IndexOf('-');
+            return dash >= 0 ? info.Substring(dash + 1).Trim() : "";
         }
 
         public object Get(GetStatusRequest request)

@@ -5770,10 +5770,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     function checkForUpdates(view) {
         window.ApiClient.getJSON(window.ApiClient.getUrl("HomeScreenCompanion/Version")).then(function (result) {
             var currentVer = result.Version || '';
+            var channel = (result.Channel || '').replace(/[^A-Za-z0-9 .-]/g, '');
             var footerVer = view.querySelector('#footerVersionText');
             if (footerVer && currentVer) {
                 var releaseUrl = 'https://github.com/soderlund91/HomeScreenCompanion/releases/tag/v' + currentVer;
-                footerVer.innerHTML = '<a href="' + releaseUrl + '" target="_blank" style="color:inherit;text-decoration:none;">v' + currentVer + '</a>';
+                footerVer.innerHTML = '<a href="' + releaseUrl + '" target="_blank" style="color:inherit;text-decoration:none;">v' + currentVer
+                    + (channel ? ' ' + channel : '') + '</a>';
             }
             if (!currentVer) return;
 
