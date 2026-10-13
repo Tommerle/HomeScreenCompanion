@@ -25,36 +25,81 @@ namespace HomeScreenCompanion
             _jsonSerializer = jsonSerializer;
         }
 
-        public async Task<List<ExternalItemDto>> FetchItems(string url, int limit, string traktClientId, string mdbApiKey, string tmdbApiKey, CancellationToken cancellationToken)
+        // At most this many list entries are read from a list.
+        internal const int MaxScan = 1000;
+
+        // With countsTowardLimit, limit is a number of hits instead of list entries: the list is read
+        // (in order, up to MaxScan entries) until that many distinct IMDb ids count, and the entries up
+        // to and including the last hit are returned. Without it the first limit entries are returned.
+        public async Task<List<ExternalItemDto>> FetchItems(string url, int limit, string traktClientId, string mdbApiKey, string tmdbApiKey, CancellationToken cancellationToken,
+            Func<ExternalItemDto, bool>? countsTowardLimit = null)
         {
             // Set a global maximum of 1000 items to prevent massive fetches, unless a specific smaller limit is requested
-            if (limit <= 0 || limit > 1000)
+            if (limit <= 0 || limit > MaxScan)
             {
-                limit = 1000;
+                limit = MaxScan;
             }
 
             if (string.IsNullOrWhiteSpace(url)) return new List<ExternalItemDto>();
 
+            var hits = countsTowardLimit != null && limit < MaxScan ? new HitCounter(limit, countsTowardLimit) : null;
+            int fetchLimit = hits != null ? MaxScan : limit;
+
+            List<ExternalItemDto> all;
             if (url.Contains("mdblist.com"))
             {
-                return await FetchMdblist(url, mdbApiKey, limit, cancellationToken);
+                all = await FetchMdblist(url, mdbApiKey, fetchLimit, hits, cancellationToken);
             }
             else if (url.Contains("themoviedb.org"))
             {
-                return await FetchTmdb(url, tmdbApiKey, limit, cancellationToken);
+                all = await FetchTmdb(url, tmdbApiKey, fetchLimit, hits, cancellationToken);
             }
             else
             {
-                return await FetchTrakt(url, traktClientId, limit, cancellationToken);
+                all = await FetchTrakt(url, traktClientId, fetchLimit, cancellationToken);
+            }
+            return hits != null ? hits.Cut(all) : all;
+        }
+
+        // Counts the distinct IMDb ids that count toward the limit, as the entries are read.
+        internal class HitCounter
+        {
+            private readonly int _limit;
+            private readonly Func<ExternalItemDto, bool> _counts;
+            private readonly HashSet<string> _hits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            private readonly HashSet<string> _misses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            internal HitCounter(int limit, Func<ExternalItemDto, bool> counts) { _limit = limit; _counts = counts; }
+
+            internal bool Full => _hits.Count >= _limit;
+
+            // Reads one entry; true once the limit is reached.
+            internal bool See(ExternalItemDto item)
+            {
+                if (Full) return true;
+                var id = item?.Imdb;
+                if (string.IsNullOrEmpty(id) || _hits.Contains(id) || _misses.Contains(id)) return false;
+                if (_counts(item!)) _hits.Add(id!); else _misses.Add(id!);
+                return Full;
+            }
+
+            // The entries up to and including the one that reached the limit.
+            internal List<ExternalItemDto> Cut(List<ExternalItemDto> all)
+            {
+                // Entries not seen yet (a last page read without stopping) are checked here.
+                var seen = new HitCounter(_limit, i => _hits.Contains(i.Imdb) || (!_misses.Contains(i.Imdb) && _counts(i)));
+                for (int i = 0; i < all.Count; i++)
+                    if (seen.See(all[i])) return all.Take(i + 1).ToList();
+                return all;
             }
         }
 
-        private async Task<List<ExternalItemDto>> FetchMdblist(string listUrl, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblist(string listUrl, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             if (IsMdblistOfficialList(listUrl) || string.IsNullOrWhiteSpace(apiKey))
-                return await FetchMdblistLegacy(listUrl, limit, cancellationToken);
+                return await FetchMdblistLegacy(listUrl, limit, hits, cancellationToken);
             else
-                return await FetchMdblistApi(listUrl, apiKey, limit, cancellationToken);
+                return await FetchMdblistApi(listUrl, apiKey, limit, hits, cancellationToken);
         }
 
         // Official lists (mdblist.com/lists/official/...) have no api.mdblist.com endpoint, only the public /json one
@@ -62,7 +107,7 @@ namespace HomeScreenCompanion
             url.IndexOf("/lists/official/", StringComparison.OrdinalIgnoreCase) >= 0;
 
         // Uses api.mdblist.com — works for both public and private lists
-        private async Task<List<ExternalItemDto>> FetchMdblistApi(string listUrl, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblistApi(string listUrl, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             var apiBaseUrl = BuildMdblistApiUrl(listUrl);
             const int pageSize = 1000;
@@ -91,6 +136,7 @@ namespace HomeScreenCompanion
 
                         if (pageCount < pageSize) break;
                         if (limit < 10000 && all.Count >= limit) break;
+                        if (hits != null && all.Any(hits.See)) break;
                         offset += pageSize;
                     }
                 }
@@ -101,7 +147,7 @@ namespace HomeScreenCompanion
         }
 
         // Legacy fallback: mdblist.com/slug/json — public lists only, no API key needed
-        private async Task<List<ExternalItemDto>> FetchMdblistLegacy(string listUrl, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblistLegacy(string listUrl, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             var cleanUrl = listUrl.Trim();
             int queryIndex = cleanUrl.IndexOfAny(new[] { '?', '#' });
@@ -130,6 +176,7 @@ namespace HomeScreenCompanion
 
                         if (result.Count < pageSize) break;
                         if (limit < 10000 && all.Count >= limit) break;
+                        if (hits != null && all.Any(hits.See)) break;
                         offset += pageSize;
                     }
                 }
@@ -209,7 +256,7 @@ namespace HomeScreenCompanion
             return null;
         }
 
-        private async Task<List<ExternalItemDto>> FetchTmdb(string url, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchTmdb(string url, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(apiKey)) return new List<ExternalItemDto>();
 
@@ -323,6 +370,7 @@ namespace HomeScreenCompanion
 
                     all.Add(dto);
                     if (limit > 0 && all.Count >= limit) return all.Take(limit).ToList();
+                    if (hits != null && hits.See(dto)) return all;
                 }
 
                 if (page >= result.total_pages) break;

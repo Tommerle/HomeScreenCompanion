@@ -194,30 +194,13 @@
                 border-color: #e57373 !important;
             }
 
-        /* Plugin version: at the right end of the top row; right after Logs on narrow screens. */
-        .hsc-version-chip {
-            order: 10;
-            margin-left: auto;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.78em;
-            white-space: nowrap;
-            color: #52B54B;
-            background: rgba(82, 181, 75, 0.15);
-            border: 1px solid rgba(82, 181, 75, 0.55);
-        }
-        /* The top row is as wide as the tab content (the form is max 900px), so the chip ends
-           at the content's right edge instead of the window's. */
+        /* The top row is as wide as the tab content (the form is max 900px). */
         .hsc-top-row { max-width: 900px; }
-        /* "Last run" stays on the buttons' line and takes the room left before the version chip;
-           a long status (step, elapsed, waiting runs) is cut with an ellipsis, full text in its tooltip. */
+        /* "Last run" stays on the buttons' line and takes the room left; a long status
+           (step, elapsed, waiting runs) is cut with an ellipsis, full text in its tooltip. */
         #lastRunIndicator { flex: 1 1 0; min-width: 0; }
         #lastRunIndicator > span:not(#lastRunStatusLabel) { flex-shrink: 0; }
         #lastRunStatusLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .hsc-version-chip a { color: inherit; text-decoration: none; }
-        @media (max-width: 700px) {
-            .hsc-version-chip { order: 0; margin-left: 0; }
-        }
 
         .btn-help-trigger {
             background: rgba(82, 181, 75, 0.15) !important;
@@ -1124,8 +1107,6 @@
                     <i class="md-icon">terminal</i>
                     <span>Logs</span>
                 </button>
-
-                <span class="hsc-version-chip" title="Installed version" style="display:none;"></span>
 
                 <div id="lastRunIndicator" style="display: flex; align-items: center; margin-left: 10px; padding-left: 15px; border-left: 1px solid var(--line-color);">
                     <span style="font-size: 0.85em; opacity: 0.5; margin-right: 8px;">Last run:</span>

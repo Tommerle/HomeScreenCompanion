@@ -423,6 +423,7 @@ namespace HomeScreenCompanion
                     tcSettings["_queryExcludeViewIds"] = tcExcStr;
                     tcSettings["ExcludedFolders"] = tcExcStr;
                     tc.HomeSectionSettings = jsonSerializer.SerializeToString(tcSettings);
+                    HomeScreenCompanionTask.ApplyRowTitle(tcSettings, tc, jsonSerializer);
 
                     if (!string.IsNullOrEmpty(tc.Tag))
                     {

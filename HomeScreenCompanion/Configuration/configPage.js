@@ -930,6 +930,21 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return cands[rows.filter(same).indexOf(row)] || cands[0];
     }
 
+    // The preview popup is in the page's HTML but shown from document.body: inside Emby's page
+    // container a position:fixed box can be placed relative to that container instead of the
+    // window, off screen when the page is scrolled down. Its close buttons keep working (their
+    // listeners are on the elements themselves); its styles and colours are document-wide.
+    // The art / badge Customise popup is moved out the same way.
+    function bodyOverlay(view, id) {
+        var all = view._bodyOverlays || (view._bodyOverlays = {});
+        if (!all[id] || !all[id].isConnected) {
+            var o = view.querySelector('#' + id) || all[id];
+            if (o) { document.body.appendChild(o); all[id] = o; }
+        }
+        return all[id];
+    }
+    function previewOverlay(view) { return bodyOverlay(view, 'miPreviewModalOverlay'); }
+
     // Preview art: draws the collection poster/background from the source's current (unsaved)
     // settings on the server and shows them in the preview dialog. Nothing is saved.
     // forTag: the tag art instead (same endpoint; the Tag* settings stand in for the collection's
@@ -950,7 +965,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             CollectionArtTitle: source.TagArtTitle, CollectionBackgroundPath: source.TagBackgroundPath,
             CollectionPosterOptions: source.TagPosterOptions, CollectionBackgroundOptions: source.TagBackgroundOptions
         });
-        var overlay = view.querySelector('#miPreviewModalOverlay');
+        var overlay = previewOverlay(view);
         var body = overlay.querySelector('.mi-preview-body');
         overlay.querySelector('.mi-preview-subtitle').textContent = forTag
             ? (source.Tag || source.Name || 'Tag') + ' — tag art'
@@ -977,121 +992,122 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     }
 
     // Preview: runs this source's current (unsaved) settings on the server without tagging
-    // anything, and lists what it would tag — for a list source (External, AI) also the titles
-    // on the list that are not in the library.
-    function showSourcePreview(row, btn, nwUserId) {
-        var view = row.closest('#HomeScreenCompanionConfigPage') || activeView();
+    // anything, and lists what it would tag, in the same popup as the list sources' Test.
+    // (External and AI sources have Test instead.)
+    function showSourcePreview(row, btn) {
         var label = row.querySelector('.txtEntryLabel').value;
         var tag = row.querySelector('.txtTagName').value || label;
         var sources = rowToFlatTags(row, false);
-        if (!sources.length) sources = rowToFlatTags(row, true); // no URL / collection picked yet
+        if (!sources.length) sources = rowToFlatTags(row, true); // no collection picked yet
         var source = sources[0];
         if (!source) return;
         var st = source.SourceType || '';
         var isMi = st === 'MediaInfo';
-        var isList = st === 'External' || st === 'AI' || st === '';
-        var aiName = { OpenAI: 'OpenAI', Gemini: 'Gemini', Claude: 'Claude', Ollama: 'Ollama' }[source.AiProvider] || 'the AI';
-
-        var overlay = view.querySelector('#miPreviewModalOverlay');
-        var body = overlay.querySelector('.mi-preview-body');
         var isNw = st === 'NextWatch';
-        // Your Next Watch: picks are per user — preview one user at a time (picker on top).
-        if (isNw && nwUserId == null) nwUserId = row.dataset.nwPreviewUser || (source.PlaylistUserIds || [])[0] || '';
-        if (isNw) row.dataset.nwPreviewUser = nwUserId;
-        var nwPicker = '';
-        overlay.querySelector('.mi-preview-subtitle').textContent = (label || tag || 'This source') + (isNw ? ' — personal picks for one user' : ' — what it would tag right now');
-        body.innerHTML = '<div style="padding:20px 0; text-align:center; opacity:0.8;">'
-            + escapeHtml(st === 'AI' ? 'Asking ' + aiName + '… this can take a minute.' : st === 'External' ? 'Fetching the list and checking your library…' : isNw ? 'Reading watch history and scoring the library…' : 'Checking your library…')
-            + '</div>';
-        overlay.classList.add('modal-visible');
-        btn.disabled = true;
 
-        (isNw ? getHseUsers() : Promise.resolve([])).then(function (users) {
-            if (isNw) {
-                var selected = source.PlaylistUserIds || [];
-                var ordered = users.filter(function (u) { return selected.indexOf(u.Id) !== -1; })
-                    .concat(users.filter(function (u) { return selected.indexOf(u.Id) === -1; }));
-                nwPicker = '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;"><label style="white-space:nowrap; opacity:0.85;">Picks for</label>'
-                    + '<select class="selNwPreviewUser" style="flex:1; padding:6px 8px; font-size:inherit; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2)); border-radius:3px;">'
-                    + (nwUserId ? '' : '<option value="">-- Select user --</option>')
-                    + ordered.map(function (u) {
-                        return '<option value="' + escapeHtml(u.Id) + '"' + (u.Id === nwUserId ? ' selected' : '') + '>' + escapeHtml(u.Name + userRatingSuffix(u)) + (selected.indexOf(u.Id) !== -1 ? '  (ticked on Playlist tab)' : '') + '</option>';
-                    }).join('') + '</select></div>';
-                body.innerHTML = nwPicker + body.innerHTML;
-                wireNwPicker();
-            }
-            return fetch(window.ApiClient.getUrl('HomeScreenCompanion/PreviewSource'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
-                body: JSON.stringify({ Source: source, Sources: sources, PreviewUserId: isNw ? nwUserId : '' })
-            });
-        }).then(function (r) { return r.json(); })
-        .then(function (res) {
-            if (!res.Success) {
-                body.innerHTML = nwPicker + '<div style="padding:12px 0;">' + escapeHtml(res.Message || 'Preview failed.') + '</div>';
-                wireNwPicker();
-                return;
-            }
+        var modal = openSourceTestModal('Source preview',
+            (label || tag || 'This source') + (isNw ? ' — personal picks for one user' : ' — what it would tag right now'),
+            isNw ? 'Reading watch history and scoring the library…' : 'Checking your library…');
+        var body = modal.body;
+        var users = [];
+
+        function loading(text) {
+            return '<div class="stm-empty"><i class="md-icon" style="font-size:2em;display:block;margin-bottom:8px;">hourglass_empty</i>' + escapeHtml(text) + '</div>';
+        }
+
+        // Your Next Watch: picks are per user — preview one user at a time (picker on top).
+        function nwPickerHtml(nwUserId) {
+            if (!isNw) return '';
+            var selected = source.PlaylistUserIds || [];
+            var ordered = users.filter(function (u) { return selected.indexOf(u.Id) !== -1; })
+                .concat(users.filter(function (u) { return selected.indexOf(u.Id) === -1; }));
+            return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;"><label style="white-space:nowrap; opacity:0.85;">Picks for</label>'
+                + '<select class="selNwPreviewUser" style="flex:1; padding:6px 8px; font-size:inherit; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2)); border-radius:3px;">'
+                + (nwUserId ? '' : '<option value="">-- Select user --</option>')
+                + ordered.map(function (u) {
+                    return '<option value="' + escapeHtml(u.Id) + '"' + (u.Id === nwUserId ? ' selected' : '') + '>' + escapeHtml(u.Name + userRatingSuffix(u)) + (selected.indexOf(u.Id) !== -1 ? '  (ticked on Playlist tab)' : '') + '</option>';
+                }).join('') + '</select></div>';
+        }
+
+        function render(res, nwUserId) {
             var items = res.Items || [];
             var total = res.Total || items.length;
-            var missing = res.Missing || [];
-            var missingTotal = res.MissingTotal || missing.length;
-            var checkedNote = isMi ? ' (' + (res.Scanned || 0).toLocaleString() + ' checked)'
-                : ' (' + (res.Scanned || 0).toLocaleString() + (st === 'Manual' ? ' picked' : isList ? ' on the list' : ' in the ' + (st === 'LocalPlaylist' ? 'playlist' : 'collection')) + ')';
-            var summary = total.toLocaleString() + ' title' + (total === 1 ? '' : 's') + ' would get the tag'
-                + checkedNote
-                + (total > items.length ? ' — showing the first ' + items.length + '.' : '.');
-            if (isNw) summary = total + ' pick' + (total === 1 ? '' : 's') + ' for this user, best first — this is the order of their playlist and home row.';
-            if (!items.length) {
-                summary = isNw ? 'No picks — this user has nothing unwatched they can open.' : 'Nothing matches, so nothing would be tagged.';
-            }
-            var html = nwPicker;
-            if (res.Note) html += '<div class="mi-preview-note" style="margin-bottom:10px; font-size:0.85em; opacity:0.75;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">info</i>' + escapeHtml(res.Note) + '</div>';
+            var headline = isNw
+                ? '<strong style="font-size:1.4em;">' + total + '</strong> <span style="opacity:0.7;">pick' + (total === 1 ? '' : 's') + ' for this user, best first</span>'
+                : '<strong style="font-size:1.4em;">' + total.toLocaleString() + '</strong> <span style="opacity:0.7;">title' + (total === 1 ? '' : 's') + ' would get the tag</span>';
+            var scanned = isNw ? '' : (res.Scanned || 0).toLocaleString() + (isMi ? ' checked' : st === 'Manual' ? ' picked' : ' in the ' + (st === 'LocalPlaylist' ? 'playlist' : 'collection'));
+
+            var html = '<div class="stm-summary">' + nwPickerHtml(nwUserId)
+                + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:12px;">'
+                + '<span>' + headline + '</span>'
+                + (scanned ? '<span style="opacity:0.7;white-space:nowrap;">' + escapeHtml(scanned) + '</span>' : '')
+                + '</div>';
+            if (res.Note) html += '<div style="margin-bottom:8px; font-size:0.85em; opacity:0.75;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">info</i>' + escapeHtml(res.Note) + '</div>';
             (res.Warnings || []).forEach(function (w) {
-                html += '<div style="margin-bottom:10px; font-size:0.9em; color:#e8a838;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">warning</i>' + escapeHtml(w) + '</div>';
+                html += '<div style="margin-bottom:8px; font-size:0.85em; color:#e8a838;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">warning</i>' + escapeHtml(w) + '</div>';
             });
-            html += '<div style="margin-bottom:12px; opacity:0.85;">' + escapeHtml(summary) + '</div>';
-            items.forEach(function (it, n) {
-                var img = it.ImageTag
-                    ? '<img src="' + window.ApiClient.getUrl('Items/' + it.Id + '/Images/Primary', { maxHeight: 90, tag: it.ImageTag }) + '" style="width:40px; height:60px; object-fit:cover; border-radius:3px;" loading="lazy" />'
-                    : '<div style="width:40px; height:60px; border-radius:3px; background:rgba(128,128,128,0.2);"></div>';
-                var meta = [it.Year, it.Type === 'Series' ? 'Show' : it.Type === 'Movie' ? 'Movie' : it.Type].filter(Boolean).join(' · ');
-                var viewers = it.Viewers != null
-                    ? '<div style="margin-left:auto; white-space:nowrap; opacity:0.85;">' + it.Viewers + ' viewer' + (it.Viewers === 1 ? '' : 's') + '</div>'
-                    : '';
-                html += '<div style="display:flex; align-items:center; gap:12px; padding:6px 0; border-bottom:1px solid rgba(128,128,128,0.15);">'
-                    + '<div style="width:24px; text-align:right; opacity:0.6;">' + (n + 1) + '</div>' + img
-                    + '<div style="min-width:0;"><div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(it.Name) + '</div>'
-                    + '<div style="font-size:0.85em; opacity:0.7;">' + escapeHtml(meta) + '</div>'
-                    + (it.Reason ? '<div style="font-size:0.8em; opacity:0.6; white-space:normal;">' + escapeHtml(it.Reason) + '</div>' : '')
-                    + '</div>' + viewers + '</div>';
-            });
-            if (missingTotal > 0) {
-                html += '<div class="mi-preview-missing" style="margin-top:18px;">'
-                    + '<div style="font-weight:600; margin-bottom:4px;">Not in your library (' + missingTotal.toLocaleString() + ')</div>'
-                    + '<div style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">On the list, but no matching title in Emby'
-                    + (missingTotal > missing.length ? ' — showing the first ' + missing.length : '') + '.</div>';
-                missing.forEach(function (m) {
-                    var imdb = m.Imdb
-                        ? '<a href="https://www.imdb.com/title/' + encodeURIComponent(m.Imdb) + '/" target="_blank" rel="noopener" style="color:inherit; opacity:0.7; margin-left:auto; white-space:nowrap;">' + escapeHtml(m.Imdb) + '</a>'
-                        : '<span style="opacity:0.5; margin-left:auto; white-space:nowrap;">no IMDb id</span>';
-                    html += '<div style="display:flex; align-items:center; gap:12px; padding:4px 0; border-bottom:1px solid rgba(128,128,128,0.12);">'
-                        + '<div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(m.Title || '(no title)')
-                        + (m.Year ? ' <span style="opacity:0.7;">(' + m.Year + ')</span>' : '') + '</div>' + imdb + '</div>';
-                });
-                html += '</div>';
+            html += '</div><div class="stm-list">';
+            if (!items.length) {
+                html += '<div class="stm-empty">' + (isNw ? 'No picks — this user has nothing unwatched they can open.' : 'Nothing matches, so nothing would be tagged.') + '</div>';
             }
+            items.forEach(function (it, idx) {
+                var poster = it.ImageTag
+                    ? '<div class="stm-poster" style="background-image:url(&quot;' + escapeHtml(window.ApiClient.getUrl('Items/' + it.Id + '/Images/Primary', { maxHeight: 100, tag: it.ImageTag })) + '&quot;)"></div>'
+                    : '<div class="stm-poster"><i class="md-icon">movie</i></div>';
+                var meta = [it.Year, it.Type === 'Series' ? 'Series' : it.Type].filter(Boolean);
+                if (it.Viewers != null) meta.push(it.Viewers + ' viewer' + (it.Viewers === 1 ? '' : 's'));
+                html += '<div class="stm-row found" style="animation-delay:' + Math.min(idx * 15, 400) + 'ms">'
+                    + '<div class="stm-rank">' + (idx + 1) + '</div>' + poster
+                    + '<div class="stm-info">'
+                    + '<div class="stm-title" title="' + escapeHtml(it.Name) + '">' + escapeHtml(it.Name || '(untitled)') + '</div>'
+                    + '<div class="stm-meta">' + escapeHtml(meta.join(' · ')) + '</div>'
+                    + (it.Reason ? '<div class="stm-meta" style="white-space:normal;">' + escapeHtml(it.Reason) + '</div>' : '')
+                    + '</div>'
+                    + '<div class="stm-status in" title="In library"><i class="md-icon">check</i></div>'
+                    + '</div>';
+            });
+            html += '</div><div class="stm-footer"><span>'
+                + (total > items.length ? 'Showing the first ' + items.length + ' of ' + total.toLocaleString() + '. ' : '')
+                + (isNw ? 'The order of their playlist and home row.' : 'Unsaved settings — nothing is tagged.')
+                + '</span><button type="button" class="stm-done">Close</button></div>';
             body.innerHTML = html;
             wireNwPicker();
-        }).catch(function (err) {
-            body.innerHTML = nwPicker + '<div style="padding:12px 0;">Preview failed: ' + escapeHtml(err.message) + '</div>';
-            wireNwPicker();
-        }).finally(function () { btn.disabled = false; });
+        }
+
+        function fail(message, nwUserId) {
+            modal.fail(message);
+            if (isNw) { body.insertAdjacentHTML('afterbegin', '<div class="stm-summary">' + nwPickerHtml(nwUserId) + '</div>'); wireNwPicker(); }
+        }
 
         function wireNwPicker() {
             var sel = body.querySelector('.selNwPreviewUser');
-            if (sel) sel.addEventListener('change', function () { if (this.value) showSourcePreview(row, btn, this.value); });
+            if (sel) sel.addEventListener('change', function () { if (this.value) load(this.value); });
         }
+
+        function load(nwUserId) {
+            if (isNw) {
+                row.dataset.nwPreviewUser = nwUserId;
+                body.innerHTML = '<div class="stm-summary">' + nwPickerHtml(nwUserId) + '</div>' + loading('Reading watch history and scoring the library…');
+                wireNwPicker();
+            }
+            btn.disabled = true;
+            fetch(window.ApiClient.getUrl('HomeScreenCompanion/PreviewSource'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
+                body: JSON.stringify({ Source: source, Sources: sources, PreviewUserId: isNw ? nwUserId : '' })
+            }).then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res.Success) render(res, nwUserId);
+                else fail(res.Message || 'Preview failed.', nwUserId);
+            }).catch(function (err) {
+                fail('Preview failed: ' + err.message, nwUserId);
+            }).finally(function () { btn.disabled = false; });
+        }
+
+        (isNw ? getHseUsers() : Promise.resolve([])).then(function (u) {
+            users = u || [];
+            load(isNw ? (row.dataset.nwPreviewUser || (source.PlaylistUserIds || [])[0] || '') : '');
+        }).catch(function (err) { fail('Preview failed: ' + err.message, ''); });
     }
 
     // Emby's own toast (bottom notification); falls back to nothing if it can't be loaded.
@@ -1325,7 +1341,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     function openArtCustomise(picker) {
         var view = picker.closest('#HomeScreenCompanionConfigPage') || activeView();
         var row = picker.closest('.tag-row');
-        var overlay = view.querySelector('#artCustomiseModalOverlay');
+        var overlay = bodyOverlay(view, 'artCustomiseModalOverlay');
         var checked = picker.querySelector('input[type=radio]:checked');
         var style = checked ? checked.value : '';
         if (!overlay || !style) return;
@@ -1598,6 +1614,167 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var set = img.dataset.kind === 'poster' ? samples.Poster : samples.Background;
                 var url = set && set[img.dataset.style];
                 if (url) img.src = url;
+            });
+        });
+    }
+
+    // Asks before a group is deleted and lists what it made that goes with it: its home rows and
+    // playlists (as the sync tracked them), its tag and its collection. A tag or collection name
+    // another group also uses, or an imported collection, is listed as kept. The server does the
+    // clean-up on the next full sync after Save.
+    function confirmDeleteGroup(row, onDelete) {
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function decodeList(v) { try { return JSON.parse(decodeURIComponent(v || '%5B%5D')) || []; } catch (e) { return []; } }
+        var cfg = readRowAsConfig(row);
+        var label = (cfg.Name || '').trim(), tag = (cfg.Tag || '').trim();
+        var title = label || tag;
+        var hseTab = row.querySelector('.homescreen-tab'), plTab = row.querySelector('.playlist-tab');
+        var tracked = decodeList(hseTab && hseTab.dataset.hseTracked).filter(function (t) { return t && t.UserId && t.SectionId; });
+        var mappings = decodeList(plTab && plTab.dataset.plMappings).filter(function (m) { return m && m.UserId && m.PlaylistId; });
+        var collName = (cfg.CollectionName || '').trim() || tag;
+
+        // Other groups on the page that share the tag or the collection name keep them.
+        var others = Array.from(document.querySelectorAll('.tag-row')).filter(function (r) { return r !== row && r.querySelector('.selSourceType'); });
+        function lc(s) { return (s || '').trim().toLowerCase(); }
+        var tagShared = others.some(function (r) { return lc((r.querySelector('.txtTagName') || {}).value || (r.querySelector('.txtEntryLabel') || {}).value) === lc(tag); });
+        var collShared = others.some(function (r) {
+            if (!(r.querySelector('.chkEnableCollection') || {}).checked) return false;
+            var n = (r.querySelector('.txtCollectionName') || {}).value || (r.querySelector('.txtTagName') || {}).value;
+            return lc(n) === lc(collName);
+        });
+
+        getHseUsers().catch(function () { return []; }).then(function (users) {
+            function names(ids) {
+                var seen = {};
+                return ids.filter(function (id) { var k = id.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; })
+                    .map(function (id) { var u = users.find(function (x) { return (x.Id || '').toLowerCase() === id.toLowerCase(); }); return u ? u.Name : 'a removed user'; })
+                    .join(', ');
+            }
+            var removed = [], kept = [];
+            if (tracked.length) {
+                var rowName = '';
+                try { rowName = (JSON.parse(cfg.HomeSectionSettings || '{}').CustomName || '').trim(); } catch (e) {}
+                removed.push(['home', 'Home screen row' + (rowName ? ' "' + esc(rowName) + '"' : ''), 'for ' + esc(names(tracked.map(function (t) { return t.UserId; })))]);
+            }
+            if (mappings.length) {
+                var plName = (cfg.PlaylistName || '').trim() || title;
+                removed.push(['queue_music', 'Playlist "' + esc(plName) + '"', 'for ' + esc(names(mappings.map(function (m) { return m.UserId; })))]);
+            }
+            if (cfg.EnableTag && tag) {
+                if (tagShared) kept.push(['label', 'Tag "' + esc(tag) + '"', 'another group uses it too']);
+                else removed.push(['label', 'Tag "' + esc(tag) + '"', 'taken off every title that has it']);
+            }
+            if (cfg.EnableCollection && collName) {
+                if (cfg.CollectionImported) kept.push(['video_library', 'Collection "' + esc(collName) + '"', 'it was imported, so it stays in Emby']);
+                else if (collShared) kept.push(['video_library', 'Collection "' + esc(collName) + '"', 'another group uses it too']);
+                else removed.push(['video_library', 'Collection "' + esc(collName) + '"', 'deleted from Emby (the titles in it are not touched)']);
+            }
+
+            showDeleteDialog({
+                title: 'Delete ' + (title ? '"' + esc(title) + '"' : 'this group') + '?',
+                subtitle: label && tag && lc(label) !== lc(tag) ? 'Tag: ' + esc(tag) : '',
+                removed: removed, kept: kept,
+                empty: 'This group has not made anything in Emby yet, so only its settings are deleted.',
+                note: 'Nothing changes until you press Save. ' +
+                    (removed.length ? 'The items above are removed at the next full sync. ' : '') +
+                    'Your movies and shows themselves are never deleted.',
+                button: 'Delete group',
+                onDelete: onDelete
+            });
+        });
+    }
+
+    // Confirmation popup for deleting a group or a top-list. removed / kept are lists of
+    // [icon, text, detail] (HTML already escaped); empty is shown when nothing is removed.
+    function showDeleteDialog(o) {
+        function list(items, color) {
+            return items.map(function (it) {
+                return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;">' +
+                    '<i class="md-icon" style="font-size:1.15em;color:' + color + ';margin-top:1px;">' + it[0] + '</i>' +
+                    '<div><div>' + it[1] + '</div><div style="font-size:0.82em;opacity:0.65;">' + it[2] + '</div></div></div>';
+            }).join('');
+        }
+        function heading(text) {
+            return '<div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.6;margin:14px 0 2px;">' + text + '</div>';
+        }
+        var body = o.removed.length
+            ? heading('Will also be removed') + list(o.removed, '#cc3333')
+            : '<div style="opacity:0.75;margin-top:8px;">' + o.empty + '</div>';
+        if (o.kept && o.kept.length) body += heading('Kept') + list(o.kept, '#52B54B');
+        body += '<div style="font-size:0.82em;opacity:0.65;margin-top:16px;line-height:1.5;">' + o.note + '</div>';
+
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML =
+            '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;padding:24px 28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
+            '<h3 style="margin:0;font-size:1.1em;">' + o.title + '</h3>' +
+            '<button type="button" class="dgClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+            '</div>' +
+            (o.subtitle ? '<div style="font-size:0.82em;opacity:0.6;margin-top:2px;">' + o.subtitle + '</div>' : '') +
+            body +
+            '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;border-top:1px solid var(--line-color);padding-top:16px;">' +
+            '<button type="button" class="dgCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
+            '<button type="button" class="dgDelete" style="cursor:pointer;border:none;background:#cc3333;color:#fff;border-radius:3px;padding:8px 18px;font-size:0.9em;font-weight:500;"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:5px;">delete</i>' + o.button + '</button>' +
+            '</div></div>';
+        function close() { modal.remove(); document.removeEventListener('keydown', onKey); }
+        function onKey(e) { if (e.key === 'Escape') close(); }
+        document.addEventListener('keydown', onKey);
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal || e.target.closest('.dgClose') || e.target.closest('.dgCancel')) close();
+            else if (e.target.closest('.dgDelete')) { close(); o.onDelete(); }
+        });
+        document.body.appendChild(modal);
+    }
+
+    // Asks before a top-list is deleted (straight away, not on Save) and lists what goes with it:
+    // its home rows, its library with the copies in it, and the badges on the real posters.
+    function confirmDeleteTopList(tagName, onDelete) {
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function norm(p) { return (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(); }
+        var folderName = (tagName || '').replace(/[\\/:*?"<>|]/g, '_').trim().toLowerCase();
+        Promise.all([
+            window.ApiClient.getPluginConfiguration(pluginId).catch(function () { return {}; }),
+            window.ApiClient.getJSON(window.ApiClient.getUrl('Library/VirtualFolders')).catch(function () { return []; }),
+            getHseUsers().catch(function () { return []; })
+        ]).then(function (res) {
+            var tl = ((res[0] && res[0].TopLists) || []).find(function (t) { return (t.TagName || '').toLowerCase() === (tagName || '').toLowerCase(); }) || {};
+            var users = res[2];
+            var settings = {};
+            try { settings = JSON.parse(tl.HomeSectionSettings || '{}') || {}; } catch (e) {}
+            var isShows = tl.ContentType === 'Shows';
+            // The list's own library: by the id it stores, else by its folder name under toplists/.
+            var folders = res[1] || [];
+            var lib = folders.find(function (f) { return tl.HomeSectionLibraryId && String(f.ItemId) === String(tl.HomeSectionLibraryId); })
+                || folders.find(function (f) {
+                    return (f.Locations || []).some(function (loc) {
+                        var n = norm(loc), last = n.slice(n.lastIndexOf('/') + 1);
+                        return n.indexOf('/toplists/') >= 0 && (last === folderName || last === (tagName || '').trim().toLowerCase());
+                    });
+                });
+            var tracked = (tl.HomeSectionTracked || []).filter(function (t) { return t && t.UserId && t.SectionId; });
+            var seen = {};
+            var names = tracked.map(function (t) { return t.UserId; })
+                .filter(function (id) { var k = id.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; })
+                .map(function (id) { var u = users.find(function (x) { return (x.Id || '').toLowerCase() === id.toLowerCase(); }); return u ? u.Name : 'a removed user'; });
+
+            var removed = [];
+            if (names.length)
+                removed.push(['home', 'Home screen row' + (settings.CustomName ? ' "' + esc(settings.CustomName) + '"' : ''), 'for ' + esc(names.join(', '))]);
+            var copies = (isShows ? 'show' : 'movie') + ' copies';
+            if (lib) removed.push(['video_library', 'Library "' + esc(lib.Name) + '"', 'and the ' + copies + ' in it, made for this list']);
+            else removed.push(['folder', 'The ' + copies + ' made for this list', 'its library is already gone']);
+            if (settings.RealPosterBadge)
+                removed.push(['verified', 'TOP 10 badge on the real posters', 'the titles in your library get their plain poster back']);
+
+            showDeleteDialog({
+                title: 'Delete top-list "' + esc(tagName) + '"?',
+                subtitle: '',
+                removed: removed, kept: [],
+                empty: '',
+                note: 'This happens right away. Your real movies and shows are not touched.',
+                button: 'Delete top-list',
+                onDelete: onDelete
             });
         });
     }
@@ -2717,7 +2894,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         <div style="display:flex; align-items:baseline; gap:10px; margin:10px 0 10px 0; flex-wrap:wrap;">
                             <p style="margin:0; font-size:0.9em; font-weight:bold; opacity:0.7;">Source URLs</p>
                             <span style="font-size:0.75em; opacity:0.5;">— Find lists: <a href="https://trakt.tv/discover" target="_blank" style="color:inherit; text-decoration:underline;">Trakt</a> &middot; <a href="https://mdblist.com/toplists/" target="_blank" style="color:inherit; text-decoration:underline;">MDBList</a> &middot; <a href="https://www.themoviedb.org/" target="_blank" style="color:inherit; text-decoration:underline;">TMDb</a> &middot; <a href="https://developer.themoviedb.org/reference/getting-started" target="_blank" style="color:inherit; text-decoration:underline;">TMDb API</a></span>
-                            <button type="button" is="emby-button" class="btnMiPreview raised" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
                         </div>
                         <div class="url-list-container">${urls.map(u => getUrlRowHtml(u.url, u.limit)).join('')}</div>
                         <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddUrl" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);"><i class="md-icon" style="margin-right:5px;">add</i>Add another URL</button></div>
@@ -2726,7 +2902,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <div class="source-local-container" style="display: ${(sourceType === 'LocalCollection' || sourceType === 'LocalPlaylist') ? 'block' : 'none'};">
                         <div style="display:flex; align-items:center; gap:10px; margin:10px 0 10px 0;">
                             <p style="margin:0; font-size:0.9em; font-weight:bold; opacity:0.7;" class="local-type-label">${sourceType === 'LocalPlaylist' ? 'Select Playlists' : 'Select Collections'}</p>
-                            <button type="button" is="emby-button" class="btnMiPreview raised" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
                         </div>
                         <div class="local-list-container">${localSources.map(ls => getLocalRowHtml(sourceType, ls.id, ls.limit)).join('')}</div>
                         <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddLocal" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);"><i class="md-icon" style="margin-right:5px;">add</i>Add another</button></div>
@@ -2735,7 +2911,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <div class="source-manual-container" data-manual-ids="${encodeURIComponent(JSON.stringify(tagConfig.ManualItemIds || []))}" style="display: ${sourceType === 'Manual' ? 'block' : 'none'};">
                         <div style="display:flex; align-items:center; gap:10px; margin:10px 0 10px 0;">
                             <p style="margin:0; font-size:0.9em; font-weight:bold; opacity:0.7;">Movies and Shows</p>
-                            <button type="button" is="emby-button" class="btnMiPreview raised" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
                         </div>
                         <div style="position:relative; margin-bottom:10px;">
                             <input is="emby-input" type="text" class="txtManualSearch" autocomplete="off" label="Add a movie or show" placeholder="Type to search…" />
@@ -2807,7 +2983,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <i class="md-icon" style="margin-right:5px;">science</i>Test AI Source
                             </button>
                             <span class="ai-test-result" style="margin-left:10px; font-size:0.85em; opacity:0.7;"></span>
-                            <button type="button" is="emby-button" class="btnMiPreview raised" title="Ask the AI once and see which titles are in your library" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
                         </div>
                     </div>
 
@@ -2815,8 +2990,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         <div class="mi-limit-row" style="display:${sourceType === 'MediaInfo' || sourceType === 'NextWatch' ? 'flex' : 'none'}; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
                             <label style="font-size:0.9em; white-space:nowrap; margin:0;">Max items</label>
                             <input is="emby-input" class="txtMediaInfoLimit" type="number" value="${mediaInfoLimit}" min="0" style="width:90px;" />
-                            <button type="button" is="emby-button" class="btnMiPreview raised" style="margin-left:auto; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview</span></button>
-                            <button type="button" is="emby-button" class="btnMiHelp raised" style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">help_outline</i><span>How to (filter guide)</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="btnMiHelp btnMiLimitHelp raised" style="display:${sourceType === 'MediaInfo' ? '' : 'none'}; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">help_outline</i><span>How to (filter guide)</span></button>
                         </div>
                         <div class="nw-settings" style="display:${sourceType === 'NextWatch' ? 'block' : 'none'}; margin-bottom:14px;">
                             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -3331,6 +3506,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var miPresetsSection = row.querySelector('.mi-presets-section');
                 if (miPresetsSection) miPresetsSection.style.display = isMi ? 'block' : 'none';
                 if (miLimitRow) miLimitRow.style.display = isMi || type === 'NextWatch' ? 'flex' : 'none';
+                var miLimitHelp = row.querySelector('.btnMiLimitHelp');
+                if (miLimitHelp) miLimitHelp.style.display = isMi ? '' : 'none';
                 var nwSettings = row.querySelector('.nw-settings');
                 if (nwSettings) nwSettings.style.display = type === 'NextWatch' ? 'block' : 'none';
                 var miLimitInput = row.querySelector('.txtMediaInfoLimit');
@@ -3699,15 +3876,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }
 
             if (e.target.closest('.btnRemoveGroup')) {
-                // Name the group so a click on the wrong row is easy to spot.
-                var delLabel = (row.querySelector('.txtEntryLabel').value || '').trim();
-                var delTag = (row.querySelector('.txtTagName').value || '').trim();
-                var delName = delLabel && delTag && delLabel.toLowerCase() !== delTag.toLowerCase()
-                    ? '"' + delLabel + '" (tag: ' + delTag + ')'
-                    : (delLabel || delTag) ? '"' + (delLabel || delTag) + '"' : '';
-                if (confirm(delName ? 'Delete the tag group ' + delName + '?' : 'Delete this tag group?')) {
+                confirmDeleteGroup(row, function () {
                     row.remove();
-                }
+                    setTimeout(checkFormState, 0);
+                });
             }
 
             if (e.target.closest('.btnRunEntry')) {
@@ -4188,7 +4360,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     // Popup for the "Test" buttons on list/AI sources: shows every item the source returned and
     // whether it exists in the library. Opens in a loading state; call .show(result) or .fail(msg).
-    function openSourceTestModal(title, subtitle) {
+    // The source Preview reuses it and draws its own list into .body.
+    function openSourceTestModal(title, subtitle, loadingText) {
         function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
         var overlay = document.createElement('div');
@@ -4204,7 +4377,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<button type="button" class="stm-close" title="Close"><i class="md-icon">close</i></button>' +
                 '</div>' +
                 '<div class="stm-body" style="display:flex;flex-direction:column;min-height:0;flex:1;">' +
-                    '<div class="stm-empty"><i class="md-icon" style="font-size:2em;display:block;margin-bottom:8px;">hourglass_empty</i>Fetching source…</div>' +
+                    '<div class="stm-empty"><i class="md-icon" style="font-size:2em;display:block;margin-bottom:8px;">hourglass_empty</i>' + esc(loadingText || 'Fetching source…') + '</div>' +
                 '</div>' +
             '</div>';
         document.body.appendChild(overlay);
@@ -4301,7 +4474,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div class="stm-footer"><button type="button" class="stm-done">Close</button></div>';
         }
 
-        return { show: show, fail: fail };
+        return { show: show, fail: fail, body: body };
     }
 
     // Picks which task's log to show (running task, else the most recently started one, unless the
@@ -5594,11 +5767,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (footerVer && currentVer) {
                 var releaseUrl = 'https://github.com/soderlund91/HomeScreenCompanion/releases/tag/v' + currentVer;
                 footerVer.innerHTML = '<a href="' + releaseUrl + '" target="_blank" style="color:inherit;text-decoration:none;">v' + currentVer + '</a>';
-            }
-            var chip = view.querySelector('.hsc-version-chip');
-            if (chip && currentVer) {
-                chip.innerHTML = '<a href="https://github.com/soderlund91/HomeScreenCompanion/releases/tag/v' + currentVer + '" target="_blank">v' + currentVer + '</a>';
-                chip.style.display = '';
             }
             if (!currentVer) return;
 
@@ -7294,7 +7462,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     function openBadgeCustomise(picker, kind, container, onCancel) {
         var view = picker.closest('#HomeScreenCompanionConfigPage') || activeView();
-        var overlay = (view && view.querySelector('#artCustomiseModalOverlay')) || document.querySelector('#artCustomiseModalOverlay');
+        var overlay = view ? bodyOverlay(view, 'artCustomiseModalOverlay') : document.querySelector('#artCustomiseModalOverlay');
         if (!overlay) return;
         var tile = kind === 'top10';
         var optsInput = picker.querySelector('.tl-badge-opts');
@@ -7904,6 +8072,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;margin-top:8px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
+                '<span class="mtl-create-hint" style="margin-right:auto;font-size:0.82em;opacity:0.65;"></span>' +
                 '<button type="button" class="btnMtlCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
                 '<button type="button" class="btnMtlCreate" disabled style="cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:4px;padding:10px 26px;font-size:0.95em;font-weight:600;display:flex;align-items:center;gap:6px;">' +
                 '<i class="md-icon" style="font-size:1em;">playlist_add</i>' + escHtml(createBtnLabel) + '</button>' +
@@ -7947,6 +8116,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var nameVal  = (modal.querySelector('.mtlListName').value || '').trim();
                 var hasUsers = modal.querySelectorAll('.chkMtlUser:checked').length > 0;
                 modal.querySelector('.btnMtlCreate').disabled = (nameVal.length === 0 || selectedMovies.length === 0 || !hasUsers);
+                // Says why the button is disabled, so a missing user doesn't look like a dead button.
+                var missing = [];
+                if (nameVal.length === 0) missing.push('a list name');
+                if (selectedMovies.length === 0) missing.push('at least one ' + itemWord);
+                if (!hasUsers) missing.push('at least one user');
+                modal.querySelector('.mtl-create-hint').textContent = missing.length
+                    ? 'Still needed: ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'
+                    : '';
             }
 
             renderSelectedList();
@@ -9710,7 +9887,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 if (btn.classList.contains('btnTlDelete')) {
                     var deleteName = btn.dataset.name;
-                    if (!confirm('Delete top-list for "' + deleteName + '"?\n\nThis will remove the folder, all .strm files, and the virtual library. Your real movies and shows are not touched.')) return;
+                    confirmDeleteTopList(deleteName, function () {
                     var deleteBtn = btn;
                     deleteBtn.disabled = true;
                     deleteBtn.textContent = 'Deleting…';
@@ -9755,6 +9932,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             deleteBtn.textContent = 'Delete top-list';
                             alert('Error deleting top-list: ' + (err.message || err));
                         });
+                    });
                     return;
                 }
 
@@ -10092,13 +10270,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
                 ta.style.overflowY = ta.scrollHeight > 120 ? 'auto' : 'hidden';
             }, { signal: _signal });
-            // Remember how far down the page is scrolled while it is on screen (by the time
-            // viewhide fires the scroller may already have been reset).
-            document.addEventListener('scroll', function (e) {
-                if (_activeView !== view || view.classList.contains('hide')) return;
-                var sc = pageScroller(view);
-                if (e.target === sc || (e.target === document && sc === document.scrollingElement)) view._hscScroll = sc.scrollTop;
-            }, { capture: true, passive: true, signal: _signal });
             window.addEventListener('beforeunload', beforeUnloadHandler);
             document.addEventListener('click', closeSpeedDial);
             var settingsTab = view.querySelector('#tabSettings');
@@ -10201,7 +10372,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelectorAll('.modal-header-close').forEach(function (x) {
                     x.addEventListener('click', function () {
                         var t = x.getAttribute('data-close');
-                        var b = view.querySelector('#' + t) || x.closest('.modal-content').querySelector('.' + t);
+                        var box = x.closest('.modal-content');
+                        var b = view.querySelector('#' + t) || box.querySelector('#' + t) || box.querySelector('.' + t);
                         if (b) b.click();
                     });
                 });
@@ -10387,16 +10559,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         view.addEventListener('viewhide', (e) => {
             stopStatusPolling();
+            // Shown from document.body (see bodyOverlay), so they do not leave with the page.
+            Object.keys(view._bodyOverlays || {}).forEach(function (id) { view._bodyOverlays[id].classList.remove('modal-visible'); });
             // App pause hides the current view without a new one; real navigation always has newViewInfo.
             view._hscPaused = !!(e.detail && e.detail.newViewInfo === null);
         });
 
-        // ---- Unsaved changes and open rows survive leaving the page ----
+        // ---- Unsaved changes survive leaving the page ----
         // Emby either re-shows this copy (Back) or builds a brand-new copy (sidebar/hash), and
         // either way loadConfig() re-renders from the server. So on leaving, this copy writes its
-        // unsaved settings (if any) and which rows/tabs were open to sessionStorage; the copy that
-        // is shown next reads it back. Each copy writes only on its own viewhide, and only while it
-        // is the copy on screen, so a hidden old copy can never overwrite a newer state.
+        // unsaved settings (if any) to sessionStorage; the copy that is shown next reads them back.
+        // The page itself always opens on its first tab, at the top. Each copy writes only on its
+        // own viewhide, and only while it is the copy on screen, so a hidden old copy can never
+        // overwrite a newer state.
         function leaveStateKey() {
             var sid = '', uid = '';
             try { sid = window.ApiClient.serverId ? window.ApiClient.serverId() : ''; } catch (e) { }
@@ -10447,14 +10622,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 if (!body || body.style.display === 'none') return;
                 rows.push({ key: rowKey(row), index: i, expanded: true, tab: row.dataset.activeTab || 'general' });
             });
-            var pt = view.querySelector('.page-tab-btn.active');
-            var st = view.querySelector('.hsc-sub-tab-btn.active');
-            return {
-                rows: rows,
-                pageTab: pt ? pt.getAttribute('data-page-tab') : '',
-                subTab: st ? st.getAttribute('data-hsc-tab') : '',
-                scroll: view._hscScroll || 0
-            };
+            return { rows: rows };
         }
         function applyUiRows(ui) {
             if (!ui || !ui.rows || !ui.rows.length) return;
@@ -10477,14 +10645,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var tab = row.querySelector('.tag-tab[data-tab="' + (r.tab || 'general') + '"]');
                 if (tab) tab.click();
             });
-        }
-        function restoreScroll(y) {
-            if (!y) return;
-            var sc = pageScroller(view);
-            sc.scrollTop = y;
-            view._hscScroll = y;
-            // Lazy tabs can grow the page a moment later; try once more.
-            setTimeout(function () { if (_activeView === view && sc.scrollTop < y) sc.scrollTop = y; }, 400);
         }
         function showDraftBar(serverChanged) {
             var bar = view.querySelector('.hsc-draft-bar');
@@ -10523,14 +10683,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             // Another copy of the page is already on screen, or this one never finished loading
             // (then whatever was stored is still there, untouched).
             if (_activeView !== view || view._hscLoading || !originalConfigState) return;
-            var ui = captureUi();
             var current = null, dirty = false;
             try {
                 current = getUiConfig(view, true);
                 dirty = JSON.stringify(current) !== originalConfigState;
             } catch (e) { }
-            if (dirty) writeLeaveState({ draft: stripSecrets(current), serverStamp: view._hscServerStamp || '', ui: ui });
-            else writeLeaveState({ ui: ui });
+            writeLeaveState(dirty ? { draft: stripSecrets(current), serverStamp: view._hscServerStamp || '' } : null);
         });
 
         // Save submits this copy's own form. (A form="…" attribute would submit the first form with
@@ -10794,12 +10952,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         // Added on every viewshow and removed on every viewhide (see the leave-state handler).
 
         // Fetches the settings and shows them. opts.leaveState (only from viewshow) is what this page
-        // left in sessionStorage: unsaved settings to put back on top, and open rows/tabs. Every
-        // other caller keeps the rows and tabs that are open right now.
+        // left in sessionStorage: unsaved settings to put back on top. Coming back to the page
+        // always starts on the first tab, at the top, with every row closed; every other caller
+        // keeps the rows that are open right now.
         function loadConfig(opts) {
             opts = opts || {};
             var leave = opts.leaveState || null;
-            var ui = leave ? leave.ui : captureUi();
+            var ui = leave ? null : captureUi();
             _hseLibraryCachePromise = null; // återställ cache så nya bibliotek (t.ex. ny top-list) hämtas
             preFetchLibraryData();          // starta hämtning direkt vid sidladdning
             view._hscLoading = true;
@@ -10828,13 +10987,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     if (restored && JSON.stringify(getUiConfig(view, true)) !== originalConfigState) showDraftBar(serverChanged);
                     else { hideDraftBar(); view._hscServerStamp = fetchedStamp; }
                     if (leave) writeLeaveState(null); // picked up; written again on the next viewhide
-                    if (ui) {
-                        // Top tab / sub-tab only on return to the page; other callers never move them.
-                        if (leave && ui.pageTab) showPageTab(ui.pageTab);
-                        if (leave && ui.subTab) showSubTab(ui.subTab);
-                        applyUiRows(ui);
-                        if (leave) requestAnimationFrame(function () { restoreScroll(ui.scroll); });
+                    if (leave) {
+                        // Back on the page (also via Back, which re-shows this same copy as it was).
+                        showPageTab('TagCollection');
+                        var st = view.querySelector('.hsc-sub-tab-btn.active');
+                        if (st && st.getAttribute('data-hsc-tab') !== 'manage') showSubTab('manage');
+                        pageScroller(view).scrollTop = 0;
                     }
+                    else if (ui) applyUiRows(ui);
                 });
             }).catch(function () { view._hscLoading = false; });
         }

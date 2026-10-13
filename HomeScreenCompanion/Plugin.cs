@@ -34,6 +34,8 @@ namespace HomeScreenCompanion
         {
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
             HomeScreenCompanionTask.KeepLastRunCounts(Configuration, configuration as PluginConfiguration);
+            // Groups deleted on the settings page: their tag and home rows are cleaned up by the next full run.
+            HomeScreenCompanionTask.RecordDeletedGroups(Configuration, configuration as PluginConfiguration);
             base.UpdateConfiguration(configuration);
             HomeScreenCompanionTask.RecordImportedCollections(Configuration);
             // Toggling the collection mirror adds (or removes) memberships for all existing copies.

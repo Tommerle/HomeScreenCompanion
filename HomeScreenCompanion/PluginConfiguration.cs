@@ -206,6 +206,30 @@ namespace HomeScreenCompanion
         public string SectionId { get; set; } = "";
     }
 
+    // What groups deleted on the settings page left behind, waiting for the next full run to
+    // remove it (deleted_groups.xml in the plugin data folder).
+    public class DeletedGroupCleanup
+    {
+        public List<RemovedHomeRow> HomeRows { get; set; } = new List<RemovedHomeRow>();
+        public List<RemovedPlaylist> Playlists { get; set; } = new List<RemovedPlaylist>();
+    }
+
+    public class RemovedPlaylist
+    {
+        public string GroupName { get; set; } = "";
+        public string UserId { get; set; } = "";
+        public string PlaylistId { get; set; } = "";
+    }
+
+    public class RemovedHomeRow
+    {
+        public string GroupName { get; set; } = "";
+        public string UserId { get; set; } = "";
+        public string SectionId { get; set; } = "";
+        public string SectionMarker { get; set; } = "";
+        public string HomeSectionSettings { get; set; } = "{}";
+    }
+
     public class MediaInfoFilter
     {
         public string Operator { get; set; } = "AND";

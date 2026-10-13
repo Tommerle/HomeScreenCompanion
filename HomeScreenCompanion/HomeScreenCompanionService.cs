@@ -1781,12 +1781,9 @@ public class HomeScreenCompanionService : IService
                 if (!settingsDict.ContainsKey("SectionType"))
                     settingsDict["SectionType"] = (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
                         : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
-                // An empty title would clear the row's name in Emby: use the pre-filled one, as the sync does.
-                HomeScreenCompanionTask.FillDefaultCustomName(settingsDict, tc);
-                // A tag row outside its schedule keeps its "[INACTIVE]" title (as the sync sets it).
-                if (tc.Active && !HomeScreenCompanionTask.IsScheduleActive(tc.ActiveIntervals, DateTime.Now)
-                    && HomeScreenCompanionTask.IsTagRow(tc, _jsonSerializer))
-                    HomeScreenCompanionTask.MarkInactive(settingsDict);
+                // An empty title would clear the row's name in Emby, and a tag row outside its
+                // schedule keeps its "[INACTIVE]" title.
+                HomeScreenCompanionTask.ApplyRowTitle(settingsDict, tc, _jsonSerializer);
                 // Playlist rows keep each user's own playlist (ParentId is left as it is).
                 HomeScreenCompanionTask.NormalizePlaylistSectionSettings(settingsDict);
 
@@ -3406,6 +3403,7 @@ public class HomeScreenCompanionService : IService
                         tcSettings["_queryExcludeViewIds"] = tcExcStr;
                         tcSettings["ExcludedFolders"] = tcExcStr;
                         tc.HomeSectionSettings = _jsonSerializer.SerializeToString(tcSettings);
+                        HomeScreenCompanionTask.ApplyRowTitle(tcSettings, tc, _jsonSerializer);
 
                         // Resolve tag ID for items-type query
                         if (!string.IsNullOrEmpty(tc.Tag))

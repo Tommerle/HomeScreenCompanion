@@ -671,19 +671,20 @@ namespace HomeScreenCompanion
                                 nl.Add(ep.Name);
                             }
                         }
+                        var passesFilters = FilterConditionsCheck(tagConfig, seriesEpisodeCache, personCache, userDataCache, mediaInfoCache,
+                            preloadedUsers, seriesLastPlayedCache, collectionMembershipCache, seriesEpisodeNamesCache);
 
                         if (string.IsNullOrEmpty(tagConfig.SourceType) || tagConfig.SourceType == "External")
                         {
                             var fetchTimer = System.Diagnostics.Stopwatch.StartNew();
-                            var items = await fetcher.FetchItems(tagConfig.Url, effectiveLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken);
+                            var items = await fetcher.FetchItems(tagConfig.Url, effectiveLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
+                                CountsTowardLimit(imdbLookup, blacklist, passesFilters));
                             fetchTimer.Stop();
                             gs.ListCount = items.Count;
                             int _extBlacklisted = 0, _extNoImdb = 0;
 
                             if (items.Count > 0)
                             {
-                                if (items.Count > effectiveLimit) items = items.Take(effectiveLimit).ToList();
-
                                 foreach (var extItem in items)
                                 {
                                     if (string.IsNullOrEmpty(extItem.Imdb)) { _extNoImdb++; continue; }
@@ -788,6 +789,8 @@ namespace HomeScreenCompanion
                                             continue;
                                         }
 
+                                        if (passesFilters != null && !passesFilters(itemToTag)) continue;
+
                                         if (!matchedLocalItems.Contains(itemToTag))
                                         {
                                             matchedLocalItems.Add(itemToTag);
@@ -806,7 +809,7 @@ namespace HomeScreenCompanion
                         }
                         else if (tagConfig.SourceType == "Manual")
                         {
-                            matchedLocalItems = ManualItems(tagConfig, blacklist, effectiveLimit, gs);
+                            matchedLocalItems = ManualItems(tagConfig, blacklist, effectiveLimit, gs, passesFilters);
                             gs.ListCount = tagConfig.ManualItemIds?.Count ?? 0;
                             _log.Debug($"  {matchedLocalItems.Count} of {gs.ListCount} hand-picked items found");
                         }
@@ -940,7 +943,7 @@ namespace HomeScreenCompanion
                                 config.OllamaModel,
                                 config.AiSystemPrompt,
                                 recentlyWatchedContext,
-                                effectiveLimit,
+                                AiAskCount(effectiveLimit),
                                 cancellationToken);
                             fetchTimer.Stop();
 
@@ -949,6 +952,8 @@ namespace HomeScreenCompanion
 
                             foreach (var aiItem in aiItems)
                             {
+                                // Asked for more than the limit (see AiAskCount): the first hits fill it.
+                                if (effectiveLimit < 10000 && TitleCount(matchedLocalItems) >= effectiveLimit) break;
                                 if (string.IsNullOrWhiteSpace(aiItem.title)) continue;
                                 string _aiLabel = aiItem.year.HasValue ? $"{aiItem.title} ({aiItem.year})" : aiItem.title;
 
@@ -1560,7 +1565,7 @@ namespace HomeScreenCompanion
                 if (!dryRun) ManageHomeSections(config, cancellationToken, debug, statsList);
                 else _log.Skip("Dry run — home sections are not changed");
                 if (!dryRun)
-                    _log.Info($"    {statsList.Count(g => g.HomeSectionSynced)} synced, {statsList.Count(g => g.HomeSectionRemoved)} removed  ·  {RunLog.Elapsed(phaseTimer.Elapsed)}");
+                    _log.Info($"    {statsList.Count(g => g.HomeSectionSynced)} synced, {statsList.Count(g => g.HomeSectionRemoved) + _deletedGroupRowsRemoved} removed  ·  {RunLog.Elapsed(phaseTimer.Elapsed)}");
 
                 CleanupDisabledPlaylists(config, dryRun);
                 bool _hasTopLists = (config.TopLists ?? new List<TopListHomeSection>()).Any(t => !string.IsNullOrWhiteSpace(t.TagName));
@@ -1690,7 +1695,7 @@ namespace HomeScreenCompanion
                     : $"  Collections:   {totalCollCreated} created, {totalCollUpdated} updated, {collDeleted} removed");
                 if (statsList.Any(g => g.EnablePlaylist))
                     _log.Info($"  Playlists:     {statsList.Sum(g => g.PlaylistUsersCreated)} created, {statsList.Sum(g => g.PlaylistUsersUpdated)} updated{(statsList.Sum(g => g.PlaylistUsersFailed) > 0 ? $", {statsList.Sum(g => g.PlaylistUsersFailed)} failed" : "")}");
-                _log.Info($"  Home sections: {totalHsSynced} synced, {totalHsRemoved} removed");
+                _log.Info($"  Home sections: {totalHsSynced} synced, {totalHsRemoved + _deletedGroupRowsRemoved} removed");
                 _log.Info($"  Done in {elapsedStr}  ·  {StatusSymbol(groupsFailed, groupsWarned)} {finalStatus}");
                 _log.Rule();
             }
@@ -1912,6 +1917,7 @@ namespace HomeScreenCompanion
             var startTime = DateTime.Now;
             _log = _preview != null ? new RunLog(new List<string>(), null, "", false) : new RunLog(ExecutionLog, _logger, "", debug, Progress);
             if (_preview == null && tagConfig.SourceType == "AI" && tagConfig.AiRefreshIntervalDays > 0 &&
+                IsScheduleActive(tagConfig.ActiveIntervals) &&
                 tagConfig.AiLastRunDate > DateTime.MinValue &&
                 (DateTime.UtcNow - tagConfig.AiLastRunDate).TotalDays < tagConfig.AiRefreshIntervalDays)
             {
@@ -1958,6 +1964,9 @@ namespace HomeScreenCompanion
                 GroupTotal = 1
             };
             var groupTimer = System.Diagnostics.Stopwatch.StartNew();
+
+            if (_preview == null && !IsScheduleActive(tagConfig.ActiveIntervals))
+                return OffScheduleSingleRun(config, tagConfig, gs, startTime, dryRun, logMissing, debug, cancellationToken);
 
             var _topListsFolder = Path.Combine(Plugin.Instance.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
             var imdbLookup = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
@@ -2212,6 +2221,8 @@ namespace HomeScreenCompanion
             string cName = string.IsNullOrWhiteSpace(tagConfig.CollectionName) ? tagName : tagConfig.CollectionName.Trim();
             int effectiveLimit = tagConfig.Limit <= 0 ? 10000 : tagConfig.Limit;
             var blacklist = new HashSet<string>(tagConfig.Blacklist ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var passesFilters = FilterConditionsCheck(tagConfig, seriesEpisodeCache, personCache, userDataCache, mediaInfoCache,
+                preloadedUsers, seriesLastPlayedCache, collectionMembershipCache, seriesEpisodeNamesCache);
             // Remove this tag from the cache before repopulating so blacklisted items don't get
             // immediately re-tagged by the real-time event handler when UpdateItem is called.
             // (Full run clears the entire cache first; single run must do a targeted removal.)
@@ -2251,10 +2262,10 @@ namespace HomeScreenCompanion
                         if (string.IsNullOrWhiteSpace(src.Url)) continue;
                         int srcLimit = src.Limit <= 0 ? 10000 : src.Limit;
                         var fetchTimer = System.Diagnostics.Stopwatch.StartNew();
-                        var items = await fetcher.FetchItems(src.Url, srcLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken);
+                        var items = await fetcher.FetchItems(src.Url, srcLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
+                            CountsTowardLimit(imdbLookup, blacklist, passesFilters));
                         fetchTimer.Stop();
                         _listCount += items.Count;
-                        if (items.Count > srcLimit) items = items.Take(srcLimit).ToList();
                         int _srcMatched = 0, _srcBlacklisted = 0, _srcMissingBefore = gs.MissingItems.Count;
                         foreach (var extItem in items)
                         {
@@ -2312,6 +2323,7 @@ namespace HomeScreenCompanion
                             if (!IsTaggableTopLevelItem(itemToTag)) continue;
                             var imdb = itemToTag.GetProviderId("Imdb");
                             if (!string.IsNullOrEmpty(imdb) && blacklist.Contains(imdb)) continue;
+                            if (passesFilters != null && !passesFilters(itemToTag)) continue;
                             if (!srcMatched.Contains(itemToTag)) srcMatched.Add(itemToTag);
                         }
                         if (srcLimit < 10000 && srcMatched.Count > srcLimit)
@@ -2335,7 +2347,7 @@ namespace HomeScreenCompanion
                 }
                 else if (tagConfig.SourceType == "Manual")
                 {
-                    matchedLocalItems = ManualItems(tagConfig, blacklist, tagConfig.Limit <= 0 ? 10000 : tagConfig.Limit, gs);
+                    matchedLocalItems = ManualItems(tagConfig, blacklist, tagConfig.Limit <= 0 ? 10000 : tagConfig.Limit, gs, passesFilters);
                     _listCount = tagConfig.ManualItemIds?.Count ?? 0;
                     _log.Debug($"  {matchedLocalItems.Count} of {_listCount} hand-picked items found");
                 }
@@ -2455,7 +2467,7 @@ namespace HomeScreenCompanion
                         config.OllamaModel,
                         config.AiSystemPrompt,
                         recentlyWatchedContext,
-                        effectiveLimit,
+                        AiAskCount(effectiveLimit),
                         cancellationToken);
                     fetchTimer.Stop();
 
@@ -2464,6 +2476,8 @@ namespace HomeScreenCompanion
 
                     foreach (var aiItem in aiItems)
                     {
+                        // Asked for more than the limit (see AiAskCount): the first hits fill it.
+                        if (effectiveLimit < 10000 && TitleCount(matchedLocalItems) >= effectiveLimit) break;
                         if (string.IsNullOrWhiteSpace(aiItem.title)) continue;
                         string _aiLabel = aiItem.year.HasValue ? $"{aiItem.title} ({aiItem.year})" : aiItem.title;
 
@@ -3018,6 +3032,8 @@ namespace HomeScreenCompanion
             }
             if (!dryRun && tagConfig.EnableHomeSection)
                 ManageHomeSections(config, cancellationToken, debug, new List<GroupRunStats> { gs }, tagName);
+            else if (!dryRun)
+                RemoveDeletedGroupLeftovers(cancellationToken);
             CleanupDisabledPlaylists(config, dryRun);
             SyncTopListFolders(config, dryRun);
 
@@ -3039,6 +3055,99 @@ namespace HomeScreenCompanion
             return (true, summary);
         }
 
+        // A single-group run outside the group's schedule: nothing is fetched, and the group ends up
+        // as a full run leaves it — its tag off the titles, its collection removed (unless imported),
+        // its playlists removed and its home row marked inactive. A tag or collection that another
+        // group in schedule also uses is left alone.
+        private (bool Success, string Message) OffScheduleSingleRun(PluginConfiguration config, TagConfig tagConfig, GroupRunStats gs,
+            DateTime startTime, bool dryRun, bool logMissing, bool debug, CancellationToken cancellationToken)
+        {
+            string tagName = tagConfig.Tag.Trim();
+            string cName = string.IsNullOrWhiteSpace(tagConfig.CollectionName) ? tagName : tagConfig.CollectionName.Trim();
+            var others = config.Tags.Where(t => t.Active && IsScheduleActive(t.ActiveIntervals)
+                && !string.Equals(GroupKey(t), GroupKey(tagConfig), StringComparison.OrdinalIgnoreCase)).ToList();
+
+            gs.Skipped = true;
+            gs.SkipReason = "not in schedule";
+            _log.Blank();
+            _log.Info("» Fetching sources");
+            WriteFetchLine(gs);
+
+            _log.Blank();
+            _log.Info("» Applying tags");
+            int tagsRemoved = 0;
+            if (others.Any(t => string.Equals(t.Tag?.Trim(), tagName, StringComparison.OrdinalIgnoreCase)))
+                _log.Skip($"Tag \"{tagName}\" kept — another group in schedule uses it");
+            else
+            {
+                if (!dryRun) { TagCacheManager.Instance.RemoveTagFromAllEntries(tagName); TagCacheManager.Instance.Save(); }
+                foreach (var item in _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { "Movie", "Series", "Season", "Episode" },
+                    Tags = new[] { tagName },
+                    Recursive = true
+                }))
+                {
+                    if (debug) _log.Debug($"    - {item.Name}{(item.ProductionYear.HasValue ? $" ({item.ProductionYear})" : "")}  [{item.GetType().Name}]");
+                    if (!dryRun)
+                    {
+                        item.RemoveTag(tagName);
+                        try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); }
+                        catch (Exception ex) { _log.Warn($"Could not save tags for '{item.Name}': {ex.Message}"); }
+                    }
+                    tagsRemoved++;
+                }
+                _log.Info(tagsRemoved == 0 ? "    No tag changes needed"
+                    : dryRun ? $"    Would remove {tagsRemoved} tags" : $"    -{tagsRemoved} removed (not in schedule)");
+            }
+            gs.TagsRemoved = tagsRemoved;
+
+            if (tagConfig.EnableCollection)
+            {
+                _log.Blank();
+                _log.Info("» Collections");
+                var coll = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault();
+                if (coll == null || TagAnchor.IsAnchor(coll, _jsonSerializer)) _log.Skip($"Collection \"{cName}\" does not exist");
+                else if (RecordImportedCollections(config).Contains(cName))
+                    _log.Skip($"Collection \"{cName}\" kept (imported collection; HSC no longer changes it while the group is not in schedule)");
+                else if (others.Any(t => t.EnableCollection && string.Equals(
+                    string.IsNullOrWhiteSpace(t.CollectionName) ? t.Tag?.Trim() : t.CollectionName.Trim(), cName, StringComparison.OrdinalIgnoreCase)))
+                    _log.Skip($"Collection \"{cName}\" kept — another group in schedule uses it");
+                else if (dryRun) _log.Skip($"Collection \"{cName}\" would be removed (not in schedule)");
+                else
+                {
+                    try
+                    {
+                        _libraryManager.DeleteItem(coll, new DeleteOptions { DeleteFileLocation = false });
+                        _log.Skip($"Collection \"{cName}\" removed (not in schedule)");
+                    }
+                    catch (Exception ex) { _log.Warn($"Collection \"{cName}\" could not be removed: {ex.Message}"); }
+                }
+            }
+
+            if (tagConfig.EnablePlaylist || (tagConfig.PlaylistMappings?.Count ?? 0) > 0)
+            {
+                _log.Blank();
+                _log.Info("» Playlists");
+            }
+            CleanupDisabledPlaylists(config, dryRun);
+
+            if (tagConfig.EnableHomeSection)
+            {
+                _log.Blank();
+                _log.Info("» Home sections");
+                if (dryRun) _log.Skip("Dry run — home sections are not changed");
+                else ManageHomeSections(config, cancellationToken, debug, new List<GroupRunStats> { gs }, tagName);
+            }
+            else if (!dryRun)
+                RemoveDeletedGroupLeftovers(cancellationToken);
+
+            gs.ElapsedMs = (long)(DateTime.Now - startTime).TotalMilliseconds;
+            WriteSingleRunFooter(gs, startTime, dryRun, logMissing);
+            if (_preview == null) LastRunStatus = $"Skipped ({DateTime.Now:HH:mm})";
+            return (true, tagsRemoved > 0 ? $"Not in schedule — {tagsRemoved}↓ tags" : "Not in schedule — skipped");
+        }
+
         // Identifies the UI group a flat TagConfig belongs to. The config page stores one flat entry
         // per URL / local source with the same Name + Tag, so several entries can share one key.
         // An External source without a URL, or a local collection / playlist source without one picked.
@@ -3052,6 +3161,204 @@ namespace HomeScreenCompanion
 
         private static string GroupKey(TagConfig t) =>
             (t.Name ?? "").Trim() + "\x1F" + (t.Tag ?? "").Trim();
+
+        // Fallback id a home row is found by when its real section id is not known.
+        private static string SectionMarker(TagConfig tc) =>
+            "hsc__" + string.Concat((tc.Tag ?? tc.Name ?? "").Take(40)
+                .Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_'));
+
+        private static readonly object _deletedGroupsLock = new object();
+        private static string DeletedGroupsFile => Path.Combine(Plugin.Instance!.DataFolderPath, "deleted_groups.xml");
+
+        private static DeletedGroupCleanup LoadDeletedGroups()
+        {
+            try
+            {
+                if (File.Exists(DeletedGroupsFile))
+                    return Plugin.XmlSerializer.DeserializeFromFile(typeof(DeletedGroupCleanup), DeletedGroupsFile) as DeletedGroupCleanup ?? new DeletedGroupCleanup();
+            }
+            catch { }
+            return new DeletedGroupCleanup();
+        }
+
+        private static void SaveDeletedGroups(DeletedGroupCleanup c)
+        {
+            try
+            {
+                if (c.HomeRows.Count == 0 && c.Playlists.Count == 0) { if (File.Exists(DeletedGroupsFile)) File.Delete(DeletedGroupsFile); return; }
+                Directory.CreateDirectory(Path.GetDirectoryName(DeletedGroupsFile)!);
+                Plugin.XmlSerializer.SerializeToFile(c, DeletedGroupsFile);
+            }
+            catch { }
+        }
+
+        private static string RankFilePath(string tagName)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var safe = new string((tagName ?? "unknown").Select(c => Array.IndexOf(invalidChars, c) >= 0 ? '_' : c).ToArray()).Trim('.');
+            if (string.IsNullOrWhiteSpace(safe)) safe = "unknown";
+            return Path.Combine(Plugin.Instance!.DataFolderPath, "tag_ranks", safe + ".json");
+        }
+
+        // Called when the settings page saves. A deleted group leaves nothing in the config, so
+        // what it left behind is written down here for the next full run: its tag and collection
+        // go into their history files (the run then takes the tag off its titles and removes the
+        // collection, also when no run had recorded them), and its home rows and playlists are
+        // queued for removal. Its rank file goes now. A renamed group keeps its tracked rows and
+        // playlists, so only what no remaining group tracks is queued; a tag or collection name
+        // another group still uses is left alone.
+        internal static void RecordDeletedGroups(PluginConfiguration? oldConfig, PluginConfiguration? newConfig)
+        {
+            if (oldConfig?.Tags == null || newConfig?.Tags == null || Plugin.Instance == null) return;
+            try
+            {
+                var newKeys = new HashSet<string>(newConfig.Tags.Select(GroupKey), StringComparer.OrdinalIgnoreCase);
+                var deleted = oldConfig.Tags.Where(t => !newKeys.Contains(GroupKey(t))).ToList();
+                if (deleted.Count == 0) return;
+
+                var newTags = new HashSet<string>(newConfig.Tags.Where(t => !string.IsNullOrWhiteSpace(t.Tag)).Select(t => t.Tag.Trim()), StringComparer.OrdinalIgnoreCase);
+                var newCollections = new HashSet<string>(newConfig.Tags.Where(t => t.EnableCollection).Select(CollectionNameOf), StringComparer.OrdinalIgnoreCase);
+                var stillTracked = new HashSet<string>(newConfig.Tags
+                    .SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>())
+                    .Select(r => r.UserId + "\x1F" + r.SectionId), StringComparer.OrdinalIgnoreCase);
+                var stillMapped = new HashSet<string>(newConfig.Tags
+                    .SelectMany(t => t.PlaylistMappings ?? new List<PlaylistMapping>())
+                    .Select(m => m.PlaylistId), StringComparer.OrdinalIgnoreCase);
+
+                lock (_deletedGroupsLock)
+                {
+                    var tagHist = LoadFileHistory("homescreencompanion_history.txt");
+                    var collHist = LoadFileHistory("homescreencompanion_collections.txt");
+                    var queue = LoadDeletedGroups();
+                    bool tagHistChanged = false, collHistChanged = false, queueChanged = false;
+                    foreach (var t in deleted)
+                    {
+                        var tag = (t.Tag ?? "").Trim();
+                        var groupName = !string.IsNullOrWhiteSpace(t.Name) ? $"{t.Name} [{tag}]" : tag;
+
+                        if (t.EnableTag && tag.Length > 0 && !newTags.Contains(tag)
+                            && !tagHist.Any(h => string.Equals(h, tag, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            tagHist.Add(tag);
+                            tagHistChanged = true;
+                        }
+                        if (tag.Length > 0 && !newTags.Contains(tag))
+                            try { var rf = RankFilePath(tag); if (File.Exists(rf)) File.Delete(rf); } catch { }
+
+                        var coll = CollectionNameOf(t);
+                        if (t.EnableCollection && coll.Length > 0 && !newCollections.Contains(coll)
+                            && !collHist.Any(h => string.Equals(h, coll, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            collHist.Add(coll);
+                            collHistChanged = true;
+                        }
+
+                        foreach (var r in t.HomeSectionTracked ?? new List<HomeSectionTracking>())
+                        {
+                            if (string.IsNullOrEmpty(r.UserId) || string.IsNullOrEmpty(r.SectionId)) continue;
+                            if (stillTracked.Contains(r.UserId + "\x1F" + r.SectionId)) continue;
+                            if (queue.HomeRows.Any(x => string.Equals(x.UserId, r.UserId, StringComparison.OrdinalIgnoreCase) && x.SectionId == r.SectionId)) continue;
+                            queue.HomeRows.Add(new RemovedHomeRow
+                            {
+                                GroupName = groupName,
+                                UserId = r.UserId,
+                                SectionId = r.SectionId,
+                                SectionMarker = SectionMarker(t),
+                                HomeSectionSettings = t.HomeSectionSettings ?? "{}"
+                            });
+                            queueChanged = true;
+                        }
+
+                        foreach (var m in t.PlaylistMappings ?? new List<PlaylistMapping>())
+                        {
+                            if (string.IsNullOrEmpty(m.PlaylistId) || stillMapped.Contains(m.PlaylistId)) continue;
+                            if (queue.Playlists.Any(x => string.Equals(x.PlaylistId, m.PlaylistId, StringComparison.OrdinalIgnoreCase))) continue;
+                            queue.Playlists.Add(new RemovedPlaylist { GroupName = groupName, UserId = m.UserId, PlaylistId = m.PlaylistId });
+                            queueChanged = true;
+                        }
+                    }
+                    if (tagHistChanged) SaveFileHistory("homescreencompanion_history.txt", tagHist);
+                    if (collHistChanged) SaveFileHistory("homescreencompanion_collections.txt", collHist);
+                    if (queueChanged) SaveDeletedGroups(queue);
+                }
+            }
+            catch { }
+        }
+
+        private static string CollectionNameOf(TagConfig t) =>
+            (string.IsNullOrWhiteSpace(t.CollectionName) ? (t.Tag ?? "") : t.CollectionName).Trim();
+
+        // Full run: removes the home rows and playlists of deleted groups (see RecordDeletedGroups).
+        // Returns the number of groups whose home rows were removed.
+        private int _deletedGroupRowsRemoved;
+
+        private int RemoveDeletedGroupLeftovers(CancellationToken cancellationToken)
+        {
+            DeletedGroupCleanup queue;
+            lock (_deletedGroupsLock) queue = LoadDeletedGroups();
+            if (queue.HomeRows.Count == 0 && queue.Playlists.Count == 0) return 0;
+
+            var failedRows = new List<RemovedHomeRow>();
+            var failedPlaylists = new List<RemovedPlaylist>();
+            int groupsWithRows = 0;
+            foreach (var byGroup in queue.HomeRows.GroupBy(r => r.GroupName))
+            {
+                int n = 0;
+                foreach (var r in byGroup)
+                {
+                    long uid;
+                    // A user deleted since: nothing left to remove.
+                    try { uid = _userManager.GetInternalId(r.UserId); }
+                    catch { continue; }
+                    try
+                    {
+                        DeleteSectionForUser(uid, r.SectionId, r.SectionMarker, r.HomeSectionSettings, cancellationToken);
+                        n++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Warn($"{byGroup.Key}: home section could not be removed: {ex.Message}");
+                        failedRows.Add(r);
+                    }
+                }
+                if (n > 0)
+                {
+                    groupsWithRows++;
+                    _log.Skip($"{byGroup.Key}: home section removed for {RunLog.Plural(n, "user")} (group was deleted)");
+                }
+            }
+
+            foreach (var byGroup in queue.Playlists.GroupBy(p => p.GroupName))
+            {
+                int n = 0;
+                foreach (var p in byGroup)
+                {
+                    if (!Guid.TryParse(p.PlaylistId, out var guid)) continue;
+                    var pl = _libraryManager.GetItemById(guid);
+                    if (pl == null) continue; // already gone
+                    try { DeletePlaylist(pl); n++; }
+                    catch (Exception ex)
+                    {
+                        _log.Warn($"Playlist '{pl.Name}' could not be removed: {ex.Message}");
+                        failedPlaylists.Add(p);
+                    }
+                }
+                if (n > 0)
+                    _log.Skip($"{byGroup.Key}: playlist removed for {RunLog.Plural(n, "user")} (group was deleted)");
+            }
+
+            lock (_deletedGroupsLock)
+            {
+                // Anything queued while this ran stays for the next run.
+                var now = LoadDeletedGroups();
+                now.HomeRows.RemoveAll(x => queue.HomeRows.Any(r => r.UserId == x.UserId && r.SectionId == x.SectionId)
+                    && !failedRows.Any(f => f.UserId == x.UserId && f.SectionId == x.SectionId));
+                now.Playlists.RemoveAll(x => queue.Playlists.Any(p => p.PlaylistId == x.PlaylistId)
+                    && !failedPlaylists.Any(f => f.PlaylistId == x.PlaylistId));
+                SaveDeletedGroups(now);
+            }
+            return groupsWithRows;
+        }
 
         // Rank file entry: the IMDb id, or the item's own id for items without one (shows from
         // local sources often have none). Readers that only know IMDb ids skip the others.
@@ -3767,6 +4074,8 @@ namespace HomeScreenCompanion
         {
             bool configChanged = false;
             var processedHsKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Also on a single-group run: a deleted group's row whose tag is gone would show every title.
+            _deletedGroupRowsRemoved = RemoveDeletedGroupLeftovers(cancellationToken);
             // The tags of the tag rows (see TagAnchor): kept on the anchor so they always exist.
             var anchoredTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -3783,9 +4092,7 @@ namespace HomeScreenCompanion
                 if (tc.HomeSectionTracked == null)
                     tc.HomeSectionTracked = new List<HomeSectionTracking>();
 
-                var safeTag = string.Concat((tc.Tag ?? tc.Name ?? "").Take(40)
-                    .Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_'));
-                var sectionMarker = "hsc__" + safeTag;
+                var sectionMarker = SectionMarker(tc);
 
                 string _hsTagName = (tc.Tag ?? "").Trim();
                 string _hsDisplayName = !string.IsNullOrWhiteSpace(tc.Name) ? $"{tc.Name} [{_hsTagName}]" : _hsTagName;
@@ -4236,6 +4543,15 @@ namespace HomeScreenCompanion
 
         internal static string StripInactive(string? title)
             => title != null && title.StartsWith(InactivePrefix, StringComparison.OrdinalIgnoreCase) ? title.Substring(InactivePrefix.Length) : title ?? "";
+
+        // The title a group's row is written with: the pre-filled one when empty, with InactivePrefix
+        // for a tag row outside its schedule (as the sync sets it).
+        internal static void ApplyRowTitle(Dictionary<string, string> settings, TagConfig tc, IJsonSerializer json)
+        {
+            FillDefaultCustomName(settings, tc);
+            if (tc.Active && !IsScheduleActive(tc.ActiveIntervals, DateTime.Now) && IsTagRow(tc, json))
+                MarkInactive(settings);
+        }
 
         internal static void MarkInactive(Dictionary<string, string> settings)
         {
@@ -4760,7 +5076,7 @@ namespace HomeScreenCompanion
 
         // A "Manual" source: the hand-picked movies and shows, in list order. Items that were
         // deleted from the library are skipped with a warning.
-        private List<BaseItem> ManualItems(TagConfig tagConfig, HashSet<string> blacklist, int limit, GroupRunStats gs)
+        private List<BaseItem> ManualItems(TagConfig tagConfig, HashSet<string> blacklist, int limit, GroupRunStats gs, Func<BaseItem, bool>? passesFilters = null)
         {
             var result = new List<BaseItem>();
             int gone = 0;
@@ -4772,12 +5088,44 @@ namespace HomeScreenCompanion
                 if (item == null || !IsTaggableTopLevelItem(item)) { gone++; continue; }
                 var imdb = item.GetProviderId("Imdb");
                 if (!string.IsNullOrEmpty(imdb) && blacklist.Contains(imdb)) continue;
+                if (passesFilters != null && !passesFilters(item)) continue;
                 if (!result.Contains(item)) result.Add(item);
                 if (result.Count >= limit) break;
             }
             if (gone > 0) gs.Warnings.Add($"{gone} hand-picked item(s) are no longer in the library");
             return result;
         }
+
+        // A source's Limit is a number of hits, not of list entries: a title counts only when it is
+        // usable — in the library, not blacklisted and passing the group's filter conditions — and
+        // the source is read on until the Limit is filled. Null when the group has no filter conditions
+        // (or is a MediaInfo source, whose conditions are the source itself).
+        private Func<BaseItem, bool>? FilterConditionsCheck(TagConfig tagConfig,
+            Dictionary<long, BaseItem> seriesEpisodeCache,
+            Dictionary<string, HashSet<long>> personCache,
+            Dictionary<(Guid, long), (bool Played, DateTimeOffset? LastPlayedDate, int PlayCount)> userDataCache,
+            Dictionary<long, CachedMediaInfo> mediaInfoCache,
+            User[]? preloadedUsers,
+            Dictionary<(Guid, long), DateTimeOffset?> seriesLastPlayedCache,
+            Dictionary<string, HashSet<long>> collectionMembershipCache,
+            Dictionary<long, List<string>>? seriesEpisodeNamesCache)
+        {
+            if (tagConfig.SourceType == "MediaInfo" || IsNextWatch(tagConfig)) return null;
+            if (!(tagConfig.MediaInfoFilters?.Count > 0 || tagConfig.MediaInfoConditions?.Count > 0)) return null;
+            return item => ItemMatchesMediaInfo(item, tagConfig, false, seriesEpisodeCache, personCache, userDataCache,
+                mediaInfoCache.TryGetValue(item.InternalId, out var ci) ? ci : (CachedMediaInfo?)null,
+                preloadedUsers, seriesLastPlayedCache, collectionMembershipCache, seriesEpisodeNamesCache);
+        }
+
+        // An external list entry counts toward the Limit when a usable copy of it is in the library.
+        private static Func<ExternalItemDto, bool> CountsTowardLimit(Dictionary<string, List<BaseItem>> imdbLookup,
+            HashSet<string> blacklist, Func<BaseItem, bool>? passesFilters)
+            => e => !string.IsNullOrEmpty(e.Imdb) && !blacklist.Contains(e.Imdb)
+                    && imdbLookup.TryGetValue(e.Imdb, out var local) && (passesFilters == null || local.Any(passesFilters));
+
+        // How many titles an AI source is asked for: more than its Limit, since some are not in the
+        // library; the first hits fill the Limit.
+        private static int AiAskCount(int limit) => limit >= 10000 ? limit : Math.Min(limit * 2, limit + 50);
 
         // A "MovingDate" window: the anchor date (e.g. last Monday of May, or Easter Sunday) of last
         // year, this year and next year, each widened by DaysBefore/DaysAfter (0–60), so a window
@@ -6124,13 +6472,13 @@ namespace HomeScreenCompanion
             return set;
         }
 
-        private List<string> LoadFileHistory(string filename)
+        private static List<string> LoadFileHistory(string filename)
         {
             try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); if (File.Exists(path)) return File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l)).ToList(); } catch { }
             return new List<string>();
         }
 
-        private void SaveFileHistory(string filename, List<string> data)
+        private static void SaveFileHistory(string filename, List<string> data)
         {
             try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllLines(path, data); } catch { }
         }
