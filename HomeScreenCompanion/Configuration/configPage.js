@@ -1779,6 +1779,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         });
     }
 
+    // An empty Custom Title means the group's current name (the sync and Apply fill it in), so a
+    // renamed group renames its row. A title equal to the name the group had when the page loaded
+    // is that default (earlier versions saved it on every save), so it is stored empty too.
+    function clearDefaultCustomName(hseSettings, hseTab) {
+        var orig = '';
+        try { orig = decodeURIComponent((hseTab && hseTab.dataset.hseOrigName) || ''); } catch (ex) {}
+        var cn = (hseSettings.CustomName || '').trim();
+        if (!cn || (orig && cn === orig)) delete hseSettings.CustomName;
+    }
+
     function readRowAsConfig(row) {
         var entryLabel = row.querySelector('.txtEntryLabel').value;
         var tagName = row.querySelector('.txtTagName').value || entryLabel;
@@ -1846,8 +1856,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             hseTab.querySelectorAll('[data-field]').forEach(function(el) {
                 var f = el.dataset.field;
                 var v = el.type === 'checkbox' ? String(el.checked) : el.value;
-                // If field is empty, fall back to placeholder (e.g. CustomName uses display name as placeholder)
-                if (v === '' && el.placeholder) v = el.placeholder;
+                // If field is empty, fall back to placeholder — not for Custom Title, whose empty value means "the group's name"
+                if (v === '' && el.placeholder && f !== 'CustomName') v = el.placeholder;
                 hseSettings[f] = v;
             });
             var itemTypesVal = (hseTab.querySelector('.selHseItemTypes') || {}).value || 'Movie,Series';
@@ -1858,13 +1868,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             else delete hseSettings['_queryExcludeViewIds'];
         } else {
             try { hseSettings = JSON.parse(decodeURIComponent((hseTab && hseTab.dataset.hseSettings) || '%7B%7D')); } catch(ex) {}
-            // Mirror the placeholder fallback from the loaded-form path: use group name as CustomName when not explicitly set
-            if (!hseSettings.CustomName) {
-                var _hseDefaultName = (row.querySelector('.txtEntryLabel') || {}).value
-                    || (row.querySelector('.txtTagName') || {}).value || '';
-                if (_hseDefaultName) hseSettings.CustomName = _hseDefaultName;
-            }
         }
+        clearDefaultCustomName(hseSettings, hseTab);
 
         var urls = [];
         row.querySelectorAll('.url-row').forEach(function(uRow) {
@@ -2778,6 +2783,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var homeSectionLibraryId = encodeURIComponent(tagConfig.HomeSectionLibraryId || 'auto');
         var homeSectionUserIdsEnc = encodeURIComponent(JSON.stringify(tagConfig.HomeSectionUserIds || []));
         var homeSectionSettingsEnc = encodeURIComponent(tagConfig.HomeSectionSettings || '{}');
+        // The name the row's title defaults to (see clearDefaultCustomName).
+        var homeSectionOrigNameEnc = encodeURIComponent((tagConfig.Name || tagConfig.Tag || '').trim());
         var homeSectionTrackedEnc = encodeURIComponent(JSON.stringify(tagConfig.HomeSectionTracked || []));
         var hsDefaultSectionType = tagConfig.EnableCollection ? 'boxset' : (tagConfig.EnableTag !== false ? 'items' : (tagConfig.EnablePlaylist ? 'playlist' : 'boxset'));
 
@@ -3319,6 +3326,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     data-hse-libraryid="${homeSectionLibraryId}"
                     data-hse-userids="${homeSectionUserIdsEnc}"
                     data-hse-settings="${homeSectionSettingsEnc}"
+                    data-hse-orig-name="${homeSectionOrigNameEnc}"
                     data-hse-tracked="${homeSectionTrackedEnc}"
                     data-hse-default-type="${hsDefaultSectionType}"
                     data-hse-loaded="0">
@@ -5030,7 +5038,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         html += '<div class="fieldDescription hse-playlist-only">Playlist rows show the whole playlist: <em>Media Type</em> and <em>Playstate</em> are not used (filter the source itself instead).</div>';
         html += '</div>';
 
-        var customName = (s.CustomName || '').replace(/"/g, '&quot;');
+        var customName = ((s.CustomName || '').trim() === (defaultName || '').trim() ? '' : (s.CustomName || '')).replace(/"/g, '&quot;');
         var customNamePlaceholder = (defaultName || '').replace(/"/g, '&quot;');
         html += '<div style="margin-bottom:12px;"><input is="emby-input" type="text" class="hse-field-str" data-field="CustomName" label="Custom Title" value="' + customName + '" placeholder="' + customNamePlaceholder + '"/></div>';
 
@@ -5492,8 +5500,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             } else {
                 try { hseSettings = JSON.parse(decodeURIComponent((hseTab && hseTab.dataset.hseSettings) || '%7B%7D')); } catch {}
             }
-            // An empty Custom Title is the pre-filled one: the source's name, else its tag (as the sync uses).
-            if (!(hseSettings.CustomName || '').trim() && (entryLabel || name)) hseSettings.CustomName = entryLabel || name;
+            clearDefaultCustomName(hseSettings, hseTab);
             var hseTracked = (function() { try { return JSON.parse(decodeURIComponent((hseTab && hseTab.dataset.hseTracked) || '%5B%5D')); } catch { return []; } })();
 
             var baseTag = {

@@ -1000,7 +1000,9 @@ public class HomeScreenCompanionService : IService
 
                 if (items == null || items.Count == 0)
                 {
-                    return new TestUrlResponse { Success = false, Message = "No items found. Check URL and API Keys." };
+                    return new TestUrlResponse { Success = false, Message = fetcher.LastError != null
+                        ? $"No items found ({fetcher.LastError}). Check URL and API Keys."
+                        : "No items found. Check URL and API Keys." };
                 }
 
                 var library = BuildTestLibraryIndex();
@@ -1568,7 +1570,9 @@ public class HomeScreenCompanionService : IService
                     CancellationToken.None);
 
                 if (aiItems == null || aiItems.Count == 0)
-                    return new TestAiSourceResponse { Success = false, Message = "No items returned. Check your API key and prompt." };
+                    return new TestAiSourceResponse { Success = false, Message = fetcher.LastError != null
+                        ? $"No items returned ({fetcher.LastError}). Check your API key and prompt."
+                        : "No items returned. Check your API key and prompt." };
 
                 var preview = aiItems.Take(5)
                     .Select(i => string.IsNullOrEmpty(i.imdb_id) ? i.title : $"{i.title} — {i.imdb_id}")
@@ -1788,8 +1792,7 @@ public class HomeScreenCompanionService : IService
                 catch { }
 
                 if (!settingsDict.ContainsKey("SectionType"))
-                    settingsDict["SectionType"] = (tc.EnableCollection && !string.IsNullOrEmpty(tc.CollectionName)) ? "boxset"
-                        : !tc.EnableTag && tc.EnablePlaylist ? "playlist" : "items";
+                    settingsDict["SectionType"] = HomeScreenCompanionTask.DefaultSectionType(tc);
                 // An empty title would clear the row's name in Emby, and a tag row outside its
                 // schedule keeps its "[INACTIVE]" title.
                 HomeScreenCompanionTask.ApplyRowTitle(settingsDict, tc, _jsonSerializer);

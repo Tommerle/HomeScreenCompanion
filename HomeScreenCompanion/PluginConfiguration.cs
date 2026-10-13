@@ -254,6 +254,8 @@ namespace HomeScreenCompanion
         public string SectionId { get; set; } = "";
         public string SectionMarker { get; set; } = "";
         public string HomeSectionSettings { get; set; } = "{}";
+        // The title the row got when its Custom Title was empty (the group's name, else its tag).
+        public string DefaultTitle { get; set; } = "";
     }
 
     public class MediaInfoFilter

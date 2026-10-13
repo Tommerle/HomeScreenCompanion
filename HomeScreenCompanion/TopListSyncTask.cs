@@ -404,7 +404,8 @@ namespace HomeScreenCompanion
                     }
                     catch { }
 
-                    tcSettings.TryGetValue("SectionType", out var tcSt);
+                    if (!tcSettings.TryGetValue("SectionType", out var tcSt) || string.IsNullOrEmpty(tcSt))
+                        tcSt = HomeScreenCompanionTask.DefaultSectionType(tc);
                     // Only items rows get the top-list exclusion (boxset and playlist rows show one item list).
                     if (tcSt == "boxset" || tcSt == "playlist") continue;
 
@@ -440,8 +441,6 @@ namespace HomeScreenCompanion
                         catch { }
                     }
 
-                    var tcSafeTag = new string((tc.Name ?? tc.Tag ?? "").Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
-                    var tcMarker = "hsc__" + tcSafeTag;
 
                     var realTracked = (tc.HomeSectionTracked ?? new List<HomeSectionTracking>())
                         .Where(t => !string.IsNullOrEmpty(t.SectionId) && !t.SectionId.StartsWith("hsc__"))
