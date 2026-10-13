@@ -945,7 +945,7 @@ namespace HomeScreenCompanion
         private static void DrawTileExtras(SKCanvas c, int w, SKRect card, float th, SKPoint numSpot, float chipH, BadgeOptions o, RankExtras ex, int rank)
         {
             string? weeks = WeeksText(ex, o), plays = PlaysText(ex, o), mv = o.MoveChip(ex);
-            bool gap = o.EmbyGap ?? ex.Show;
+            const bool gap = true;   // an extra in "tr" always sits beside Emby's chip
             float clear = EmbyClearRight(w);
             float Shift(float right) => gap && right > clear ? right - clear : 0;
             float pad = card.Width * 0.035f;

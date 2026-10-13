@@ -7320,7 +7320,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var def = badgeDefaults(kind);
             // Show lists keep their extras clear of Emby's unplayed count by default (their cards always get one).
             var contentKind = picker.dataset.content === 'shows' ? 'shows' : 'movies';
-            def.embygap = contentKind === 'shows';
+            def.embygap = true;
             var laySel = null;   // the extra the Layout picker moves
             var stored = {};
             try { stored = optsInput.value ? JSON.parse(optsInput.value) : {}; } catch (e) { stored = {}; }
@@ -7444,8 +7444,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 // The poster card's place on the tile (the renderer's: Primary 4:3 crop, Thumb 16:9).
                 var c = land ? { x: W * 0.49, y: H * 0.076, w: W * 0.317, h: H * 0.847 } : { x: W * 0.503, y: H * 0.014, w: W * 0.486, h: H * 0.972 };
                 var right = W - c.x - c.w, bottom = H - c.y - c.h;
-                var trRight = state.embygap ? Math.max(right + 3, 42) : right + 3;
-                var at = { ntl: 'left:4px;top:4px;', tl: 'left:' + (c.x + 3) + 'px;top:' + (c.y + 3) + 'px;', tr: 'right:' + trRight + 'px;top:' + (c.y + 3) + 'px;',
+                var trRight = Math.max(right + 3, 42);   // beside the Emby chip, never under it
+                var at = { ntl: 'left:4px;top:4px;', tl: 'left:' + (c.x + 3) + 'px;top:' + (c.y + 3) + 'px;', tr: 'right:' + trRight + 'px;top:0px;',
                            bl: 'left:' + (c.x + 3) + 'px;bottom:' + (bottom + 3) + 'px;', bc: 'left:' + (c.x + c.w / 2) + 'px;bottom:' + (bottom + 3) + 'px;transform:translateX(-50%);',
                            br: 'right:' + (right + 3) + 'px;bottom:' + (bottom + 3) + 'px;' };
                 var name = {}; LAY_EXTRAS.forEach(function (e) { name[e[0]] = e[2]; });
@@ -7570,8 +7570,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             field('Logo label', seg('logolabel', [['top10', 'TOP 10'], ['top10rank', 'TOP 10 #3']]), 'logolabel', 'TOP 10 #3: the title\'s rank on a second line under the logo.') +
                             field('Logo size', seg('logosize', [['s', 'S'], ['m', 'M'], ['l', 'L']]), 'logosize')) +
                         section('Layout',
-                            field('', layoutHtml(), 'layout') +
-                            field(contentKind === 'shows' ? 'Beside Emby\'s count' : 'Beside Emby\'s \u2713', seg('embygap', [[false, 'Off'], [true, 'On']]), 'embygap')) +
+                            field('', layoutHtml(), 'layout')) +
                       '</div>' +
                     '</div>';
                 wire();
