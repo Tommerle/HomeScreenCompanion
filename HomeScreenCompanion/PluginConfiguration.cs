@@ -33,6 +33,9 @@ namespace HomeScreenCompanion
         public bool HideTopListLibraries { get; set; } = true;
         public bool DryRunMode { get; set; } = false;
         public bool PreserveTagsOnEmptyResult { get; set; } = true;
+        // Last Played / Popular rules and the AI's "recently watched": count only titles that were
+        // really played (Emby's activity log), not ones only marked as watched. See PlaybackHistory.
+        public bool IgnoreMarkedAsWatched { get; set; } = false;
         // Give top-list copies the same collection memberships as their original movie.
         public bool TopListMirrorCollections { get; set; } = false;
         // Settings > Features: show the Copy / Paste buttons and the Import collection button.

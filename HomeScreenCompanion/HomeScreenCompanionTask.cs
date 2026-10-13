@@ -127,8 +127,11 @@ namespace HomeScreenCompanion
             public long ElapsedMs;
         }
 
-        public HomeScreenCompanionTask(ILibraryManager libraryManager, ICollectionManager collectionManager, IPlaylistManager playlistManager, IUserManager userManager, IUserViewManager userViewManager, IUserDataManager userDataManager, IHttpClient httpClient, IJsonSerializer jsonSerializer, ILogManager logManager, ILibraryMonitor libraryMonitor, IProviderManager providerManager, IFileSystem fileSystem)
+        private readonly MediaBrowser.Model.Activity.IActivityManager _activityManager;
+
+        public HomeScreenCompanionTask(ILibraryManager libraryManager, ICollectionManager collectionManager, IPlaylistManager playlistManager, IUserManager userManager, IUserViewManager userViewManager, IUserDataManager userDataManager, IHttpClient httpClient, IJsonSerializer jsonSerializer, ILogManager logManager, ILibraryMonitor libraryMonitor, IProviderManager providerManager, IFileSystem fileSystem, MediaBrowser.Model.Activity.IActivityManager activityManager)
         {
+            _activityManager = activityManager;
             _libraryManager = libraryManager;
             _collectionManager = collectionManager;
             _userManager = userManager;
@@ -416,6 +419,7 @@ namespace HomeScreenCompanion
                 var userDataCache = new Dictionary<(Guid, long), (bool Played, DateTimeOffset? LastPlayedDate, int PlayCount)>();
                 var seriesLastPlayedCache = new Dictionary<(Guid, long), DateTimeOffset?>();
                 StartPopularity(allItems);
+                StartPlaybackHistory(config, config.Tags.Where(t => t.Active));
                 var preloadedUsers = _userManager.GetUserList(new UserQuery { IsDisabled = false });
 
                 var activeTagOverrides = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -501,8 +505,8 @@ namespace HomeScreenCompanion
                             DateTimeOffset? _max = null;
                             foreach (var _ep in _kvp.Value)
                             {
-                                if (userDataCache.TryGetValue((_user.Id, _ep.InternalId), out var _cd) && _cd.LastPlayedDate.HasValue)
-                                    if (_max == null || _cd.LastPlayedDate > _max) _max = _cd.LastPlayedDate;
+                                if (userDataCache.TryGetValue((_user.Id, _ep.InternalId), out var _cd) && Played(_user, _ep, _cd.LastPlayedDate) is DateTimeOffset _epLp)
+                                    if (_max == null || _epLp > _max) _max = _epLp;
                             }
                             seriesLastPlayedCache[_sKey] = _max;
                         }
@@ -1950,6 +1954,7 @@ namespace HomeScreenCompanion
                 IsVirtualItem = false
             }).ToList();
             StartPopularity(allItems);
+            StartPlaybackHistory(config, new[] { tagConfig });
 
             int _movieCount = allItems.Count(i => i.GetType().Name.Contains("Movie"));
             int _seriesCount = allItems.Count(i => i.GetType().Name.Contains("Series"));
@@ -2196,8 +2201,8 @@ namespace HomeScreenCompanion
                             DateTimeOffset? maxDate = null;
                             foreach (var ep in kvp.Value)
                             {
-                                if (userDataCache.TryGetValue((user.Id, ep.InternalId), out var cd) && cd.LastPlayedDate.HasValue)
-                                    if (maxDate == null || cd.LastPlayedDate > maxDate) maxDate = cd.LastPlayedDate;
+                                if (userDataCache.TryGetValue((user.Id, ep.InternalId), out var cd) && Played(user, ep, cd.LastPlayedDate) is DateTimeOffset epLp)
+                                    if (maxDate == null || epLp > maxDate) maxDate = epLp;
                             }
                             seriesLastPlayedCache[seriesCacheKey] = maxDate;
                         }
@@ -3427,6 +3432,45 @@ namespace HomeScreenCompanion
         private int _popularityAgo;
         private readonly Dictionary<string, List<string>> _weekAgoByTag = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
+        // "Ignore titles only marked as watched" (Settings): the real plays in Emby's activity log,
+        // read once per run when a source has a Last Played or Popular rule or asks the AI with the
+        // user's recently watched titles. Null when off or not needed.
+        private PlaybackHistory? _playHistory;
+
+        private void StartPlaybackHistory(PluginConfiguration config, IEnumerable<TagConfig> sources)
+        {
+            _playHistory = null;
+            if (!config.IgnoreMarkedAsWatched) return;
+            int days = 0;
+            foreach (var t in sources)
+            {
+                if (t.SourceType == "AI" && t.AiIncludeRecentlyWatched) days = Math.Max(days, 365);
+                foreach (var c in GetAllCriteria(t))
+                {
+                    var p = c.TrimStart('!').Split(':');
+                    if (p.Length == 4 && p[0] == "LastPlayed" && double.TryParse(p[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var n))
+                        days = Math.Max(days, (int)Math.Ceiling(n) + 1);
+                    // A Popular window, plus the week back that rank movement looks at.
+                    if (p.Length == 4 && p[0] == "Popular" && int.TryParse(p[1], out var d) && d > 0)
+                        days = Math.Max(days, d + 8);
+                }
+            }
+            if (days == 0) return;
+            try
+            {
+                _playHistory = PlaybackHistory.Load(_activityManager, days);
+                _log.Debug($"Real plays (activity log, last {days} days): {_playHistory.Plays} user/title pairs — titles only marked as watched are not counted as recently played");
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"The activity log could not be read, so titles marked as watched count as played: {ex.Message}");
+            }
+        }
+
+        // The last-played date a rule sees: with "Ignore titles only marked as watched" only a real play counts.
+        private DateTimeOffset? Played(User user, BaseItem item, DateTimeOffset? lastPlayed)
+            => _playHistory == null ? lastPlayed : _playHistory.Effective(user.InternalId, item.InternalId, lastPlayed);
+
         private void StartPopularity(List<BaseItem> scope)
         {
             _popularity = new PopularityCounter(_libraryManager, _userManager, _userDataManager);
@@ -3738,7 +3782,8 @@ namespace HomeScreenCompanion
             if (!_viewersByDays.TryGetValue((days, _popularityAgo), out var counts))
             {
                 _popularity ??= new PopularityCounter(_libraryManager, _userManager, _userDataManager);
-                _viewersByDays[(days, _popularityAgo)] = counts = _popularity.CountViewers(_popularityScope, days, m => _log.Debug("  " + m), _popularityAgo);
+                _viewersByDays[(days, _popularityAgo)] = counts = _popularity.CountViewers(_popularityScope, days, m => _log.Debug("  " + m), _popularityAgo,
+                    _playHistory == null ? null : new Func<long, long, DateTimeOffset?, DateTimeOffset?>(_playHistory.Effective));
             }
             return counts.TryGetValue(item.Id, out var n) ? n : 0;
         }
@@ -5329,6 +5374,7 @@ namespace HomeScreenCompanion
                     if (userDataCache != null)
                         userDataCache[epKey] = ud == null ? (false, (DateTimeOffset?)null, 0) : (ud.Played, ud.LastPlayedDate, ud.PlayCount);
                 }
+                lpDate = Played(user, ep, lpDate);
                 if (lpDate.HasValue && (maxDate == null || lpDate > maxDate))
                     maxDate = lpDate;
             }
@@ -5660,6 +5706,7 @@ namespace HomeScreenCompanion
                                 if (userDataCache != null && userDataCache.TryGetValue(k, out var cd)) { lpDate = cd.LastPlayedDate; }
                                 else { var ud2 = _userDataManager?.GetUserData(u, item); lpDate = ud2?.LastPlayedDate;
                                        if (userDataCache != null) userDataCache[k] = ud2 == null ? (false, (DateTimeOffset?)null, 0) : (ud2.Played, ud2.LastPlayedDate, ud2.PlayCount); }
+                                lpDate = Played(u, item, lpDate);
                             }
                             if (lpDate == null) return false;
                             return ApplyNumericOp((DateTimeOffset.UtcNow - lpDate.Value).TotalDays, op4, daysU);
@@ -5708,6 +5755,7 @@ namespace HomeScreenCompanion
                 {
                     DateTimeOffset? lpDate4 = item.GetType().Name.Contains("Series") && seriesLastPlayedCache != null
                         ? GetSeriesLastPlayed(_userManager.GetUserById(guid4)!, item, seriesLastPlayedCache, userDataCache)
+                        : _playHistory != null && _userManager.GetUserById(guid4) is User _u4 ? Played(_u4, item, udResult.LastPlayedDate)
                         : udResult.LastPlayedDate;
                     if (!lpDate4.HasValue) return false;
                     return ApplyNumericOp((DateTime.UtcNow - lpDate4.Value).TotalDays, op4, days4);
@@ -6491,9 +6539,11 @@ namespace HomeScreenCompanion
                     IsVirtualItem = false
                 });
 
+                // With "Ignore titles only marked as watched", a title counts only with a real play.
                 var playedItems = playedLibraryItems
-                    .Select(item => new { item, ud = _userDataManager?.GetUserData(user, item) })
-                    .OrderByDescending(x => x.ud?.LastPlayedDate ?? DateTimeOffset.MinValue)
+                    .Select(item => new { item, lp = Played(user, item, _userDataManager?.GetUserData(user, item)?.LastPlayedDate) })
+                    .Where(x => _playHistory == null || x.lp.HasValue)
+                    .OrderByDescending(x => x.lp ?? DateTimeOffset.MinValue)
                     .Take(maxCount)
                     .Select(x => x.item)
                     .ToList();

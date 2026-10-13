@@ -608,6 +608,7 @@ namespace HomeScreenCompanion
         public bool LogMissingItems { get; set; }
         public bool DryRunMode { get; set; }
         public bool PreserveTagsOnEmptyResult { get; set; } = true;
+        public bool IgnoreMarkedAsWatched { get; set; }
         public bool TopListMirrorCollections { get; set; }
         public bool ShowCopyPasteButtons { get; set; }
         public bool ShowImportCollectionButton { get; set; }
@@ -3599,6 +3600,7 @@ public class HomeScreenCompanionService : IService
                     LogMissingItems           = config.LogMissingItems,
                     DryRunMode                = config.DryRunMode,
                     PreserveTagsOnEmptyResult = config.PreserveTagsOnEmptyResult,
+                    IgnoreMarkedAsWatched     = config.IgnoreMarkedAsWatched,
                     TopListMirrorCollections  = config.TopListMirrorCollections,
                     ShowCopyPasteButtons      = config.ShowCopyPasteButtons,
                     ShowImportCollectionButton = config.ShowImportCollectionButton,
@@ -3713,6 +3715,7 @@ public class HomeScreenCompanionService : IService
                     config.LogMissingItems           = s.LogMissingItems;
                     config.DryRunMode                = s.DryRunMode;
                     config.PreserveTagsOnEmptyResult = s.PreserveTagsOnEmptyResult;
+                    config.IgnoreMarkedAsWatched     = s.IgnoreMarkedAsWatched;
                     mirrorChanged = config.TopListMirrorCollections != s.TopListMirrorCollections;
                     config.TopListMirrorCollections  = s.TopListMirrorCollections;
                     config.ShowCopyPasteButtons      = s.ShowCopyPasteButtons;

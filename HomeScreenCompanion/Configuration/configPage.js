@@ -5627,6 +5627,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             LogMissingItems: view.querySelector('#chkLogMissingItems').checked,
             DryRunMode: view.querySelector('#chkDryRunMode').checked,
             PreserveTagsOnEmptyResult: view.querySelector('#chkPreserveTagsOnEmptyResult').checked,
+            IgnoreMarkedAsWatched: view.querySelector('#chkIgnoreMarkedAsWatched').checked,
             TopListMirrorCollections: view.querySelector('#chkTopListMirrorCollections').checked,
             HideTopListLibraries: view.querySelector('#chkHideTopListLibraries').checked,
             ShowCopyPasteButtons: view.querySelector('#chkShowCopyPasteButtons').checked,
@@ -11186,6 +11187,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelector('#chkLogMissingItems').checked = config.LogMissingItems || false;
                 view.querySelector('#chkDryRunMode').checked = config.DryRunMode || false;
                 view.querySelector('#chkPreserveTagsOnEmptyResult').checked = config.PreserveTagsOnEmptyResult || false;
+                view.querySelector('#chkIgnoreMarkedAsWatched').checked = !!config.IgnoreMarkedAsWatched;
                 view.querySelector('#chkTopListMirrorCollections').checked = config.TopListMirrorCollections || false;
                 view.querySelector('#chkHideTopListLibraries').checked = config.HideTopListLibraries !== false;
                 view.querySelector('#chkShowCopyPasteButtons').checked = config.ShowCopyPasteButtons || false;

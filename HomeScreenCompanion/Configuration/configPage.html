@@ -1431,6 +1431,14 @@
 
                         <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
                             <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkIgnoreMarkedAsWatched" />
+                                <span>Ignore titles only marked as watched</span>
+                            </label>
+                            <div class="fieldDescription">Last Played and Popular rules, and the AI's recently watched titles, count only titles that were actually played — not ones marked as watched by hand. Uses Emby's activity log; plays older than the log are counted as before.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
+                            <label>
                                 <input is="emby-checkbox" type="checkbox" id="chkLogMissingItems" />
                                 <span>Log missing movies and shows</span>
                             </label>

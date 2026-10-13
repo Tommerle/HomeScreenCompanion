@@ -34,15 +34,19 @@ namespace HomeScreenCompanion
         }
 
         // agoDays > 0 counts as if today were that many days earlier (rank movement's "a week ago").
-        public Dictionary<Guid, int> CountViewers(List<BaseItem> titles, int days, Action<string> log, int agoDays = 0)
+        // lastPlayed (user, item, date → date): the date a play counts with; null drops it (see
+        // PlaybackHistory: "Ignore titles only marked as watched"). Only used for a time window.
+        public Dictionary<Guid, int> CountViewers(List<BaseItem> titles, int days, Action<string> log, int agoDays = 0,
+            Func<long, long, DateTimeOffset?, DateTimeOffset?>? lastPlayed = null)
         {
             // user-data key → the film / show it counts for. Shows are counted through their episodes;
             // a film's versions (separate items) count as one film: IMDb id, else TMDb id, else the item.
             var target = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var itemOfKey = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             void Map(BaseItem item, string group)
             {
                 var key = KeyOf(item);
-                if (!string.IsNullOrEmpty(key) && !target.ContainsKey(key)) target[key] = group;
+                if (!string.IsNullOrEmpty(key) && !target.ContainsKey(key)) { target[key] = group; itemOfKey[key] = item.InternalId; }
             }
             var filmOf = FilmKeys(titles);
 
@@ -77,8 +81,11 @@ namespace HomeScreenCompanion
                 {
                     if (record.Key == null || !target.TryGetValue(record.Key, out var group)) continue;
                     hits++;
-                    if (!Counts(record, cutoff)) continue;
-                    if (until.HasValue && record.LastPlayedDate.HasValue && record.LastPlayedDate.Value >= until.Value) continue;
+                    var date = record.LastPlayedDate;
+                    if (cutoff.HasValue && lastPlayed != null && itemOfKey.TryGetValue(record.Key, out var itemId))
+                        date = lastPlayed(user.InternalId, itemId, date);
+                    if (!Counts(record.Played, date, cutoff)) continue;
+                    if (until.HasValue && date.HasValue && date.Value >= until.Value) continue;
                     if (!viewers.TryGetValue(group, out var set)) viewers[group] = set = new HashSet<long>();
                     set.Add(user.InternalId);
                 }
@@ -146,12 +153,14 @@ namespace HomeScreenCompanion
         }
 
         // Also used by NextWatchRecommender, so "popular" means the same in both.
-        internal static bool Counts(UserItemData d, DateTimeOffset? cutoff)
+        internal static bool Counts(UserItemData d, DateTimeOffset? cutoff) => Counts(d.Played, d.LastPlayedDate, cutoff);
+
+        private static bool Counts(bool played, DateTimeOffset? lastPlayed, DateTimeOffset? cutoff)
         {
             // Played only: Emby also raises PlayCount for a play stopped straight away.
-            if (!d.Played) return false;
+            if (!played) return false;
             if (!cutoff.HasValue) return true;
-            return d.LastPlayedDate.HasValue && d.LastPlayedDate.Value >= cutoff.Value;
+            return lastPlayed.HasValue && lastPlayed.Value >= cutoff.Value;
         }
 
         // One GetAllUserData call per user per run, shared with NextWatchRecommender.
