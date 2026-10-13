@@ -1061,7 +1061,7 @@ namespace HomeScreenCompanion
         /// real poster (tl, tr, bl, bc, br), with "#rank" on a second line when withRank. size s/m/l
         /// ≈ 14/18/24% of the poster width. Writes a new JPEG; the source file is only read.
         /// </summary>
-        internal static void RealPosterBadge(string sourcePath, string outputPath, int rank, bool withRank, string size, string corner)
+        internal static void RealPosterBadge(string sourcePath, string outputPath, int rank, bool withRank, string size, string corner, string? embyChip = null)
         {
             using var src = SKBitmap.Decode(sourcePath)
                 ?? throw new InvalidOperationException($"SkiaSharp could not decode '{sourcePath}'");
@@ -1073,7 +1073,10 @@ namespace HomeScreenCompanion
             // The same square as the Number badge's "TOP 10 square" shape (DrawBadge), in the chosen corner.
             float bw = SquareWidth(Math.Min(w, h), size);
             var sq = SquareRect(w, h, bw, withRank, corner);
-            DrawLogoBox(c, SKRect.Create(sq.Left, sq.Top, bw, bw * 1.12f), withRank ? rank : (int?)null);
+            // Top right: beside Emby's own chip (unplayed count / ✓), the same as the Top 10 tile.
+            float sx = corner == "tr" ? Math.Min(sq.Left, EmbyClearRight(w) - bw) : sq.Left;
+            DrawLogoBox(c, SKRect.Create(sx, sq.Top, bw, bw * 1.12f), withRank ? rank : (int?)null);
+            if (embyChip != null) DrawEmbyChip(c, w, 0, embyChip == "shows");
             using var img = surface.Snapshot();
             using var data = img.Encode(SKEncodedImageFormat.Jpeg, 92);
             using var fs = File.Create(outputPath);
@@ -1081,7 +1084,7 @@ namespace HomeScreenCompanion
         }
 
         /// <summary>The real-poster badge at rank 7 on the stand-in poster (the Real posters block's icon), width px wide.</summary>
-        internal static string RealPosterPreview((string Label, string Size, string Corner)? opt, string standInPoster, string tempDir, int width = 400)
+        internal static string RealPosterPreview((string Label, string Size, string Corner)? opt, string standInPoster, string tempDir, int width = 400, string? kind = null)
         {
             var (label, size, corner) = opt ?? ("top10", "m", "tr");
             Directory.CreateDirectory(tempDir);
@@ -1089,7 +1092,7 @@ namespace HomeScreenCompanion
             try
             {
                 // Rank 7 as the example, like the Badge Style tiles.
-                RealPosterBadge(standInPoster, outPath, 7, label == "top10rank", size, corner);
+                RealPosterBadge(standInPoster, outPath, 7, label == "top10rank", size, corner, kind ?? "movies");   // preview: with a sample of Emby's chip
                 using var full = SKBitmap.Decode(outPath);
                 int w = width, h = full.Height * w / full.Width;
                 using var surface = SKSurface.Create(new SKImageInfo(w, h));

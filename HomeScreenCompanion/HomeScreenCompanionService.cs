@@ -1203,7 +1203,7 @@ public class HomeScreenCompanionService : IService
                 if (!File.Exists(standIn)) CollectionArtRenderer.DrawBadgeStandInPoster(standIn);
                 var variant = (request.Variant ?? "").Trim().ToLowerInvariant();
                 var image = variant == "real"
-                    ? BadgeRenderer.RealPosterPreview(RealPosterBadges.OptionOf(string.IsNullOrWhiteSpace(request.RealPoster) ? "top10|m" : request.RealPoster), standIn, dir)
+                    ? BadgeRenderer.RealPosterPreview(RealPosterBadges.OptionOf(string.IsNullOrWhiteSpace(request.RealPoster) ? "top10|m" : request.RealPoster), standIn, dir, 400, PreviewKind(request.Kind))
                     : BadgeRenderer.Preview(BadgeLook.Combine(request.BadgeStyle, request.Options), standIn, dir, variant, 0, PreviewKind(request.Kind));
                 return new ArtCustomPreviewResponse { Success = true, Image = image };
             }

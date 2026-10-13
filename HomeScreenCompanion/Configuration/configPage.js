@@ -7036,7 +7036,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<div class="tl-badge-custom-row" style="display:flex;align-items:center;gap:8px;margin-top:8px;">' + custBtn +
                 '<span class="tl-badge-custom-note fieldDescription" style="margin:0;' + (tileSel && optionsJson ? '' : 'display:none;') + '">Customised</span>' +
             '</div>' +
-            buildRealPosterHtml(realPoster) +
+            buildRealPosterHtml(realPoster, contentKind) +
             '</div>';
     }
 
@@ -7053,14 +7053,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     }
     // The badge popup's Position control: a mini poster with a dot per spot, the spot's name beside it.
     var POS_SPOTS = [['tl', 'Top left'], ['tr', 'Top right'], ['bl', 'Bottom left'], ['bc', 'Bottom centre'], ['br', 'Bottom right']];
-    function posPickerHtml(spots, sel) {
+    // emby: mark Emby's chip in the top-right corner, with the top-right spot beside it.
+    function posPickerHtml(spots, sel, emby) {
         var on = spots.some(function (p) { return p[0] === sel; }) ? sel : spots[0][0];
         var name = spots.filter(function (p) { return p[0] === on; })[0][1];
-        return '<div class="artc-posrow"><div class="artc-posposter" data-field="pos">' + spots.map(function (p) {
+        return '<div class="artc-posrow"><div class="artc-posposter' + (emby ? ' artc-emby' : '') + '" data-field="pos">' + (emby ? '<span class="artc-pos-emby">Emby</span>' : '') + spots.map(function (p) {
             return '<button type="button" class="artc-posdot artc-pos-' + p[0] + (on === p[0] ? ' artc-on' : '') + '" data-value="' + p[0] + '" title="' + p[1] + '" aria-label="' + p[1] + '"><span></span></button>';
         }).join('') + '</div><span class="artc-posname">' + escapeHtml(name) + '</span></div>';
     }
-    function buildRealPosterHtml(value) {
+    function buildRealPosterHtml(value, contentKind) {
         var rp = parseRealPoster(value);
         function seg(key, opts, cur) {
             return '<div class="artc-seg" data-rp="' + key + '">' + opts.map(function (o) {
@@ -7068,7 +7069,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }).join('') + '</div>';
         }
         var lbl = 'font-size:0.82em;opacity:0.75;min-width:56px;';
-        return '<div class="tl-rp" style="margin-top:14px;">' +
+        return '<div class="tl-rp" data-kind="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-top:14px;">' +
             '<span style="font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:4px;">Real posters</span>' +
             '<div class="checkboxContainer" style="margin-bottom:6px;"><label>' +
                 '<input is="emby-checkbox" type="checkbox" class="tl-rp-on"' + (rp.on ? ' checked' : '') + ' />' +
@@ -7078,7 +7079,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div>' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="' + lbl + '">Label</span>' + seg('label', [['top10', 'TOP 10'], ['top10rank', 'TOP 10 #3']], rp.label) + '</div>' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="' + lbl + '">Size</span>' + seg('size', [['s', 'S'], ['m', 'M'], ['l', 'L']], rp.size) + '</div>' +
-                '<div class="tl-rp-pos" style="display:flex;align-items:center;gap:10px;"><span style="' + lbl + '">Position</span>' + posPickerHtml(POS_SPOTS, rp.pos) + '</div>' +
+                '<div class="tl-rp-pos" style="display:flex;align-items:center;gap:10px;"><span style="' + lbl + '">Position</span>' + posPickerHtml(POS_SPOTS, rp.pos, true) + '</div>' +
                 '</div>' +
                 // The look the real posters get (rank 7 on a stand-in poster), drawn by the server.
                 '<img class="tl-rp-icon" alt="" style="width:60px;height:90px;object-fit:contain;display:block;border-radius:3px;" />' +
@@ -7101,15 +7102,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var token = readRealPoster(block);
         if (icon.dataset.iconFor === token) return;
         icon.dataset.iconFor = token;
-        realPosterIconImage(token).then(function (src) { if (icon.dataset.iconFor === token) icon.src = src; }).catch(function () { });
+        realPosterIconImage(token, block.dataset.kind).then(function (src) { if (icon.dataset.iconFor === token) icon.src = src; }).catch(function () { });
     }
-    function realPosterIconImage(rpVal) {
-        var key = 'real|' + rpVal;
+    function realPosterIconImage(rpVal, kind) {
+        var key = 'real|' + (kind || '') + '|' + rpVal;
         if (!_badgeIconCache[key])
             _badgeIconCache[key] = fetch(window.ApiClient.getUrl('HomeScreenCompanion/BadgeCustomPreview'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
-                body: JSON.stringify({ BadgeStyle: 'neutral', Options: '', Variant: 'real', RealPoster: rpVal })
+                body: JSON.stringify({ BadgeStyle: 'neutral', Options: '', Variant: 'real', RealPoster: rpVal, Kind: kind || '' })
             }).then(function (r) { return r.json(); }).then(function (res) {
                 if (!res.Success) throw new Error(res.Message || 'Preview failed');
                 return res.Image;
