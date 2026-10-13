@@ -195,6 +195,7 @@ namespace HomeScreenCompanion
         public string TagName { get; set; } = "";   // unused (kept so older pages still post)
         public string Variant { get; set; } = "";   // "thumb" = the landscape a Thumb row uses; "real" = a real poster's badge; else the Primary poster
         public string RealPoster { get; set; } = "";   // Variant "real": the Real posters value "label|size[|{"pos":..}]"
+        public string Kind { get; set; } = "";   // "shows" / "movies": the list's titles (a sample of Emby's count / ✓ chip on top)
     }
 
     // The badge popup's shape tiles: one small card per look, each drawn exactly like the preview
@@ -206,6 +207,7 @@ namespace HomeScreenCompanion
         public string BadgeStyle { get; set; } = "";
         public string Variant { get; set; } = "";
         public List<string> Options { get; set; } = new List<string>();   // one Options JSON per tile
+        public string Kind { get; set; } = "";   // as BadgeCustomPreview
     }
 
     public class BadgeShapeTilesResponse
@@ -1202,7 +1204,7 @@ public class HomeScreenCompanionService : IService
                 var variant = (request.Variant ?? "").Trim().ToLowerInvariant();
                 var image = variant == "real"
                     ? BadgeRenderer.RealPosterPreview(RealPosterBadges.OptionOf(string.IsNullOrWhiteSpace(request.RealPoster) ? "top10|m" : request.RealPoster), standIn, dir)
-                    : BadgeRenderer.Preview(BadgeLook.Combine(request.BadgeStyle, request.Options), standIn, dir, variant);
+                    : BadgeRenderer.Preview(BadgeLook.Combine(request.BadgeStyle, request.Options), standIn, dir, variant, 0, PreviewKind(request.Kind));
                 return new ArtCustomPreviewResponse { Success = true, Image = image };
             }
             catch (Exception ex)
@@ -1210,6 +1212,12 @@ public class HomeScreenCompanionService : IService
                 _logger.Warn($"Badge preview failed: {ex.Message}");
                 return new ArtCustomPreviewResponse { Message = "Preview failed: " + ex.Message };
             }
+        }
+
+        private static string? PreviewKind(string? kind)
+        {
+            var k = (kind ?? "").Trim().ToLowerInvariant();
+            return k == "shows" || k == "movies" ? k : null;
         }
 
         // Shape tiles, by look (style|variant|options): the popup asks again after every change, mostly for the same looks.
@@ -1227,17 +1235,18 @@ public class HomeScreenCompanionService : IService
                 if (!File.Exists(standIn)) CollectionArtRenderer.DrawBadgeStandInPoster(standIn);
                 var variant = (request.Variant ?? "").Trim().ToLowerInvariant();
                 var looks = (request.Options ?? new List<string>()).Select(o => BadgeLook.Combine(request.BadgeStyle, o)).ToList();
+                var kind = PreviewKind(request.Kind);
                 var images = new string[looks.Count];
                 int drawn = 0;
                 // The same drawing as the preview (BadgeRenderer.Preview), only smaller; new looks drawn side by side.
                 Parallel.For(0, looks.Count, i =>
                 {
-                    var key = variant + "|" + looks[i];
+                    var key = variant + "|" + kind + "|" + looks[i];
                     string? img;
                     lock (ShapeTileCache) ShapeTileCache.TryGetValue(key, out img);
                     if (img == null)
                     {
-                        img = BadgeRenderer.Preview(looks[i], standIn, dir, variant, ShapeTileWidth);
+                        img = BadgeRenderer.Preview(looks[i], standIn, dir, variant, ShapeTileWidth, kind);
                         Interlocked.Increment(ref drawn);
                         lock (ShapeTileCache) { if (ShapeTileCache.Count > 400) ShapeTileCache.Clear(); ShapeTileCache[key] = img; }
                     }
@@ -2955,6 +2964,8 @@ public class HomeScreenCompanionService : IService
             IFileSystem fileSystem, Action<string>? log = null, RankExtras? extras = null)
         {
             var (poster, thumb) = FetchImageSources(item, httpClient, tempDir, providerManager, libraryManager, fileSystem, log);
+            // A series card always gets Emby's unplayed count in its top-right corner.
+            if (item is MediaBrowser.Controller.Entities.TV.Series) { extras ??= new RankExtras(); extras.Show = true; }
             BadgeRenderer.RenderRanked(poster, thumb, rank, outputBase, badgeStyle, extras,
                 (what, ex) => log?.Invoke($"Top-list: {what} failed for '{item.Name}' — {ex.Message}"));
         }

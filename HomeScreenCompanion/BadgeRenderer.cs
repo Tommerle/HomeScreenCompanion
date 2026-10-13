@@ -34,16 +34,29 @@ namespace HomeScreenCompanion
     ///   moveeq    true | false                        movement chip also shows "=" for an unchanged rank
     ///   logolabel top10 | top10rank                   TOP 10 logo: plain, or with "#rank" on a second line
     ///   logosize  s | m | l                           TOP 10 logo size (m = the original size)
+    ///   logopos, movepos, weekspos, playspos          Top 10 tile: where each extra sits — ntl (top left of
+    ///             ntl | tl | tr | bl | bc | br        the number area) or a corner / bottom centre of the poster.
+    ///                                                 Missing = today's spots: logo tr, move ntl, weeks and
+    ///                                                 plays bl (stacked, plays under weeks).
+    ///   embygap   true | false                        Top 10 tile: an extra in tr sits left of Emby's own
+    ///                                                 count / ✓ chip. Missing = on for show lists only.
     /// </summary>
     internal sealed class BadgeOptions
     {
         public string? Font, Num, NumColour, OutColour, Outline, Size, Shape, Colour, Medal, Pos, TilePos, TileBg, TileBgColour, Special, LogoLabel, LogoSize;
-        public bool? Shadow, Move, MoveEq, Weeks, Plays, Logo;
+        public string? LogoPos, MovePos, WeeksPos, PlaysPos;
+        public bool? Shadow, Move, MoveEq, Weeks, Plays, Logo, EmbyGap;
 
         public static readonly BadgeOptions None = new BadgeOptions();
 
         public static readonly string[] Shapes = { "circle", "roundsq", "pill", "ribbon", "banner", "diag", "netflix", "numonly", "bigoutline", "hidden" };
         private static readonly string[] Positions = { "tl", "tr", "bl", "br", "bc" };
+        // The Top 10 tile's spots for the extras: the top left of the number area, then the poster's.
+        internal static readonly string[] Spots = { "ntl", "tl", "tr", "bl", "bc", "br" };
+        internal string LogoSpot => LogoPos ?? "tr";
+        internal string MoveSpot => MovePos ?? "ntl";
+        internal string WeeksSpot => WeeksPos ?? "bl";
+        internal string PlaysSpot => PlaysPos ?? "bl";
 
         public bool IsDefault => Font == null && Num == null && NumColour == null && OutColour == null && Outline == null && Size == null
             && Shape == null && Colour == null && Medal == null && Pos == null && TilePos == null && TileBg == null && TileBgColour == null
@@ -85,6 +98,11 @@ namespace HomeScreenCompanion
                     case "logo": o.Logo = b; break;
                     case "logolabel": if (s == "top10" || s == "top10rank") o.LogoLabel = s; break;
                     case "logosize": if (s == "s" || s == "m" || s == "l") o.LogoSize = s; break;
+                    case "logopos": if (s != null && Spots.Contains(s)) o.LogoPos = s; break;
+                    case "movepos": if (s != null && Spots.Contains(s)) o.MovePos = s; break;
+                    case "weekspos": if (s != null && Spots.Contains(s)) o.WeeksPos = s; break;
+                    case "playspos": if (s != null && Spots.Contains(s)) o.PlaysPos = s; break;
+                    case "embygap": o.EmbyGap = b; break;
                 }
             }
             return o;
@@ -108,6 +126,7 @@ namespace HomeScreenCompanion
         public int? Weeks;
         public int? Plays;
         public bool Sample;    // preview: sample values
+        public bool Show;      // a series: Emby draws its unplayed count in the card's top-right corner
     }
 
     /// <summary>
@@ -699,9 +718,7 @@ namespace HomeScreenCompanion
             }
             var card = new SKRect(px, py, px + pw, py + cardH);
             DrawCard(c, poster, card, RadiusFor(pw));
-            DrawStatLines(c, card, ex, o, cardH * 0.065f, true);
-            if (o.Logo == true) NetflixLogoOn(c, card, o, rank);
-            if (o.MoveChip(ex) is string mv) Chip(c, mv, 24, 16, 92);
+            DrawTileExtras(c, TW, card, cardH * 0.065f, new SKPoint(24, 16), 92, o, ex, rank);
             Save(surface, outputPath);
         }
 
@@ -739,9 +756,7 @@ namespace HomeScreenCompanion
             }
             var card = new SKRect(px, py, px + pw, py + ph);
             DrawCard(c, poster, card, RadiusFor(pw));
-            DrawStatLines(c, card, ex, o, ph * 0.055f, true);
-            if (o.Logo == true) NetflixLogoOn(c, card, o, rank);
-            if (o.MoveChip(ex) is string mv) Chip(c, mv, margin + 10, crop + margin + 6, 110);
+            DrawTileExtras(c, w, card, ph * 0.055f, new SKPoint(margin + 10, crop + margin + 6), 110, o, ex, rank);
             Save(surface, outputPath);
         }
 
@@ -808,25 +823,40 @@ namespace HomeScreenCompanion
             return wdt;
         }
 
+        // The "N wks" and "▶ N plays" texts (null = not drawn).
+        private static string? WeeksText(RankExtras ex, BadgeOptions o) => o.Weeks == true && ex.Weeks != null ? (ex.Weeks == 1 ? "1st week" : ex.Weeks + " wks in list") : null;
+        private static string? PlaysText(RankExtras ex, BadgeOptions o) => o.Plays == true && ex.Plays != null ? ex.Plays + (ex.Plays == 1 ? " play" : " plays") : null;
+
         // The "N wks" and "▶ N plays" lines at the bottom of an area (the poster, or the tile's card).
         private static void DrawStatLines(SKCanvas c, SKRect area, RankExtras ex, BadgeOptions o, float th, bool rounded)
         {
-            string? weeks = o.Weeks == true && ex.Weeks != null ? (ex.Weeks == 1 ? "1st week" : ex.Weeks + " wks in list") : null;
-            string? plays = o.Plays == true && ex.Plays != null ? ex.Plays + (ex.Plays == 1 ? " play" : " plays") : null;
+            string? weeks = WeeksText(ex, o), plays = PlaysText(ex, o);
             if (weeks == null && plays == null) return;
-            int lines = (weeks != null ? 1 : 0) + (plays != null ? 1 : 0);
+            BottomShade(c, area, th, (weeks != null ? 1 : 0) + (plays != null ? 1 : 0), rounded);
+            StatLines(c, area, weeks, plays, th, "bl");
+        }
+
+        // The dark fade at the bottom of an area, tall enough for that many stat lines.
+        private static void BottomShade(SKCanvas c, SKRect area, float th, int lines, bool rounded)
+        {
             float gh = th * (2.4f + 1.4f * lines);
             c.Save();
             if (rounded) c.ClipRoundRect(new SKRoundRect(area, RadiusFor((int)area.Width)), SKClipOperation.Intersect, true);
             using (var g = new SKPaint { Shader = SKShader.CreateLinearGradient(new SKPoint(0, area.Bottom - gh), new SKPoint(0, area.Bottom), new[] { SKColors.Transparent, SKColors.Black.WithAlpha(225) }, null, SKShaderTileMode.Clamp) })
                 c.DrawRect(area.Left, area.Bottom - gh, area.Width, gh, g);
             c.Restore();
+        }
+
+        // The stat lines at the bottom of an area: left (bl), centred (bc) or right (br); plays under weeks.
+        private static void StatLines(SKCanvas c, SKRect area, string? weeks, string? plays, float th, string spot)
+        {
             using var tp = new SKPaint { Typeface = BadgeFonts.Face("roboto"), Color = SKColors.White, IsAntialias = true };
             FitCentre(tp, "0", 0, 0, 9999, th);
-            float x = area.Left + th * 0.8f, baseY = area.Bottom - th * 0.9f;
+            float baseY = area.Bottom - th * 0.9f;
+            float X(float wdt) => spot == "br" ? area.Right - th * 0.8f - wdt : spot == "bc" ? area.MidX - wdt / 2 : area.Left + th * 0.8f;
             if (plays != null)
             {
-                float s = th, px = x;
+                float s = th, px = X(PlayLineWidth(tp, plays, th));
                 using (var p = new SKPath())
                 {
                     p.MoveTo(px, baseY - s); p.LineTo(px + s * 0.88f, baseY - s / 2); p.LineTo(px, baseY); p.Close();
@@ -839,7 +869,146 @@ namespace HomeScreenCompanion
             if (weeks != null)
             {
                 tp.Color = new SKColor(225, 225, 230);
-                c.DrawText(weeks.ToUpperInvariant(), x, baseY, tp);
+                var up = weeks.ToUpperInvariant();
+                c.DrawText(up, X(tp.MeasureText(up)), baseY, tp);
+            }
+        }
+        private static float PlayLineWidth(SKPaint tp, string plays, float th) => th * 1.35f + tp.MeasureText(plays);
+
+        // One stat line on a dark rounded backing (a stat line placed in a top spot). Returns its width.
+        private static float StatPill(SKCanvas c, string? weeks, string? plays, float x, float y, float th, bool measureOnly = false)
+        {
+            using var tp = new SKPaint { Typeface = BadgeFonts.Face("roboto"), Color = SKColors.White, IsAntialias = true };
+            FitCentre(tp, "0", 0, 0, 9999, th);
+            string text = plays ?? weeks!.ToUpperInvariant();
+            float pad = th * 0.55f, hgt = th * 2f;
+            float tw = plays != null ? PlayLineWidth(tp, plays, th) : tp.MeasureText(text);
+            float wdt = tw + pad * 2;
+            if (measureOnly) return wdt;
+            using (var bg = new SKPaint { Color = SKColors.Black.WithAlpha(185), IsAntialias = true })
+                c.DrawRoundRect(SKRect.Create(x, y, wdt, hgt), hgt * 0.22f, hgt * 0.22f, bg);
+            float baseY = y + hgt / 2 + th / 2, tx = x + pad;
+            if (plays != null)
+            {
+                using (var p = new SKPath())
+                {
+                    p.MoveTo(tx, baseY - th); p.LineTo(tx + th * 0.88f, baseY - th / 2); p.LineTo(tx, baseY); p.Close();
+                    using var green = new SKPaint { Color = new SKColor(0x52, 0xB5, 0x4B), IsAntialias = true };
+                    c.DrawPath(p, green);
+                }
+                c.DrawText(plays, tx + th * 1.35f, baseY, tp);
+            }
+            else
+            {
+                tp.Color = new SKColor(225, 225, 230);
+                c.DrawText(text, tx, baseY, tp);
+            }
+            return wdt;
+        }
+
+        // ── Emby's own chip (unplayed count / ✓) ──────────────────────────────────────────
+        // Emby's web client draws it in the card's top-right corner at a fixed size (countIndicator:
+        // 1.8em at 84%, about 22 px, 3 px in from the edges), so it takes a bigger share of a smaller
+        // card: 8% of a 276 px card, 9% of a 248 px one. As shares of the card width: its size and
+        // insets (as on a ~250 px card), and the gap kept free beside it, so that cards down to
+        // ~200 px wide still keep the extra clear of it.
+        internal const float EmbyChipSize = 0.085f, EmbyChipRight = 0.011f, EmbyChipTop = 0.013f, EmbyChipGap = 0.03f;
+        // The right edge an extra in the top-right spot may reach when it keeps clear of Emby's chip.
+        private static float EmbyClearRight(int w) => w * (1 - EmbyChipRight - EmbyChipSize - EmbyChipGap);
+
+        /// <summary>A sample of Emby's chip (preview only): green circle with a count, or Emby's ✓.</summary>
+        internal static void DrawEmbyChip(SKCanvas c, int w, float top, bool count)
+        {
+            float d = w * EmbyChipSize, x = w - w * EmbyChipRight - d, y = top + w * EmbyChipTop;
+            using (var bg = new SKPaint { Color = new SKColor(0x52, 0xB5, 0x4B), IsAntialias = true })
+                c.DrawCircle(x + d / 2, y + d / 2, d / 2, bg);
+            if (count)
+            {
+                using var t = new SKPaint { Typeface = BadgeFonts.Face("roboto"), Color = SKColors.White, IsAntialias = true };
+                DrawFit(c, "8", t, x + d / 2, y + d / 2, d * 0.5f, d * 0.42f);
+            }
+            else
+            {
+                using var p = new SKPath();
+                p.MoveTo(x + d * 0.28f, y + d * 0.52f); p.LineTo(x + d * 0.44f, y + d * 0.67f); p.LineTo(x + d * 0.73f, y + d * 0.36f);
+                using var st = new SKPaint { Color = SKColors.White, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = d * 0.1f, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
+                c.DrawPath(p, st);
+            }
+        }
+
+        // ── Top 10 tile extras, each in its spot ─────────────────────────────────────────
+        // w = image width, card = the poster card, th = stat line height, numSpot / chipH = the
+        // movement chip's place and height in the number area (its spot "ntl"). With no spots set
+        // this draws exactly what the tile always drew: stat lines bottom left, logo top right on
+        // the card, movement chip top left. An extra in "tr" keeps clear of Emby's chip when embygap
+        // is on (default: show lists, whose cards always get Emby's unplayed count).
+        private static void DrawTileExtras(SKCanvas c, int w, SKRect card, float th, SKPoint numSpot, float chipH, BadgeOptions o, RankExtras ex, int rank)
+        {
+            string? weeks = WeeksText(ex, o), plays = PlaysText(ex, o), mv = o.MoveChip(ex);
+            bool gap = o.EmbyGap ?? ex.Show;
+            float clear = EmbyClearRight(w);
+            float Shift(float right) => gap && right > clear ? right - clear : 0;
+            float pad = card.Width * 0.035f;
+            bool Bottom(string spot) => spot == "bl" || spot == "bc" || spot == "br";
+            // The top-left corner for a w x h mark in a non-bottom spot (inset from the card's corner).
+            SKPoint TopAt(string spot, float mw)
+            {
+                if (spot == "ntl") return numSpot;
+                if (spot == "tr") { float x = card.Right - pad - mw; return new SKPoint(x - Shift(x + mw), card.Top + pad); }
+                return new SKPoint(card.Left + pad, card.Top + pad);
+            }
+
+            // 1. Stat lines: those in bottom spots on one shared fade (plays under weeks in a shared spot), the others on a backing.
+            var lineSpots = new List<string>();
+            if (weeks != null) lineSpots.Add(o.WeeksSpot);
+            if (plays != null && !lineSpots.Contains(o.PlaysSpot)) lineSpots.Add(o.PlaysSpot);
+            int shadeLines = lineSpots.Where(Bottom).Select(sp => (weeks != null && o.WeeksSpot == sp ? 1 : 0) + (plays != null && o.PlaysSpot == sp ? 1 : 0)).DefaultIfEmpty(0).Max();
+            if (shadeLines > 0) BottomShade(c, card, th, shadeLines, true);
+            foreach (var sp in lineSpots)
+            {
+                string? wk = weeks != null && o.WeeksSpot == sp ? weeks : null, pl = plays != null && o.PlaysSpot == sp ? plays : null;
+                if (Bottom(sp)) { StatLines(c, card, wk, pl, th, sp); continue; }
+                float lh = th * 2f, y = 0;
+                foreach (var (a, b) in new[] { (wk, (string?)null), ((string?)null, pl) })
+                {
+                    if (a == null && b == null) continue;
+                    var at = TopAt(sp, StatPill(c, a, b, 0, 0, th, true));
+                    StatPill(c, a, b, at.X, at.Y + y, th);
+                    y += lh + th * 0.4f;
+                }
+            }
+
+            // 2. TOP 10 logo: flush in a corner of the card (clipped to its rounding), or in the number area.
+            if (o.Logo == true)
+            {
+                string sp = o.LogoSpot;
+                float bw = card.Width * 0.2f * o.LogoScale, lh = LogoBoxHeight(bw, o.LogoRank(rank) != null);
+                if (sp == "ntl") DrawLogoBox(c, SKRect.Create(numSpot.X, numSpot.Y, bw, bw * 1.12f), o.LogoRank(rank));
+                else
+                {
+                    float x = sp == "tl" || sp == "bl" ? card.Left : sp == "bc" ? card.MidX - bw / 2 : card.Right - bw;
+                    if (sp == "tr") x -= Shift(card.Right);
+                    float y = Bottom(sp) ? card.Bottom - lh : card.Top;
+                    c.Save();
+                    c.ClipRoundRect(new SKRoundRect(card, RadiusFor((int)card.Width)), SKClipOperation.Intersect, true);
+                    DrawLogoBox(c, SKRect.Create(x, y, bw, bw * 1.12f), o.LogoRank(rank));
+                    c.Restore();
+                }
+            }
+
+            // 3. Movement chip.
+            if (mv != null)
+            {
+                string sp = o.MoveSpot;
+                if (sp == "ntl") Chip(c, mv, numSpot.X, numSpot.Y, chipH);
+                else
+                {
+                    float cw = Chip(c, mv, 0, 0, chipH, true);
+                    var at = Bottom(sp)
+                        ? new SKPoint(sp == "bl" ? card.Left + pad : sp == "br" ? card.Right - pad - cw : card.MidX - cw / 2, card.Bottom - pad - chipH)
+                        : TopAt(sp, cw);
+                    Chip(c, mv, at.X, at.Y, chipH);
+                }
             }
         }
 
@@ -849,14 +1018,6 @@ namespace HomeScreenCompanion
         {
             float s = Math.Min(w, h), bw = s * 0.17f * o.LogoScale;
             return SKRect.Create(corner == "tl" ? 0 : w - bw, 0, bw, LogoBoxHeight(bw, o.LogoRank(rank) != null));
-        }
-        private static void NetflixLogoOn(SKCanvas c, SKRect card, BadgeOptions o, int rank)
-        {
-            float bw = card.Width * 0.2f * o.LogoScale, bh = bw * 1.12f;
-            c.Save();
-            c.ClipRoundRect(new SKRoundRect(card, RadiusFor((int)card.Width)), SKClipOperation.Intersect, true);
-            DrawLogoBox(c, SKRect.Create(card.Right - bw, card.Top, bw, bh), o.LogoRank(rank));
-            c.Restore();
         }
         private static float LogoBoxHeight(float bw, bool withRank) => bw * 1.12f + (withRank ? bw * 0.5f : 0);
         // The TOP 10 logo in "logo" (the TOP / 10 square), with "#rank" on a red second line under it
@@ -961,8 +1122,10 @@ namespace HomeScreenCompanion
         /// a stand-in poster (no library posters, so it is quick). variant "thumb" = the landscape
         /// image a Thumb row uses; anything else = the Primary poster (card). JPEG data: URL, scaled
         /// to width px (0 = the preview's 400 / 600); the shape tiles are this drawing, small.
+        /// kind "shows" / "movies": the list's titles; a sample of Emby's own chip (unplayed count /
+        /// ✓) goes on top, as Emby draws it on the home screen. Never part of the real images.
         /// </summary>
-        internal static string Preview(string look, string standInPoster, string tempDir, string? variant, int width = 0)
+        internal static string Preview(string look, string standInPoster, string tempDir, string? variant, int width = 0, string? kind = null)
         {
             var (style, json) = BadgeLook.Split(look);
             var o = BadgeOptions.Parse(json);
@@ -970,7 +1133,7 @@ namespace HomeScreenCompanion
             bool thumb = variant == "thumb";
             const int rank = 7;   // the example rank, like the Badge Style tiles
             // Sample movement: "=" when the list shows unchanged ranks, so the tick box is visible in the preview.
-            var extras = new RankExtras { Move = o.MoveEq == true ? "=" : "+2", Weeks = 5, Plays = 48, Sample = true };
+            var extras = new RankExtras { Move = o.MoveEq == true ? "=" : "+2", Weeks = 5, Plays = 48, Sample = true, Show = kind == "shows" };
             Directory.CreateDirectory(tempDir);
             var ob = Path.Combine(tempDir, "badge-preview-" + Guid.NewGuid().ToString("N"));
             var outPath = ob + (thumb ? "-thumb.jpg" : ".jpg");
@@ -995,6 +1158,7 @@ namespace HomeScreenCompanion
                 using var surface = SKSurface.Create(new SKImageInfo(w, h));
                 using (var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true })
                     surface.Canvas.DrawBitmap(full, src, SKRect.Create(0, 0, w, h), paint);
+                if (kind == "shows" || kind == "movies") DrawEmbyChip(surface.Canvas, w, 0, kind == "shows");
                 using var img = surface.Snapshot();
                 using var data = img.Encode(SKEncodedImageFormat.Jpeg, 88);
                 return "data:image/jpeg;base64," + Convert.ToBase64String(data.ToArray());

@@ -7002,7 +7002,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     ];
 
     var _badgePickerSeq = 0;
-    function buildBadgePickerHtml(selectedVal, optionsJson, realPoster) {
+    // contentKind 'shows' / 'movies': the list's titles (the previews draw Emby's count / ✓ chip for them).
+    function buildBadgePickerHtml(selectedVal, optionsJson, realPoster, contentKind) {
         var sel = selectedVal || 'neutral';
         var esc = function (v) { return String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
         var cardBase = 'cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;border:2px solid transparent;transition:border-color 0.15s;';
@@ -7016,7 +7017,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var radioName = 'tlBadgeStyle_' + (++_badgePickerSeq);
         // Options saved for a number badge (4.2.0.32-.36) are not used: the badge draws in its preset colour.
         var optKind = tileSel ? 'top10' : 'badge';
-        return '<div class="tl-badge-picker" style="margin-bottom:16px;">' +
+        return '<div class="tl-badge-picker" data-content="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-bottom:16px;">' +
             '<span style="font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:8px;">Badge Style</span>' +
             '<input type="hidden" class="tl-badge-preset" value="neutral">' +
             '<input type="hidden" class="tl-badge-opts" data-optkind="' + optKind + '" value="' + esc(optionsJson || '') + '">' +
@@ -7153,13 +7154,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // the look (rank 7 on the stand-in poster) in the same box. Cached per look for the page.
     var _badgeIconCache = {};
     var _badgeTileCache = {};   // the badge popup's shape tiles, by look (kept for the page)
-    function badgeIconImage(style, options, variant) {
-        var key = style + '|' + variant + '|' + options;
+    function badgeIconImage(style, options, variant, kind) {
+        var key = style + '|' + variant + '|' + (kind || '') + '|' + options;
         if (!_badgeIconCache[key])
             _badgeIconCache[key] = fetch(window.ApiClient.getUrl('HomeScreenCompanion/BadgeCustomPreview'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
-                body: JSON.stringify({ BadgeStyle: style, Options: options, Variant: variant })
+                body: JSON.stringify({ BadgeStyle: style, Options: options, Variant: variant, Kind: kind || '' })
             }).then(function (r) { return r.json(); }).then(function (res) {
                 if (!res.Success) throw new Error(res.Message || 'Preview failed');
                 return res.Image;
@@ -7175,12 +7176,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var options = optsIn.value && optsIn.dataset.optkind === 'top10' ? optsIn.value : '';
         var imgSel = container && container.querySelector && container.querySelector('.tlm-image-type, .mtlImageType');
         var variant = imgSel && imgSel.value === 'Thumb' ? 'thumb' : 'primary';
-        var token = variant + '|' + options;
+        var kind = picker.dataset.content || '';
+        var token = variant + '|' + kind + '|' + options;
         label.dataset.iconFor = token;
         var old = label.querySelector('.tl-badge-custom-icon');
         if (art.dataset.origDisplay == null) art.dataset.origDisplay = art.style.display;
         if (!options) { if (old) old.remove(); art.style.display = art.dataset.origDisplay; return; }
-        badgeIconImage('top10', options, variant).then(function (src) {
+        badgeIconImage('top10', options, variant, kind).then(function (src) {
             if (label.dataset.iconFor !== token) return;   // changed again meanwhile
             var img = label.querySelector('.tl-badge-custom-icon');
             if (!img) {
@@ -7249,12 +7251,17 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // stay visible with a short note.
     var NUM_COLOURS = [['#ffffff', 'White'], ['#ececf0', 'Light grey'], ['#141414', 'Page dark'], ['#f5c518', 'Gold'], ['#e50914', 'Red'], ['#52b54b', 'Emby green'], ['#7fd4ff', 'Ice blue'], ['#000000', 'Black']];
     var OUT_COLOURS = [['#9696a0', 'Grey'], ['#000000', 'Black'], ['#ffffff', 'White'], ['#f5c518', 'Gold'], ['#e50914', 'Red'], ['#52b54b', 'Emby green']];
-    var BADGE_FIELDS = ['font', 'num', 'numcolour', 'outcolour', 'outline', 'size', 'shape', 'colour', 'medal', 'shadow', 'pos', 'tilepos', 'tilebg', 'tilebgcolour', 'special', 'move', 'moveeq', 'weeks', 'plays', 'logo', 'logolabel', 'logosize'];
+    var BADGE_FIELDS = ['font', 'num', 'numcolour', 'outcolour', 'outline', 'size', 'shape', 'colour', 'medal', 'shadow', 'pos', 'tilepos', 'tilebg', 'tilebgcolour', 'special', 'move', 'moveeq', 'weeks', 'plays', 'logo', 'logolabel', 'logosize',
+                        'logopos', 'movepos', 'weekspos', 'playspos', 'embygap'];
+    // The Top 10 tile's extras and the spots they can sit in (ntl = top left of the number area).
+    var LAY_EXTRAS = [['logo', 'TOP 10 logo', 'TOP 10'], ['move', 'Rank movement', '\u25B22'], ['weeks', 'Weeks', 'wks'], ['plays', 'Plays', '\u25B6 plays']];
+    var LAY_SPOTS = [['ntl', 'Number area'], ['tl', 'Top left'], ['tr', 'Top right'], ['bl', 'Bottom left'], ['bc', 'Bottom centre'], ['br', 'Bottom right']];
     function badgeDefaults(kind) {
         var tile = kind === 'top10';
         return { font: tile ? 'anton' : 'lemonmilk', num: tile ? 'outline' : 'filled', numcolour: tile ? '#141414' : '#ffffff', outcolour: tile ? '#9696a0' : '#000000',
                  outline: 'normal', size: 'm', shape: 'circle', colour: '', medal: '', shadow: false, pos: 'tl', tilepos: 'beside', tilebg: 'flat', tilebgcolour: '#16223a',
-                 special: '', move: false, moveeq: false, weeks: false, plays: false, logo: false, logolabel: 'top10', logosize: 'm' };
+                 special: '', move: false, moveeq: false, weeks: false, plays: false, logo: false, logolabel: 'top10', logosize: 'm',
+                 logopos: 'tr', movepos: 'ntl', weekspos: 'bl', playspos: 'bl', embygap: false };
     }
     // The number colour each style starts with (switching style moves an untouched colour along).
     function badgeNumDefault(kind, num) {
@@ -7311,6 +7318,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         getBadgeCustomiseInfo().then(function (info) {
             var def = badgeDefaults(kind);
+            // Show lists keep their extras clear of Emby's unplayed count by default (their cards always get one).
+            var contentKind = picker.dataset.content === 'shows' ? 'shows' : 'movies';
+            def.embygap = contentKind === 'shows';
+            var laySel = null;   // the extra the Layout picker moves
             var stored = {};
             try { stored = optsInput.value ? JSON.parse(optsInput.value) : {}; } catch (e) { stored = {}; }
             if (optsInput.dataset.optkind && optsInput.dataset.optkind !== kind) stored = {};
@@ -7349,6 +7360,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     if (!big && k === 'numcolour' && st.numcolour === badgeNumDefault(kind, st.num)) return;
                     if (k === 'moveeq' && !st.move) return;   // only with the movement chip on
                     if ((k === 'logolabel' || k === 'logosize') && !st.logo) return;   // only with the TOP 10 logo on
+                    if (/^(logo|move|weeks|plays)pos$/.test(k) && !st[k.slice(0, -3)]) return;   // a spot only for an extra that is on
+                    if (k === 'embygap' && !layOn(st).length) return;
                     if (!big && st[k] === def[k]) return;
                     out[k] = st[k]; any = true;
                 });
@@ -7370,7 +7383,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             // Shape tiles: each is the preview's drawing of stateWithShape(shape). Keyed by the look sent,
             // so a click on a shape (same looks) is answered from the cache.
             function tileLook(shape) { var st = stateWithShape(shape); return { style: previewStyle(st), options: toOptions(st) }; }
-            function tileKey(shape) { var l = tileLook(shape); return variant + '|' + l.style + '|' + l.options; }
+            function tileKey(shape) { var l = tileLook(shape); return variant + '|' + contentKind + '|' + l.style + '|' + l.options; }
             function refreshTiles() {
                 if (tile) return;
                 var wanted = SHAPES.map(function (o) { return { shape: o[0], key: tileKey(o[0]), look: tileLook(o[0]) }; });
@@ -7395,7 +7408,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     return fetch(window.ApiClient.getUrl('HomeScreenCompanion/BadgeShapeTiles'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
-                        body: JSON.stringify({ BadgeStyle: st, Variant: variant, Options: list.map(function (w) { return w.look.options; }) })
+                        body: JSON.stringify({ BadgeStyle: st, Variant: variant, Kind: contentKind, Options: list.map(function (w) { return w.look.options; }) })
                     }).then(function (r) { return r.json(); }).then(function (res) {
                         if (res.Success) list.forEach(function (w, n) { if (res.Images[n]) tileCache[w.key] = res.Images[n]; });
                     });
@@ -7403,6 +7416,53 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     window._hscTileMs = Math.round(performance.now() - t0);
                     if (mine === tileSeq) show();
                 }).catch(function () { });
+            }
+
+            // ── Layout: the extras that are on, each in a spot; one extra per spot (weeks and plays
+            // share the bottom left, stacked, until one is moved — the tile's original look).
+            function layOn(st) { st = st || state; return LAY_EXTRAS.filter(function (e) { return !!st[e[0]]; }).map(function (e) { return e[0]; }); }
+            function layAt(spot) { return layOn().filter(function (e) { return state[e + 'pos'] === spot; }); }
+            function layFree() { var f = LAY_SPOTS.filter(function (p) { return !layAt(p[0]).length; })[0]; return f ? f[0] : 'ntl'; }
+            // Puts extra x in spot; what was there moves to x's old spot (or a free one when that is still taken).
+            function layPlace(x, spot) {
+                var old = state[x + 'pos'];
+                if (old === spot) return;
+                var there = layAt(spot).filter(function (e) { return e !== x; });
+                state[x + 'pos'] = spot;
+                there.forEach(function (e, i) { state[e + 'pos'] = i === 0 && !layAt(old).length ? old : layFree(); });
+            }
+            // An extra switched on goes to its spot, or a free one when another extra has it.
+            function layTake(x) {
+                var there = layAt(state[x + 'pos']).filter(function (e) { return e !== x; });
+                var lines = x === 'weeks' || x === 'plays';
+                if (there.length && !(lines && there.length === 1 && (there[0] === 'weeks' || there[0] === 'plays'))) state[x + 'pos'] = layFree();
+            }
+            function layoutHtml() {
+                var on = layOn();
+                if (on.indexOf(laySel) < 0) laySel = on[0] || null;
+                var land = variant === 'thumb', W = 240, H = land ? 135 : 180;
+                // The poster card's place on the tile (the renderer's: Primary 4:3 crop, Thumb 16:9).
+                var c = land ? { x: W * 0.49, y: H * 0.076, w: W * 0.317, h: H * 0.847 } : { x: W * 0.503, y: H * 0.014, w: W * 0.486, h: H * 0.972 };
+                var right = W - c.x - c.w, bottom = H - c.y - c.h;
+                var trRight = state.embygap ? Math.max(right + 3, 42) : right + 3;
+                var at = { ntl: 'left:4px;top:4px;', tl: 'left:' + (c.x + 3) + 'px;top:' + (c.y + 3) + 'px;', tr: 'right:' + trRight + 'px;top:' + (c.y + 3) + 'px;',
+                           bl: 'left:' + (c.x + 3) + 'px;bottom:' + (bottom + 3) + 'px;', bc: 'left:' + (c.x + c.w / 2) + 'px;bottom:' + (bottom + 3) + 'px;transform:translateX(-50%);',
+                           br: 'right:' + (right + 3) + 'px;bottom:' + (bottom + 3) + 'px;' };
+                var name = {}; LAY_EXTRAS.forEach(function (e) { name[e[0]] = e[2]; });
+                var picker = '<div class="artc-seg" data-lay="1" style="margin-bottom:8px;">' + LAY_EXTRAS.filter(function (e) { return on.indexOf(e[0]) >= 0; }).map(function (e) {
+                    return '<button type="button" class="artc-segbtn artc-layx' + (laySel === e[0] ? ' artc-on' : '') + '" data-value="' + e[0] + '">' + e[1] + '</button>';
+                }).join('') + '</div>';
+                var spots = LAY_SPOTS.map(function (p) {
+                    var here = layAt(p[0]);
+                    return '<button type="button" class="artc-layspot' + (here.length ? ' artc-full' : '') + (here.indexOf(laySel) >= 0 ? ' artc-on' : '') + '" data-value="' + p[0] + '" title="' + p[1] + '" aria-label="' + p[1] + '" style="' + at[p[0]] + '">' +
+                        here.map(function (e) { return '<span>' + name[e] + '</span>'; }).join('') + '</button>';
+                }).join('');
+                var where = LAY_SPOTS.filter(function (p) { return laySel && p[0] === state[laySel + 'pos']; })[0];
+                return picker + '<div class="artc-posrow"><div class="artc-lay" style="height:' + H + 'px;">' +
+                    '<span class="artc-lay-num">7</span>' +
+                    '<div class="artc-lay-card" style="left:' + c.x + 'px;top:' + c.y + 'px;width:' + c.w + 'px;height:' + c.h + 'px;"></div>' +
+                    '<span class="artc-lay-emby">Emby</span>' + spots + '</div>' +
+                    '<span class="artc-posname">' + (where ? escapeHtml(where[1]) : '') + '</span></div>';
             }
 
             function seg(f, opts) {
@@ -7441,6 +7501,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     case 'tilebgcolour': return tile && state.tilebg === 'solid';
                     case 'moveeq': return !!state.move;
                     case 'logolabel': case 'logosize': return !!state.logo;
+                    case 'layout': case 'embygap': return tile && layOn().length > 0;
                     default: return true;
                 }
             }
@@ -7508,6 +7569,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             field('TOP 10 logo', seg('logo', [[false, 'Off'], [true, 'On']]), 'logo', tile ? 'Red TOP 10 logo in the corner of the poster card.' : 'Red TOP 10 corner logo; with shape "None" it is the only mark.') +
                             field('Logo label', seg('logolabel', [['top10', 'TOP 10'], ['top10rank', 'TOP 10 #3']]), 'logolabel', 'TOP 10 #3: the title\'s rank on a second line under the logo.') +
                             field('Logo size', seg('logosize', [['s', 'S'], ['m', 'M'], ['l', 'L']]), 'logosize')) +
+                        section('Layout',
+                            field('', layoutHtml(), 'layout') +
+                            field(contentKind === 'shows' ? 'Beside Emby\'s count' : 'Beside Emby\'s \u2713', seg('embygap', [[false, 'Off'], [true, 'On']]), 'embygap')) +
                       '</div>' +
                     '</div>';
                 wire();
@@ -7516,11 +7580,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function set(f, v) {
                 if (f === 'num') { if (state.numcolour === badgeNumDefault(kind, state.num)) state.numcolour = badgeNumDefault(kind, v); }
                 if (f === 'shape') state = stateWithShape(v); else state[f] = v;
+                if (v === true && LAY_EXTRAS.some(function (e) { return e[0] === f; })) { layTake(f); laySel = f; }
                 render();
             }
             function normalLook() { return { font: def.font, num: def.num, numcolour: badgeNumDefault(kind, def.num), outcolour: def.outcolour }; }
             function wire() {
                 body.querySelectorAll('.artc-seg').forEach(function (g) {
+                    if (!g.dataset.field) return;   // the Layout picker's extras: wired below
                     g.querySelectorAll('.artc-segbtn').forEach(function (b) {
                         b.addEventListener('click', function () {
                             var v = b.dataset.value, f = g.dataset.field;
@@ -7532,6 +7598,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 body.querySelectorAll('.artc-font').forEach(function (b) { b.addEventListener('click', function () { set('font', b.dataset.value); }); });
                 body.querySelectorAll('.artc-shape').forEach(function (b) { b.addEventListener('click', function () { set('shape', b.dataset.value); }); });
                 body.querySelectorAll('.artc-posdot').forEach(function (b) { b.addEventListener('click', function () { set('pos', b.dataset.value); }); });
+                body.querySelectorAll('.artc-layx').forEach(function (b) { b.addEventListener('click', function () { laySel = b.dataset.value; render(); }); });
+                body.querySelectorAll('.artc-layspot').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var here = layAt(b.dataset.value);
+                        if (!laySel) { if (here.length) { laySel = here[0]; render(); } return; }
+                        layPlace(laySel, b.dataset.value);
+                        render();
+                    });
+                });
                 body.querySelectorAll('.artc-colours').forEach(function (g) {
                     var f = g.dataset.field;
                     g.querySelectorAll('.artc-swatch').forEach(function (b) { b.addEventListener('click', function () { set(f, b.dataset.value); }); });
@@ -7557,7 +7632,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     fetch(window.ApiClient.getUrl('HomeScreenCompanion/BadgeCustomPreview'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-MediaBrowser-Token': window.ApiClient.accessToken() },
-                        body: JSON.stringify({ BadgeStyle: previewStyle(), Options: toOptions(), Variant: variant })
+                        body: JSON.stringify({ BadgeStyle: previewStyle(), Options: toOptions(), Variant: variant, Kind: contentKind })
                     }).then(function (r) { return r.json(); }).then(function (res) {
                         if (mine !== seq) return;   // a newer drawing is on its way
                         var img = body.querySelector('.artc-img'), b = body.querySelector('.artc-busy');
@@ -7679,7 +7754,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<label style="' + labelStyle + '">Card Size</label>' +
                 '<select is="emby-select" class="tlm-card-size" style="width:100%;">' + cardSizeOptionsHtml(preset ? preset.cardSizeOffset : '0') + '</select></div>' +
 
-                buildBadgePickerHtml(preset ? preset.badgeStyle : 'neutral', preset ? preset.badgeOptions : '', preset ? preset.realPoster : '') +
+                buildBadgePickerHtml(preset ? preset.badgeStyle : 'neutral', preset ? preset.badgeOptions : '', preset ? preset.realPoster : '', isShows ? 'shows' : 'movies') +
 
                 '<div style="' + fieldStyle + '">' +
                 '<label style="' + labelStyle + '">Max items <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:0.7;">(0 = all)</span></label>' +
@@ -7899,7 +7974,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</div>' +
 
                 '<div style="border-top:1px solid var(--line-color);padding-top:14px;margin-top:4px;">' +
-                buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster) +
+                buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster, isShows ? 'shows' : 'movies') +
                 '</div>' +
 
                 '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
@@ -8217,7 +8292,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '</div>' +
 
                     '<div style="border-top:1px solid var(--line-color);padding-top:14px;margin-top:4px;">' +
-                    buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster) +
+                    buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster, isShows ? 'shows' : 'movies') +
                     '</div>' +
 
                     '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
@@ -8430,7 +8505,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<label style="' + labelStyle + '">Card Size</label>' +
                     '<select is="emby-select" class="tlm-card-size" style="width:100%;">' + cardSizeOptionsHtml(presetCardSize) + '</select></div>' +
 
-                    buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster) +
+                    buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster, isShows ? 'shows' : 'movies') +
 
                     '<div style="' + fieldStyle + '">' +
                     '<label style="' + labelStyle + '">Max items <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:0.7;">(0 = all)</span></label>' +
