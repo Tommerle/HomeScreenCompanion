@@ -147,6 +147,7 @@ namespace HomeScreenCompanion
 
                 progress.Report(20);
                 int totalCopied = 0, failedUsers = 0;
+                bool topListsChanged = false;
                 int targetCount = config.HomeSyncTargetUserIds.Count;
                 _log.Blank();
                 _log.Info("» Copying home screen");
@@ -183,6 +184,23 @@ namespace HomeScreenCompanion
                                 _log.Skip($"{targetName}: removed copied '{label}' row (belongs to {ownerName})");
                         }
 
+                        // Top-list rows: only for the list's own users. A row of a list the master
+                        // is not on is kept (put back below at its place); one copied here earlier
+                        // for a list this user is not on goes.
+                        var keptTopListRows = new Dictionary<TopListHomeSection, ContentSection>();
+                        foreach (var s in existing?.Sections ?? Array.Empty<ContentSection>())
+                        {
+                            var tl = managed.TopListRow(s);
+                            if (tl == null) continue;
+                            if (!managed.IsTopListUser(tl, targetKey))
+                                _log.Skip($"{targetName}: removed copied '{s.CustomName ?? s.Name}' row (top-list for other users)");
+                            else if (!managed.MasterHasRow(tl, sourceSections.Sections) && !keptTopListRows.ContainsKey(tl))
+                            {
+                                keptTopListRows[tl] = s;
+                                HomeScreenCompanionTask.RememberRowPosition(_userManager, _jsonSerializer, TopListRowKey(tl), targetIdStr, targetInternalId, s.Id, cancellationToken);
+                            }
+                        }
+
                         if (existing?.Sections?.Length > 0)
                         {
                             _log.Debug($"  {targetName}: replacing {existing.Sections.Length} existing sections");
@@ -212,10 +230,41 @@ namespace HomeScreenCompanion
                                 }
                                 copy.ParentId = own;
                             }
+                            var topList = managed.TopListRow(section);
+                            if (topList != null && !managed.IsTopListUser(topList, targetKey))
+                            {
+                                _log.Debug($"  {targetName}: – '{section.CustomName ?? section.Name}' skipped (top-list for other users)");
+                                continue;
+                            }
                             _log.Debug($"  {targetName}: + [{section.SectionType}] \"{section.CustomName ?? section.Name}\"");
                             _userManager.AddHomeSection(targetInternalId, copy, cancellationToken);
                             totalCopied++;
                             copiedHere++;
+                        }
+
+                        // This user's top-list rows: the one copied from the master, else their
+                        // own put back at its place (a new one at the bottom). Tracked, so the
+                        // top-list sync keeps updating it and never adds a second one.
+                        foreach (var tl in managed.TopLists)
+                        {
+                            if (!managed.IsTopListUser(tl, targetKey)) continue;
+                            var before = _userManager.GetHomeSections(targetInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                            var row = before.FirstOrDefault(s => managed.TopListRow(s) == tl);
+                            if (row == null)
+                            {
+                                var add = keptTopListRows.TryGetValue(tl, out var kept) ? CopySection(kept) : managed.NewTopListRow(tl, _jsonSerializer);
+                                _userManager.AddHomeSection(targetInternalId, add, cancellationToken);
+                                row = (_userManager.GetHomeSections(targetInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>())
+                                    .FirstOrDefault(s => !string.IsNullOrEmpty(s.Id) && !before.Any(b => b.Id == s.Id));
+                                if (row == null) continue;
+                                HomeScreenCompanionTask.RestoreRowPosition(_userManager, _jsonSerializer, TopListRowKey(tl), targetIdStr, targetInternalId, row.Id, cancellationToken);
+                                _log.Debug($"  {targetName}: = '{row.CustomName ?? row.Name}' kept (top-list row)");
+                                copiedHere++;
+                            }
+                            var tracked = (tl.HomeSectionTracked ??= new List<HomeSectionTracking>()).FirstOrDefault(t => NormId(t.UserId) == targetKey);
+                            if (tracked == null) tl.HomeSectionTracked.Add(new HomeSectionTracking { UserId = targetIdStr, SectionId = row.Id });
+                            else tracked.SectionId = row.Id;
+                            topListsChanged = true;
                         }
 
                         _log.Ok($"{targetName}: {RunLog.Plural(copiedHere, "section")} copied");
@@ -228,6 +277,7 @@ namespace HomeScreenCompanion
 
                     progress.Report(20 + (int)(80.0 * (i + 1) / targetCount));
                 }
+                if (topListsChanged) Plugin.Instance?.SaveConfiguration();
 
                 if (config.HomeSyncLibraryOrder)
                 {
@@ -346,13 +396,52 @@ namespace HomeScreenCompanion
                         m._byPlaylist[iid] = row;
                     }
                 }
+                foreach (var tl in config.TopLists ?? new List<TopListHomeSection>())
+                {
+                    if (string.IsNullOrEmpty(tl.HomeSectionLibraryId) || tl.HomeSectionLibraryId == "auto") continue;
+                    m.TopLists.Add(tl);
+                    m._topListUsers[tl] = new HashSet<string>((tl.HomeSectionUserIds ?? new List<string>()).Select(NormId));
+                    foreach (var id in TopListSyncTask.OwnLibraryIds(tl.HomeSectionLibraryId, libraryManager))
+                        m._byTopListLibrary[id] = tl;
+                }
                 return m;
             }
 
             // A per-user HSC playlist row: the section shows one of HSC's per-user playlists.
             public ManagedRow? PlaylistRow(ContentSection s)
                 => !string.IsNullOrEmpty(s.ParentId) && _byPlaylist.TryGetValue(s.ParentId, out var pr) ? pr : null;
+
+            // Top-list rows (movies and shows): an items row on the list's own library, only for
+            // the list's users.
+            public readonly List<TopListHomeSection> TopLists = new List<TopListHomeSection>();
+            private readonly Dictionary<TopListHomeSection, HashSet<string>> _topListUsers = new Dictionary<TopListHomeSection, HashSet<string>>();
+            private readonly Dictionary<string, TopListHomeSection> _byTopListLibrary = new Dictionary<string, TopListHomeSection>(StringComparer.OrdinalIgnoreCase);
+
+            public TopListHomeSection? TopListRow(ContentSection s)
+                => string.Equals(s.SectionType, "items", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(s.ParentId)
+                   && _byTopListLibrary.TryGetValue(s.ParentId.Trim().Replace("-", ""), out var tl) ? tl : null;
+
+            public bool IsTopListUser(TopListHomeSection tl, string user) => _topListUsers[tl].Contains(user);
+
+            public bool MasterHasRow(TopListHomeSection tl, ContentSection[] masterSections) => masterSections.Any(s => TopListRow(s) == tl);
+
+            // A new row for a list user without one, as the top-list's own setup makes it.
+            public ContentSection NewTopListRow(TopListHomeSection tl, IJsonSerializer json)
+            {
+                var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
+                        settings = json.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settings;
+                }
+                catch { }
+                if (!settings.ContainsKey("SectionType")) settings["SectionType"] = "items";
+                return HomeScreenCompanionTask.BuildContentSection(json, settings, tl.HomeSectionLibraryId);
+            }
         }
+
+        // Row-position memory key of a top-list row (kept apart from the tag rows' keys).
+        private static string TopListRowKey(TopListHomeSection tl) => "tl\u001F" + (tl.TagName ?? "").Trim();
 
         private static ContentSection CopySection(ContentSection source)
         {
