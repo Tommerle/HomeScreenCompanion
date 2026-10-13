@@ -10482,6 +10482,95 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelector('#btnCloseHelp').addEventListener('click', () => helpOverlay.classList.remove('modal-visible'));
                 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpOverlay.classList.remove('modal-visible'); });
 
+                // Back to top: shows once the guide is scrolled down, lifts above "Close Guide" at the very end.
+                var helpScroll = helpOverlay.querySelector('.modal-body-scroll');
+                var helpToTop = view.querySelector('#btnHelpBackToTop');
+                // Contents: the section in view is marked (the last one whose heading has passed the top).
+                var helpNavTargets = [];
+                helpOverlay.querySelectorAll('nav .help-nav-link').forEach(function (link) {
+                    var m = /#(help-sec-[\w-]+)/.exec(link.getAttribute('onclick') || '');
+                    var sec = m && helpScroll.querySelector('#' + m[1]);
+                    if (sec) helpNavTargets.push({ link: link, sec: sec });
+                });
+                function markHelpSection() {
+                    var top = helpScroll.getBoundingClientRect().top, current = null;
+                    var atEnd = helpScroll.scrollHeight - helpScroll.scrollTop - helpScroll.clientHeight < 4;
+                    helpNavTargets.forEach(function (t) { if (t.sec.getBoundingClientRect().top - top <= 80) current = t; });
+                    if (atEnd && helpNavTargets.length) current = helpNavTargets[helpNavTargets.length - 1];
+                    helpNavTargets.forEach(function (t) { t.link.classList.toggle('active', t === current); });
+                }
+                helpScroll.addEventListener('scroll', () => {
+                    helpToTop.classList.toggle('visible', helpScroll.scrollTop > 300);
+                    helpToTop.classList.toggle('raised', helpScroll.scrollHeight - helpScroll.scrollTop - helpScroll.clientHeight < 90);
+                    markHelpSection();
+                });
+                helpToTop.addEventListener('click', () => helpScroll.scrollTo({ top: 0, behavior: 'smooth' }));
+
+                // Search: marks every match in the guide; Enter / the arrows step through them.
+                var helpSearch = view.querySelector('#txtHelpSearch');
+                var helpSearchCount = view.querySelector('#helpSearchCount');
+                var helpSearchPrev = view.querySelector('#btnHelpSearchPrev');
+                var helpSearchNext = view.querySelector('#btnHelpSearchNext');
+                var helpHits = [], helpHitIdx = -1, helpSearchTimer = null, helpLastQuery = '';
+                function clearHelpHits() {
+                    helpScroll.querySelectorAll('mark.help-hit').forEach(function (m) {
+                        var parent = m.parentNode;
+                        parent.replaceChild(document.createTextNode(m.textContent), m);
+                        parent.normalize();
+                    });
+                    helpHits = []; helpHitIdx = -1;
+                }
+                function showHelpHit(i) {
+                    if (!helpHits.length) return;
+                    if (helpHitIdx >= 0) helpHits[helpHitIdx].classList.remove('current');
+                    helpHitIdx = (i + helpHits.length) % helpHits.length;
+                    var hit = helpHits[helpHitIdx];
+                    hit.classList.add('current');
+                    for (var d = hit.parentElement.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
+                    hit.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    helpSearchCount.textContent = (helpHitIdx + 1) + ' of ' + helpHits.length;
+                }
+                function runHelpSearch() {
+                    clearHelpHits();
+                    var q = helpSearch.value.trim().toLowerCase();
+                    helpLastQuery = q;
+                    helpSearchCount.textContent = '';
+                    if (q.length >= 2) {
+                        var walker = document.createTreeWalker(helpScroll, NodeFilter.SHOW_TEXT, {
+                            acceptNode: function (n) {
+                                if (n.parentElement.closest('.help-search, nav')) return NodeFilter.FILTER_REJECT;
+                                return n.nodeValue.toLowerCase().indexOf(q) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                            }
+                        });
+                        var nodes = [];
+                        while (walker.nextNode()) nodes.push(walker.currentNode);
+                        nodes.forEach(function (node) {
+                            var text = node.nodeValue, lower = text.toLowerCase(), pos = 0, at;
+                            var frag = document.createDocumentFragment();
+                            while ((at = lower.indexOf(q, pos)) >= 0) {
+                                if (at > pos) frag.appendChild(document.createTextNode(text.slice(pos, at)));
+                                var mark = document.createElement('mark');
+                                mark.className = 'help-hit';
+                                mark.textContent = text.slice(at, at + q.length);
+                                frag.appendChild(mark);
+                                helpHits.push(mark);
+                                pos = at + q.length;
+                            }
+                            if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+                            node.parentNode.replaceChild(frag, node);
+                        });
+                        if (helpHits.length) showHelpHit(0); else helpSearchCount.textContent = 'No matches';
+                    }
+                    helpSearchPrev.disabled = helpSearchNext.disabled = helpHits.length < 2;
+                }
+                helpSearch.addEventListener('input', () => { clearTimeout(helpSearchTimer); helpSearchTimer = setTimeout(runHelpSearch, 250); });
+                helpSearch.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(helpSearchTimer); if (helpSearch.value.trim().toLowerCase() !== helpLastQuery) runHelpSearch(); else showHelpHit(helpHitIdx + (e.shiftKey ? -1 : 1)); }
+                    else if (e.key === 'Escape' && helpSearch.value) { e.preventDefault(); e.stopPropagation(); helpSearch.value = ''; runHelpSearch(); }
+                });
+                helpSearchPrev.addEventListener('click', () => showHelpHit(helpHitIdx - 1));
+                helpSearchNext.addEventListener('click', () => showHelpHit(helpHitIdx + 1));
+
                 // Quick Start: opens only from its button and the "Quick Start" links (never by itself).
                 var quickStartOverlay = view.querySelector('#quickStartModalOverlay');
                 view.querySelector('#btnOpenQuickStart').addEventListener('click', () => quickStartOverlay.classList.add('modal-visible'));

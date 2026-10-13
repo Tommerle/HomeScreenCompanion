@@ -338,6 +338,33 @@
             overflow-y: auto;
         }
 
+        /* Back to top: round arrow at the bottom right of a long popup, shown once scrolled down */
+        .hsc-back-to-top {
+            position: absolute;
+            right: 28px;
+            bottom: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: #52B54B;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: opacity 0.2s, transform 0.2s, background 0.15s;
+            z-index: 2;
+        }
+        .hsc-back-to-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        .hsc-back-to-top.visible.raised { transform: translateY(-56px); }
+        .hsc-back-to-top:hover { background: #3a8c34; }
+        .hsc-back-to-top .md-icon { font-size: 1.8em; }
+
         /* Source test results */
         .stm-content { max-width: 640px; display: flex; flex-direction: column; max-height: 88vh; }
         .stm-header { padding: 18px 20px; }
@@ -519,6 +546,69 @@
         .help-nav-link:hover {
             color: #52B54B;
         }
+
+        /* Setup Guide: the section in view is marked in Contents */
+        .help-nav-link.active {
+            color: #52B54B;
+            font-weight: 600;
+        }
+
+        /* Setup Guide: search box above Contents */
+        .help-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 6px 10px;
+            border: 1px solid var(--line-color);
+            border-radius: 6px;
+            background: rgba(128,128,128,0.06);
+        }
+        .help-search .md-icon { opacity: 0.6; font-size: 1.2em; }
+        .help-search input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: inherit;
+            font: inherit;
+            font-size: 0.92em;
+        }
+        .help-search-count { font-size: 0.8em; color: var(--theme-text-secondary); white-space: nowrap; }
+        .help-search-btn {
+            background: transparent;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 50%;
+            display: inline-flex;
+            opacity: 0.75;
+        }
+        .help-search-btn:hover { opacity: 1; background: rgba(128,128,128,0.2); }
+        .help-search-btn:disabled { opacity: 0.25; cursor: default; background: transparent; }
+        mark.help-hit { background: rgba(232,168,56,0.35); color: inherit; border-radius: 2px; padding: 0 1px; }
+        mark.help-hit.current { background: #e8a838; color: #000; }
+
+        /* Setup Guide: long detail lists fold away under a "Show details" line */
+        details.help-more { margin-top: 4px; }
+        details.help-more > summary {
+            cursor: pointer;
+            color: #52B54B;
+            font-weight: 600;
+            font-size: 0.92em;
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+        }
+        details.help-more > summary::-webkit-details-marker { display: none; }
+        details.help-more > summary .md-icon { font-size: 1.2em; transition: transform 0.15s; }
+        details.help-more[open] > summary .md-icon { transform: rotate(180deg); }
+        details.help-more > summary .help-more-open { display: none; }
+        details.help-more[open] > summary .help-more-open { display: inline; }
+        details.help-more[open] > summary .help-more-closed { display: none; }
 
         .help-link {
             color: #52B54B;
@@ -1712,7 +1802,22 @@
                 <!-- PLUGIN INTRO -->
                 <div style="background:rgba(82,181,75,0.08);border:1px solid rgba(82,181,75,0.3);border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:0.92em;line-height:1.6;">
                     <strong style="color:#52B54B;">What does this plugin do?</strong><br>
-                    Home Screen Companion keeps your Emby home screen up to date automatically. You connect it to movie lists (from sites like Trakt or MDBList, or your own filters), and the plugin marks those movies with a <em>tag</em> in your Emby library. Those tags can then power custom home screen rows — like "Trending Now" or "Top 10 Action Movies" — that update themselves on a schedule.
+                    Home Screen Companion keeps your Emby home screen up to date automatically. Each <strong>source</strong> is a list of movies and shows: from a site like Trakt, MDBList or TMDb, from your own collections and playlists, picked by hand, built by filters on your files, written by an AI, or worked out per user from what they watch (<em>Your Next Watch</em>).
+                    <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7;">
+                        <li>The plugin finds those titles in your library and keeps them up to date as a <strong>tag</strong>, an Emby <strong>collection</strong> and/or a <strong>playlist</strong> per user.</li>
+                        <li>Any of them can be a <strong>home screen row</strong> for the users you choose, like "Trending Now" or "Christmas Movies", shown all year or only on the dates you set.</li>
+                        <li><strong>Top-lists</strong> show a list as a ranked row with numbered posters, like Netflix's Top 10.</li>
+                        <li>Everything is refreshed on every sync: the daily scheduled task, or <strong>Run</strong> at the top of the page.</li>
+                    </ul>
+                </div>
+
+                <!-- SEARCH -->
+                <div class="help-search">
+                    <i class="md-icon">search</i>
+                    <input type="text" id="txtHelpSearch" placeholder="Search the guide…" autocomplete="off" spellcheck="false" aria-label="Search the guide" />
+                    <span class="help-search-count" id="helpSearchCount"></span>
+                    <button type="button" class="help-search-btn" id="btnHelpSearchPrev" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled><i class="md-icon">keyboard_arrow_up</i></button>
+                    <button type="button" class="help-search-btn" id="btnHelpSearchNext" title="Next match (Enter)" aria-label="Next match" disabled><i class="md-icon">keyboard_arrow_down</i></button>
                 </div>
 
                 <!-- NAV MENU -->
@@ -1729,6 +1834,7 @@
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-7').scrollIntoView({behavior:'smooth'});return false;">Home Screen</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-7b').scrollIntoView({behavior:'smooth'});return false;">Top-List</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-8').scrollIntoView({behavior:'smooth'});return false;">Settings &amp; Utilities</a></li>
+                        <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-9').scrollIntoView({behavior:'smooth'});return false;">Troubleshooting</a></li>
                     </ol>
                 </nav>
 
@@ -1752,11 +1858,11 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">video_library</i> Local</div>
-                        Use an existing <strong>playlist</strong> or <strong>collection</strong> already in Emby as the source. Every item in that list gets the configured tag. You can also use this to show a collection as a home screen row — see <em>Home Section — Collections mode</em> below. <em>Preview</em> lists the titles that would get the tag.
+                        Use an existing <strong>playlist</strong> or <strong>collection</strong> already in Emby as the source; every movie and show in it gets the configured tag. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-local').scrollIntoView({behavior:'smooth'});return false;">More about Local below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">format_list_numbered</i> Manual List</div>
-                        Pick <strong>movies and shows</strong> by hand, right inside the plugin. Search to add a title, use <strong>▲ ▼</strong> to set the order and <strong>✕</strong> to remove it. Top-lists made from the tag follow your order. An Emby collection still shows Emby's own sort order. Titles deleted from the library are skipped. <em>Preview</em> lists the titles that would get the tag, in your order.
+                        Pick <strong>movies and shows</strong> by hand, right inside the plugin, in the order you want. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-manual').scrollIntoView({behavior:'smooth'});return false;">More about Manual List below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> MediaInfo (Smart Playlist)</div>
@@ -1764,7 +1870,7 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">auto_awesome</i> AI created lists</div>
-                        Describe what you want in plain language — for example <em>"Best sci-fi films from the 90s"</em> — and let <strong>OpenAI</strong> or <strong>Google Gemini</strong> generate the list. You can also have the AI take into account what a specific user has watched recently, to personalise the suggestions. Requires an API key in Settings. <em>Preview</em> asks the AI once and shows which of its titles are in your library and which are not; <em>Test AI Source</em> just shows the raw answer.
+                        Describe what you want in plain language — for example <em>"Best sci-fi films from the 90s"</em> — and let <strong>Anthropic Claude</strong>, <strong>Google Gemini</strong>, <strong>OpenAI (ChatGPT)</strong> or a local <strong>Ollama</strong> model write the list. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ai').scrollIntoView({behavior:'smooth'});return false;">More about AI lists below</a>.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">recommend</i> Personal: Your Next Watch</div>
@@ -1776,19 +1882,63 @@
                     <i class="md-icon help-feat-icon">public</i>
                     <div><strong>External</strong> — paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong> or <strong>TMDb</strong>. The plugin downloads the list and tags every matching title it finds in your library.
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
-                            <li>You can add several URLs to the same source; they are combined into one list.</li>
-                            <li><strong>TMDb</strong>, two ways: <em>your own lists</em> — paste the URL of any public or private list you made on themoviedb.org; or <em>API endpoints</em> — paste a direct TMDb API URL (e.g. popular movies, top-rated, now-playing, or a specific collection), which needs a <strong>TMDb API Read Access Token</strong> in the Settings tab.</li>
-                            <li><em>Preview</em> shows which titles on the list are in your library and which are not.</li>
+                            <li><strong>Several URLs</strong> — <em>Add another URL</em> adds more lists to the same source; their titles are combined under the one tag, collection and playlist. Links next to <em>Source URLs</em> open each site's list pages, to find lists.</li>
+                            <li><strong>Max (0=All)</strong> — each URL has its own limit. It counts titles <strong>found in your library</strong> (not blacklisted and passing the source's filters), from the top of the list: <em>Max 10</em> on a top-100 list gives the 10 highest-ranked titles you have, even if titles 1–3 are missing. Up to 1,000 entries are read per URL.</li>
+                            <li><strong>Matching</strong> — titles are matched by their <strong>IMDb id</strong>, so your library items need IMDb ids (Emby's metadata usually adds them). A title on the list without an IMDb id is skipped. TMDb entries are looked up to find their IMDb id.</li>
+                            <li><strong>Trakt</strong> — needs a <strong>Trakt Client ID</strong> in the Settings tab. Public user lists work, and so do Trakt's own lists that its API offers, such as <code>trakt.tv/movies/trending</code> or <code>/shows/popular</code>.</li>
+                            <li><strong>MDBList</strong> — public lists work without a key; private lists need the <strong>MDBList API Key</strong>. MDBList's official lists (<code>/lists/official/…</code>) are always read without the key.</li>
+                            <li><strong>TMDb</strong>, two ways: <em>your own lists</em> — paste the URL of any public or private list you made on themoviedb.org; or <em>API endpoints</em> — paste a direct TMDb API URL (e.g. popular movies, top-rated, now-playing, or a specific collection). Both need a <strong>TMDb API Read Access Token</strong> in the Settings tab.</li>
+                            <li><strong>Test</strong> next to a URL checks that the list can be read; <em>Preview</em> shows which titles on the list are in your library and which are not.</li>
+                            <li>If a site cannot be reached, the run log says why. Turn on <em>Preserve tags and collections on empty result</em> (Settings) to keep the old titles when a list comes back empty.</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-local" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">video_library</i>
+                    <div><strong>Local (Collection or Playlist)</strong> — use something that already exists in Emby as the list.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Choose <em>Local Collection</em> or <em>Local Playlist</em>, then pick it from the drop-down. <em>Add another</em> combines several; each has its own <strong>Max (0=All)</strong>.</li>
+                            <li>Movies and shows in it are used as they are. An <strong>episode</strong> in a playlist counts as its show.</li>
+                            <li>Handy to give a hand-made collection a home row, art or a schedule, or to turn a playlist into a tag.</li>
+                            <li>To show <strong>collections themselves</strong> as a row (instead of the movies inside), see <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-collections-mode').scrollIntoView({behavior:'smooth'});return false;">Home Section — Collections mode</a>.</li>
+                            <li>The collection or playlist is found by its <strong>name</strong>: rename it in Emby and pick it again here. If it is not found, the run log warns about it.</li>
+                            <li><em>Preview</em> lists the titles that would get the tag.</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-manual" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>Manual List</strong> — your own list, picked and ordered by hand.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Type in <em>Add a movie or show</em> to search your library and click a title to add it. <strong>▲ ▼</strong> move it, <strong>✕</strong> removes it.</li>
+                            <li>The order is kept: a top-list made from the tag and a playlist follow it. An Emby collection still shows Emby's own sort order (see <em>Keep the list order</em> under Tags &amp; Collections).</li>
+                            <li>Titles later deleted from the library are skipped. Copy/paste matches the titles on another server by IMDb/TMDb/TVDb id.</li>
+                            <li><em>Preview</em> lists the titles that would get the tag, in your order.</li>
                         </ul></div>
                 </div>
                 <div id="help-more-mediainfo" class="help-feature-row">
                     <i class="md-icon help-feat-icon">tune</i>
-                    <div><strong>MediaInfo (Smart Playlist)</strong> — build a list from the properties of your own files, for example "all 4K HDR movies" or "Action films I haven't watched yet".
+                    <div><strong>MediaInfo (Smart Playlist)</strong> — build a list from the properties of your own files, for example "all 4K HDR movies" or "Action films I haven't watched yet". It follows your library: titles that start or stop matching are added or removed on the next sync.
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
-                            <li>Filter by video quality, audio format, genre, actors, ratings and more (see <em>MediaInfo Filters</em> below).</li>
-                            <li><strong>Popular on this server</strong> — most-watched titles by number of viewers: add the rule <em>Popular on this server (viewers)</em> (under <em>Activity</em>) to list what most people on your server watched, most viewed first.</li>
-                            <li><em>Preview</em> (next to <em>Max items</em>) lists what matches right now.</li>
+                            <li>Filter by video quality, audio format, genre, actors, ratings, watch status and more — see <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-6').scrollIntoView({behavior:'smooth'});return false;">MediaInfo Filters</a>, including <em>Popular on this server</em>.</li>
+                            <li><strong>Max items</strong> (0 = all) caps the list. <em>Preview</em> (next to it) lists what matches right now.</li>
+                            <li>With the rule <em>Media Type: Episode</em> the filters check single episodes; the Tag tab then decides whether the episode, its season or its show gets the tag.</li>
                         </ul></div>
+                </div>
+                <div id="help-more-ai" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">auto_awesome</i>
+                    <div><strong>AI created lists</strong> — write what you want, and an AI answers with a list of titles that the plugin then looks for in your library.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>AI Provider</strong> — <em>Anthropic Claude</em>, <em>Google Gemini</em>, <em>OpenAI (ChatGPT)</em> or <em>Ollama (Local)</em>. Each needs its key (or for Ollama its URL) and model under <em>AI Settings</em> in the Settings tab. Ollama is experimental: local models often know less about new titles and give wrong IMDb ids more often.</li>
+                            <li><strong>Prompt</strong> — just say what you want, e.g. <em>"Feel-good comedies from the 80s"</em>. You don't need to ask for a format; the plugin's <em>system prompt</em> (Settings) already tells the AI how to answer.</li>
+                            <li><strong>Max items</strong> — how many titles you want. The AI is asked for more (up to twice as many) since some will not be in your library; the first ones found fill the list.</li>
+                            <li><strong>Matching</strong> — by the IMDb id in the AI's answer; when that id is missing or not in your library, by exact title and year.</li>
+                            <li><strong>Include recently watched for personalization</strong> — sends the chosen user's last watched titles (<em>Recent items to include</em>, default 20) with the prompt, for "recommended for you" lists. With <em>Ignore titles only marked as watched</em> (Settings) only real plays count.</li>
+                            <li><strong>Refresh every … days</strong> — 0 asks the AI on every full sync. A higher number keeps the last answer (tags, collection and playlist stay) until that many days have passed; the log says when it is due. This saves paid calls and keeps the list steady.</li>
+                            <li><strong>Test AI Source</strong> shows the AI's raw answer; <em>Preview</em> also shows which titles are in your library. Both make one paid call, and the next answer may differ.</li>
+                        </ul></div>
+                </div>
+                <div id="help-more-filters" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">filter_list</i>
+                    <div><strong>Filters on any source</strong> — every source type, not just MediaInfo, has <em>Add filters (optional)</em> at the bottom of its Source tab. The same rules as MediaInfo then narrow the list down, for example a Trakt list with only <em>Unwatched</em> titles, or only <em>4K</em> ones. On External, Local and Manual sources the filters are applied before <em>Max</em>, so the limit counts only titles that pass; on an AI source they are applied to the titles found, which can leave fewer than <em>Max items</em>.</div>
                 </div>
                 <!-- 2b. YOUR NEXT WATCH -->
                 <div id="help-sec-2b" class="help-section">
@@ -1874,7 +2024,8 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">library_add</i>
-                    <div><strong>Import collection</strong> — next to <strong>Paste source</strong>: lets HSC take over collections that already exist in Emby (made by another plugin or by hand).
+                    <div><strong>Import collection</strong> — next to <strong>Paste source</strong>: lets HSC take over collections that already exist in Emby (made by another plugin or by hand). Each one becomes a Manual List source that keeps the same collection, so links, home rows and favourites keep working; nothing is deleted.
+                        <details class="help-more"><summary><i class="md-icon">expand_more</i><span class="help-more-closed">Show details</span><span class="help-more-open">Hide details</span></summary>
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>The popup lists every collection with a tick box (and a search box when the list is long); tick one or several and click <em>Import</em>. With a long list you can also sort by name or item count and show only collections of a certain size; ticks stay when a collection is hidden.</li>
                             <li>Each becomes a <strong>Manual List</strong> source, added as a new card at the top, not saved yet — check it and click <strong>Save</strong>.</li>
@@ -1885,7 +2036,7 @@
                             <li>If another plugin or tool also updates the collection, switch that off there first, otherwise the two keep changing it.</li>
                             <li>An imported collection is never deleted by HSC: if you delete the source or switch it off, the collection stays in Emby and HSC simply stops changing it.</li>
                             <li>An imported source shows an <strong>Imported</strong> chip in its card header; a copy of it does not (the copy makes its own collection). Changing its <em>Source Type</em> makes it an ordinary source: the chip goes (saved with Save); editing its titles does not.</li>
-                        </ul></div>
+                        </ul></details></div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">content_paste</i>
@@ -1898,7 +2049,13 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">delete</i> Remove Group</div>
-                        Asks <em>Delete "&lt;name&gt;"?</em> with the source's name; the source goes when you click Save.
+                        Asks <em>Delete "&lt;name&gt;"?</em> with the source's name. The card goes at once, but nothing is deleted until you click <strong>Save Settings</strong>. Changed your mind before saving? Reload the page and click <em>Discard</em> in the <em>Unsaved changes restored</em> bar. Saving only removes the source from the settings; what it made in Emby is cleaned up by the runs after that:
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Its <strong>tag</strong> (taken off every title), its <strong>home rows</strong> and its users' <strong>playlists</strong> go on the next full sync, or the next <em>Run Group</em> of any source.</li>
+                            <li>Its <strong>collection</strong> is only deleted by a <strong>full sync</strong>, so run <strong>Run</strong> → <em>Full sync</em> once to clear everything away (or wait for the nightly run). The log lists what was removed.</li>
+                            <li>Not removed: an <em>imported</em> collection (it stays in Emby, HSC just stops changing it), and a top-list made from the tag — delete that in the <strong>Top-Lists</strong> tab.</li>
+                            <li>If a tag or collection is still left after a full sync, remove it in the <strong>Cleanup</strong> tab.</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
@@ -1924,7 +2081,7 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">block</i> Blacklist tab</div>
-                        Enter IMDB IDs (one per line) that should always be excluded from this source, no matter what the list says.
+                        IMDb ids, one per line (e.g. <code>tt1234567</code>), that this source always leaves out, whatever the list says: they get no tag and are kept out of its collection and playlists. Works for every source type; a title without an IMDb id cannot be blacklisted.
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tv</i> Home Screen tab</div>
@@ -1937,6 +2094,7 @@
                     <div><strong>Tag tab</strong> — tick <em>Apply Tag</em> to tag the matched items.
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>The <strong>Tag Name</strong> field then shows under it (like <em>Collection Name</em> under <em>Create Collection</em>): the invisible label put on each matched item in Emby. Leave it empty to use the Display Name.</li>
+                            <li><strong>TV shows: what level to tag</strong> — tick <em>Series</em>, <em>Season</em> and/or <em>Episode</em> (none ticked = Series). A show on the list then tags the show itself, all its seasons or all its episodes. With the filter rule <em>Media Type: Episode</em> only the matching episodes (or their season or show) are tagged. The Collection tab has the same choice, set separately. <em>How to use</em> next to it shows examples.</li>
                             <li>Rename the tag and the old tag is removed from your items the next time the group runs.</li>
                             <li>A deleted group's tag is removed on the next sync (or the next <em>Run Group</em> of any source). That cleanup runs once: after it, HSC leaves the old tag alone, so you can add it to items by hand.</li>
                             <li>Optionally give the tag's own page a poster and background drawn in a style you pick (the same styles as a collection).</li>
@@ -1962,7 +2120,18 @@
                             <li>Choose <em>Media Type: Collections</em> to show a collection row instead of individual items.</li>
                             <li>The <em>Section Type</em> is <em>Single Collection</em> (needs Create Collection), <em>Dynamic Media (tag)</em> (needs Apply Tag) or <em>This source's playlist (each user's own)</em> (needs Create Playlist; each user sees their own playlist from the source, so tick them on the Playlist tab too).</li>
                             <li>For <em>Your Next Watch</em> the playlist row shows each user their own picks, in pick order (or shuffled on every load when the row's <em>Sort By</em> is <em>Random</em>).</li>
-                        </ul></div>
+                        </ul>
+                        <details class="help-more"><summary><i class="md-icon">expand_more</i><span class="help-more-closed">Show the row settings</span><span class="help-more-open">Hide the row settings</span></summary>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>Show this section</strong> — <em>Always</em>, or only when Emby's <em>TV Display Mode</em> is on (TV apps) or off (phones and browsers), e.g. a bigger row for the living room.</li>
+                            <li><strong>Media Type</strong> — what a tag row shows: movies, shows, both, episodes, collections and more. Playlist rows always show the whole playlist.</li>
+                            <li><strong>Custom Title</strong> — the row's name on the home screen; empty uses the source's name.</li>
+                            <li><strong>Position</strong> — where a new row goes: <em>Bottom</em> (default), <em>Top</em> or after a chosen row. A row you later move in Emby's home screen settings keeps its new place.</li>
+                            <li><strong>View Type</strong> — <em>Cards</em> or Emby's large <em>Spotlight</em> banner. <strong>Image Type</strong> — <em>Auto</em>, <em>Primary</em> (poster) or <em>Thumb</em> (landscape). <strong>Card Size</strong> — see <em>Card size</em> under Home Screen.</li>
+                            <li><strong>Sort By</strong> and <strong>Sort Order</strong> — <em>(Default)</em> uses Emby's own order for that kind of row (a playlist row keeps the playlist's order); or sort by rating, date added, name, runtime, release date, year or <em>Random</em> (a new mix on every load).</li>
+                            <li><strong>Scroll Direction</strong> — <em>Horizontal</em> (one swipeable line) or <em>Vertical</em> (a grid). <strong>Playstate</strong> — show only <em>Played</em> or <em>Unplayed</em> titles, per user.</li>
+                            <li>Every sync puts these settings back on the row, so change them here, not in Emby's own row editor.</li>
+                        </ul></details></div>
                 </div>
 
                 <!-- 4. TAGS & COLLECTIONS -->
@@ -2003,7 +2172,8 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">settings</i>
-                    <div><strong>Customise</strong> — under every generated poster and background style (collection, tag and playlist) there is a <em>Customise</em> button. It opens the same screen for every style, starting at that style's own look.
+                    <div><strong>Customise</strong> — under every generated poster and background style (collection, tag and playlist) there is a <em>Customise</em> button. It opens the same screen for every style, starting at that style's own look: tilt, rows and number of posters, the title's font, place, size and colour, and how much to darken. The picture on the left redraws as you change things; <em>Reset</em> goes back to the style's own look.
+                        <details class="help-more"><summary><i class="md-icon">expand_more</i><span class="help-more-closed">Show details</span><span class="help-more-open">Hide details</span></summary>
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li><strong>Tilt</strong> (straight, left, right), <strong>Rows</strong> (<em>Auto</em>, 2, 3, 4, 5, or any number from 1 to 10 in the <em>Custom</em> box) and <strong>Posters</strong> (how many titles; <em>Auto</em> = the style's own number; presets 4 to 20, or 1 to 250 in the <em>Custom</em> box — clicking a preset empties the box) work on every style.</li>
                             <li><em>Grid</em> turns the whole grid and sets its rows.</li>
@@ -2021,7 +2191,7 @@
                             <li>Only the fields that change the chosen style are shown: Ranked keeps its own rows, posters and background, so those are hidden there, and the title's font, position, size, case and colour show while the title is on (Case is hidden for Bebas Neue and Luckiest Guy, which have capitals only).</li>
                             <li>The picture on the left is drawn by the server with stand-in posters and redraws as you change things; <em>Preview art</em> on the card shows your real titles. <em>Reset</em> goes back to the style's own look.</li>
                             <li>Click <em>OK</em> and then <em>Save</em>; the full sync and <em>Run Group</em> redraw the art with your settings. Art you never customised is not changed. Copy/paste and <em>Duplicate</em> keep the settings.</li>
-                        </ul></div>
+                        </ul></details></div>
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="src-card">
@@ -2045,17 +2215,9 @@
                             <li>Untick it (or switch the feature off) and the next sync puts the real films back and removes the copies and their library. This is experimental.</li>
                         </ul></div>
                 </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">tv</i>
-                    <div><strong>Home Section per source</strong> — Each source can have its own home screen row for selected users. Set this up in the <em>Home Screen</em> tab inside each source card. This works independently from the Home Screen copy feature.</div>
-                </div>
-                <div class="help-feature-row">
+                <div id="help-collections-mode" class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">collections</i>
                     <div><strong>Home Section — Collections mode</strong> — Want to show a whole collection as a row (rather than individual movies)? Use a <em>Local collection</em> source, set a tag name, and in the <em>Home Screen</em> tab choose <em>Media Type: Collections</em>. The plugin will tag the <strong>collection itself</strong> — not the movies inside it — so Emby shows it as a collection row. The individual movies inside the collection are never tagged in this mode.</div>
-                </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">block</i>
-                    <div><strong>Blacklist</strong> — IMDB IDs in the <em>Blacklist</em> tab are permanently excluded from this source, even if they appear in the fetched list.</div>
                 </div>
 
                 <!-- 5. SCHEDULING -->
@@ -2063,7 +2225,21 @@
                     <i class="md-icon help-section-icon">calendar_month</i>
                     <span>Scheduling</span>
                 </div>
-                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">By default a source is always active. Use the Schedule tab to limit when a source runs — for example to show a Halloween horror list only in October, or a Christmas movie row only in December. A home row that shows the source's tag exists all year, also when the source is set up outside its schedule: while the schedule is off it is empty, so Emby does not show it, its title starts with <strong>[INACTIVE]</strong> in the home screen settings, and you can move it there like any row. Each sync puts the row's settings back, also if Emby's own row editor dropped the tag. A collection or playlist row is removed and comes back right below the row that was above it. A new row goes where its <strong>Position</strong> (Home Screen tab) says: at the bottom, at the top or after a chosen row.</div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">By default a source is always active. Use the Schedule tab to limit when a source runs — for example to show a Halloween horror list only in October, or a Christmas movie row only in December.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">playlist_add_check</i>
+                    <div><strong>Several rules</strong> — add as many rules as you like; the source is active when <strong>any</strong> of them matches. For example <em>Friday</em> and <em>Saturday</em>, or <em>Christmas</em> and <em>New Year</em> in one source. All dates and times are the server's.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">event_busy</i>
+                    <div><strong>Outside the schedule</strong> — the next sync removes the source's tag, collection and playlists, as when the source is switched off; when the schedule starts again they come back.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>A home row that shows the source's <strong>tag</strong> stays all year: while the schedule is off it is empty, so Emby does not show it. In Emby's home screen settings its title starts with <strong>[INACTIVE]</strong>, and you can move it there like any row.</li>
+                            <li>A <strong>collection or playlist</strong> row is removed and comes back right below the row that was above it.</li>
+                            <li>Each sync puts the row's settings back, also if Emby's own row editor dropped the tag. A new row goes where its <strong>Position</strong> (Home Screen tab) says: at the bottom, at the top or after a chosen row.</li>
+                            <li>The <em>Schedule Switch</em> task checks every 15 minutes and starts a sync as soon as a schedule starts or ends, so you don't have to wait for the nightly run.</li>
+                        </ul></div>
+                </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">all_inclusive</i>
                     <div><strong>No schedule</strong> — The source is always active (default).</div>
@@ -2086,7 +2262,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">schedule</i>
-                    <div><strong>Time of Day</strong> — Active between two times (server time), on the chosen days or every day. A window may run past midnight, e.g. 22:00 to 02:00; it belongs to the day it starts on, so Friday 22:00 to 02:00 is still active at 01:00 on Saturday. The <em>Schedule Switch</em> task checks every 15 minutes and runs the sync when a schedule starts or ends.</div>
+                    <div><strong>Time of Day</strong> — Active between two times (server time), on the chosen days or every day. A window may run past midnight, e.g. 22:00 to 02:00; it belongs to the day it starts on, so Friday 22:00 to 02:00 is still active at 01:00 on Saturday. The switch happens within 15 minutes of the set time (see <em>Outside the schedule</em> above).</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">celebration</i>
@@ -2143,13 +2319,14 @@
                         Watched / Unwatched, Last Played (days ago), Play Count, Watched By Count (how many users have finished it) — can be scoped to <em>any user</em>, <em>all users</em>, or a specific user. <em>Popular on this server (viewers)</em> — how many different users watched it in the last 7, 14, 30, 60, 90 or 180 days, the last year, or all time (default ≥ 3)
                     </div>
                 </div>
-                <div class="help-feature-row" style="margin-top:12px;">
+                <div id="help-more-popular" class="help-feature-row" style="margin-top:12px;">
                     <i class="md-icon help-feat-icon">trending_up</i>
                     <div><strong>Popular on this server</strong> — most-watched titles by number of viewers. Rule <em>Popular on this server (viewers)</em> under <em>Activity</em>: pick a time window (last 7, 14, 30, 60 or 90 days, last 6 months, last year or all time; default last 30 days), an operator and a viewer count (default <i>&gt;= 3</i>).
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>A <strong>viewer</strong> is a user who has the title marked <strong>played</strong> in Emby (watched past 90% or <em>Mark played</em>) with their last play inside the window. Started or stopped plays don't count. Each user counts once, however often they watched it.</li>
                             <li>For a <strong>show</strong>, anyone who watched any episode counts as one viewer of the show. A <strong>film</strong> with several versions counts once: a user who watched any version is one viewer.</li>
                             <li>Emby only remembers each user's <em>last</em> play of a title, so a user who watched it before the window and not since doesn't count; titles marked watched without a date only count for <em>All time</em>. Disabled users are not counted.</li>
+                            <li>Marking a title watched by hand looks the same to Emby as playing it. Turn on <em>Ignore titles only marked as watched</em> (Settings) to count only real plays here and in <em>Last Played</em> rules.</li>
                             <li>The source lists its matches <strong>most viewed first</strong> (ties: higher community rating, then by name), so <strong>Max items</strong> keeps the most popular ones, and a top-list made from the tag follows that order. With more than one Popular rule, the first one sets the order.</li>
                         </ul></div>
                 </div>
@@ -2178,7 +2355,13 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">copy_all</i>
-                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. Every row is copied, in the same order — including top-list and source rows, whatever that row's own target users are. The only exception is a per-user playlist row (such as <em>Your Next Watch</em>): it is copied in the same place but shows each user's own playlist, and users without one from that source don't get the row. Old copies pointing at someone else's playlist are re-pointed or removed. This runs separately from the tag and collection sync.</div>
+                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. Every row is copied, in the same order — including top-list and source rows, whatever that row's own target users are. The only exception is a per-user playlist row (such as <em>Your Next Watch</em>): it is copied in the same place but shows each user's own playlist, and users without one from that source don't get the row. Old copies pointing at someone else's playlist are re-pointed or removed. This runs separately from the tag and collection sync.
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Tick <em>Enable Home Screen sync</em>, pick the <strong>Source User</strong> whose layout is the model, and tick the users to copy to. Set the source user's home screen up in Emby first, then run it.</li>
+                            <li>The target users' own rows are <strong>replaced</strong>, so changes they made themselves are lost on the next run.</li>
+                            <li><em>Also copy library order</em> copies the order of the libraries in the sidebar too.</li>
+                            <li>When <em>Enable Home Screen sync</em> is off, the copy never runs, not even from <strong>Run</strong>.</li>
+                        </ul></div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">tune</i>
@@ -2248,7 +2431,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">visibility_off</i>
-                    <div><strong>Hide HSC libraries</strong> — On by default, under <em>Features</em> in the <strong>Settings</strong> tab. Keeps the libraries HSC creates — those of top-lists and of ranked collections ("Keep the list order") — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
+                    <div><strong>Libraries and collections</strong> — each top-list has its own library. <em>Hide HSC libraries</em> (on by default) keeps it out of the sidebar, "My Media" and "Latest", and <em>Show collections on top-list items</em> makes "Included in &lt;collection&gt;" show on a movie opened from a top-list. Both are in the Settings tab, see <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-8b').scrollIntoView({behavior:'smooth'});return false;">Advanced Settings</a>.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">block</i>
@@ -2268,45 +2451,108 @@
                     <i class="md-icon help-section-icon">settings</i>
                     <span>Settings &amp; Utilities</span>
                 </div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">The <strong>Settings</strong> tab has four panels: <em>External list settings</em>, <em>AI Settings</em>, <em>Advanced Settings</em> and <em>Backup &amp; Restore</em>. Click <strong>Save Settings</strong> after a change.</div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">External list settings</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">key</i>
-                    <div><strong>Trakt Client ID</strong> — Required for External sources using Trakt lists. Create a new app at <a href="https://trakt.tv/oauth/applications" target="_blank" class="help-link">trakt.tv/oauth/applications</a> (Redirect URI = <code>http://localhost</code>), then copy the <em>Client ID</em>. Found under <em>External list settings</em> in the Settings tab.</div>
+                    <div><strong>Trakt Client ID</strong> — Required for External sources using Trakt lists. Create a new app at <a href="https://trakt.tv/oauth/applications" target="_blank" class="help-link">trakt.tv/oauth/applications</a> (Redirect URI = <code>http://localhost</code>), then copy the <em>Client ID</em>.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">vpn_key</i>
-                    <div><strong>MDBList API Key</strong> — Needed for private MDBList lists; public lists work without it. Get it from <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a> under <em>API Access</em>. Found under <em>External list settings</em> in the Settings tab.</div>
+                    <div><strong>MDBList API Key</strong> — Needed for private MDBList lists; public lists work without it. Get it from <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a> under <em>API Access</em>.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">movie</i>
-                    <div><strong>TMDb API Read Access Token</strong> — Required when using TMDb API endpoints as a source (e.g. popular movies, top-rated, now-playing). Also works for private TMDb lists. Get your token at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a> — scroll to <em>API Read Access Token</em> and copy the long token (not the short API Key). Needed for every TMDb source, public lists too. Found under <em>External list settings</em> in the Settings tab.</div>
+                    <div><strong>TMDb API Read Access Token</strong> — Needed for every TMDb source: your own lists (public or private) and TMDb API endpoints (e.g. popular movies, top-rated, now-playing). Get your token at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a> — scroll to <em>API Read Access Token</em> and copy the long token (not the short API Key).</div>
+                </div>
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">AI Settings</div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Fill in only the AI you use in your <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ai').scrollIntoView({behavior:'smooth'});return false;">AI sources</a>. Each has a <strong>Model</strong> field (which model to ask) with a link to that provider's current models. A cloud AI is paid per call; a cheaper, fast model is usually enough for lists.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">auto_awesome</i>
+                    <div><strong>Google Gemini</strong> — API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" class="help-link">Google AI Studio</a>. Model e.g. <code>gemini-2.5-flash-lite</code>.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_awesome</i>
-                    <div><strong>OpenAI API Key</strong> — Required for AI lists using ChatGPT. Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" class="help-link">platform.openai.com/api-keys</a>. Found under <em>AI Settings</em> in the Settings tab.</div>
+                    <div><strong>OpenAI (ChatGPT)</strong> — API key from <a href="https://platform.openai.com/api-keys" target="_blank" class="help-link">platform.openai.com/api-keys</a>. Model e.g. <code>gpt-4o-mini</code>.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_awesome</i>
-                    <div><strong>Google Gemini API Key</strong> — Required for AI lists using Gemini. Get a key at <a href="https://aistudio.google.com/app/apikey" target="_blank" class="help-link">Google AI Studio</a>. Found under <em>AI Settings</em> in the Settings tab.</div>
+                    <div><strong>Anthropic Claude</strong> — API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" class="help-link">console.anthropic.com</a>. Model e.g. <code>claude-haiku-4-5-20251001</code>.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">computer</i>
+                    <div><strong>Ollama (Local)</strong> — runs the AI on a computer of your own, free and without an API key. Enter the <strong>URL (including port)</strong>, e.g. <code>http://localhost:11434</code> or <code>http://192.168.1.100:11434</code>, as seen from the Emby server, and the <strong>Model</strong> you have pulled in Ollama, e.g. <code>llama3.2</code>. Experimental: local models know less about recent titles and give wrong IMDb ids more often (the plugin then matches by title and year). See <a href="https://ollama.com" target="_blank" class="help-link">ollama.com</a>.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tune</i>
+                    <div><strong>Edit system prompt</strong> — the hidden instruction sent before every AI request, telling the AI to answer with a list the plugin can read. Your source's prompt is the question; the system prompt is the rules for the answer. Only change it if you know what you are doing: without its format instruction the answer cannot be read and the list comes back empty. <em>Reset to default</em> puts the original back.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">visibility_off</i>
                     <div><strong>API key visibility</strong> — All API key fields are hidden by default for security. Tick the <em>Show</em> checkbox next to a field to reveal the value. The checkbox resets to hidden every time you open the settings page.</div>
                 </div>
+
+                <div id="help-sec-8b" style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Advanced Settings</div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Optional settings in four groups under <em>Advanced Settings</em> in the <strong>Settings</strong> tab. Tick one and click <strong>Save Settings</strong>.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">bug_report</i>
+                    <div><strong>Extended log</strong> <span style="opacity:0.6;">(Logging &amp; Troubleshooting)</span> — Adds source details, per-item changes, timings and error details to the log. Turn it on when something isn't working as expected or before reporting a bug.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">science</i>
+                    <div><strong>Dry Run Mode</strong> <span style="opacity:0.6;">(Logging &amp; Troubleshooting)</span> — Runs a full sync simulation without making any real changes. The log shows exactly what would be tagged, removed or collected — useful for checking your settings before committing. Remember to switch it off again.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">shield</i>
+                    <div><strong>Preserve tags and collections on empty result</strong> <span style="opacity:0.6;">(Tags &amp; Collections)</span> — If an External or AI source returns zero items — for example because the website was temporarily unreachable — the plugin keeps the existing tags and collection members as they are instead of removing everything. This prevents an accidental wipe-out caused by a network hiccup.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">done_all</i>
+                    <div><strong>Ignore titles only marked as watched</strong> <span style="opacity:0.6;">(Tags &amp; Collections)</span> — Off by default. Marking a title watched by hand gives it the same last-played date and play count as watching it, so a "recently played" rule picks it up although nobody watched it. With this on, <em>Last Played</em> and <em>Popular on this server</em> rules, and the titles an AI source gets as <em>recently watched</em>, count only titles that were actually played. It uses Emby's activity log; plays older than the log are counted as before.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">playlist_remove</i>
+                    <div><strong>Log missing movies and shows</strong> <span style="opacity:0.6;">(Tags &amp; Collections)</span> — Lists in the Sync log, per source, the titles on your External and AI lists that are not in your library, with their IMDb id — handy for finding what to add next.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">collections_bookmark</i>
+                    <div><strong>Show collections on top-list items</strong> <span style="opacity:0.6;">(Top-lists)</span> — Adds each top-list movie to the same collections as the original, so "Included in &lt;collection&gt;" also shows when a movie is opened from a top-list. Depending on the collection's sort order, it may then show the top-list version with its rank-badge poster.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">share</i>
+                    <div><strong>Copy &amp; paste sources</strong> <span style="opacity:0.6;">(Features)</span> — Off by default. Shows <strong>Copy</strong> on source and top-list cards and the <strong>Paste source</strong> and <strong>Paste top-list</strong> buttons, to move them to another server.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">library_add</i>
+                    <div><strong>Import collection</strong> <span style="opacity:0.6;">(Features)</span> — Off by default. Shows the <strong>Import collection</strong> button; switching it off again changes nothing on sources you already imported.</div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">format_list_numbered</i>
+                    <div><strong>Ranked collections — movies only (experimental)</strong> <span style="opacity:0.6;">(Features)</span> — Off by default. Shows <em>Keep the list order</em> on the Collection tab of every source, so a collection can open in list order; HSC adds a hidden library per ranked collection for it. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">Keep the list order</a>.</div>
+                </div>
+                <div id="help-hide-libs" class="help-feature-row">
+                    <i class="md-icon help-feat-icon">visibility_off</i>
+                    <div><strong>Hide HSC libraries</strong> <span style="opacity:0.6;">(Features)</span> — On by default. Keeps the libraries HSC creates — those of top-lists and of ranked collections — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
+                </div>
+
+                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Running, logs and tools</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">play_circle</i>
                     <div><strong>Run button</strong> — Manually trigger a sync at any time. Three options: <em>Full sync</em> (everything), <em>Sync home screen only</em> (just the home screen rows, no tag changes), and <em>Sync tags and collections only</em> (tags and collections, skips home screen). While a sync, Run Group, Home Screen Sync or top-list sync is busy, <em>Last run</em> at the top of the page shows the step it is on and how long it has been running, e.g. <em>Running · Playlists — Top 10: 34/88 users · 1m 12s</em>. Runs never overlap: a sync, Run Group, Home Screen Sync or top-list sync started while another is busy waits for it to finish (shown as <em>… waiting for … to finish</em>) and then runs.</div>
                 </div>
                 <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">science</i>
-                    <div><strong>Preview Mode (Dry Run)</strong> — Runs a full sync simulation without making any real changes. The log will show exactly what would be tagged, removed, or collected — useful for checking your settings before committing. Enable in the Settings tab.</div>
+                    <i class="md-icon help-feat-icon">schedule</i>
+                    <div><strong>Scheduled tasks</strong> — the plugin's tasks are on Emby's <em>Scheduled Tasks</em> page (server settings), where you can change when they run:
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>Tag &amp; Collection Sync</strong> — the full sync; every day at 04:00 by default.</li>
+                            <li><strong>Home Screen Sync</strong> and <strong>Top-list section sync</strong> — no schedule of their own; run from <strong>Run</strong> or by hand.</li>
+                            <li><strong>Continue Watching Bump</strong> — every 6 hours, and when new episodes are added.</li>
+                            <li><em>Schedule Switch</em> is not listed: every 15 minutes it starts the sync when a source's schedule starts or ends.</li>
+                        </ul></div>
                 </div>
                 <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">bug_report</i>
-                    <div><strong>Detailed Logs (Extended Log Output)</strong> — Turns on extra detail in the log for every sync step. View logs with the <strong>Logs</strong> button at the top of the page. Useful if something isn't working as expected and you want to see exactly what the plugin is doing.</div>
-                </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">shield</i>
-                    <div><strong>Preserve Tags on Empty Result</strong> — If a source returns zero items — for example because the website was temporarily unreachable — the plugin will keep the existing tags and collection members as they are instead of removing everything. This prevents an accidental wipe-out caused by a network hiccup. Enable in the Settings tab.</div>
+                    <i class="md-icon help-feat-icon">receipt_long</i>
+                    <div><strong>Logs</strong> — the <strong>Logs</strong> button at the top of the page shows the last run, in three tabs: <em>Sync</em>, <em>Home Screen</em> and <em>Top-list</em>, each with a coloured dot for how it went and when it ran. Green lines went well, yellow ones are warnings and red ones errors. Turn on <em>Extended log</em> for more detail.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_delete</i>
@@ -2315,24 +2561,6 @@
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">close</i>
                     <div><strong>Popups</strong> — Every popup has a <strong>✕</strong> at the right of its header. It does exactly what the popup's own <em>Close</em> or <em>Cancel</em> button does.</div>
-                </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Features (Advanced Settings)</div>
-                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Optional features, listed as under <em>Advanced Settings → Features</em> in the <strong>Settings</strong> tab. Tick one and click <strong>Save</strong>.</div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">share</i>
-                    <div><strong>Copy &amp; paste sources</strong> — Off by default; switch it on under <em>Advanced Settings</em> in the Settings tab (and click Save) to show <strong>Copy</strong> on source and top-list cards and the <strong>Paste source</strong> and <strong>Paste top-list</strong> buttons.</div>
-                </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">library_add</i>
-                    <div><strong>Import collection</strong> — Off by default; switch it on under <em>Advanced Settings</em> in the Settings tab (and click Save) to show the <strong>Import collection</strong> button; switching it off again changes nothing on sources you already imported.</div>
-                </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">format_list_numbered</i>
-                    <div><strong>Ranked collections — movies only (experimental)</strong> — Off by default. Shows <em>Keep the list order</em> on the Collection tab of every source. For every collection with it ticked, HSC adds a hidden library ("&lt;collection&gt; (ranked)") of small .strm copies of the movies, merges each copy with the real film as an extra version (one entry in search, shared watched status) and fills the collection with the copies, so it opens in list order. Only movies are ranked: shows keep their place after them. Unticking removes the copies and the library. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">Keep the list order</a> under Tags &amp; Collections.</div>
-                </div>
-                <div class="help-feature-row">
-                    <i class="md-icon help-feat-icon">visibility_off</i>
-                    <div><strong>Hide HSC libraries</strong> — On by default. Keeps the libraries HSC creates — those of top-lists and of ranked collections — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">restore</i>
@@ -2344,7 +2572,66 @@
                 </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">save</i>
-                    <div><strong>Backup &amp; Restore</strong> — Export your plugin configuration (settings, API keys, tag &amp; collection groups, saved filters, top lists and home screen sync) to a file, or restore any selection of those sections from a previous backup. Found at the bottom of the <strong>Settings</strong> tab. Recommended before making large changes. To move just one source or top-list to another server, use <strong>Copy</strong> on it and <strong>Paste source</strong> / <strong>Paste top-list</strong> on the other server instead.</div>
+                    <div><strong>Backup &amp; Restore</strong> — Export your plugin configuration (settings, API keys, tag &amp; collection groups, saved filters, top lists and home screen sync) to a file, or restore any selection of those sections from a previous backup. Found at the bottom of the <strong>Settings</strong> tab. Recommended before making large changes. The file holds your API keys, so keep it private. To move just one source or top-list to another server, use <strong>Copy</strong> on it and <strong>Paste source</strong> / <strong>Paste top-list</strong> on the other server instead.</div>
+                </div>
+
+                <!-- 9. TROUBLESHOOTING -->
+                <div id="help-sec-9" class="help-section">
+                    <i class="md-icon help-section-icon">build_circle</i>
+                    <span>Troubleshooting</span>
+                </div>
+                <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Start with <strong>Logs</strong>: the Sync tab says per source how many titles the list had, how many were found in your library and why a source was skipped or came back empty.</div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">tv_off</i>
+                    <div><strong>The row doesn't show on the home screen</strong>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Go through the checklist in <a href="javascript:void(0)" class="help-link hsc-open-quickstart">Quick Start</a> (step 4).</li>
+                            <li>Is the source <strong>active</strong> and inside its <strong>schedule</strong>? Outside it a tag row is empty, and Emby hides empty rows.</li>
+                            <li>Does the row have titles <strong>for this user</strong>? Their library access and parental rating apply, and <em>Playstate: Unplayed</em> hides what they have watched.</li>
+                            <li>A <em>Single Collection</em> row needs <em>Create Collection</em>, a <em>Dynamic Media (tag)</em> row needs <em>Apply Tag</em>, and a playlist row needs the user ticked on the Playlist tab.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">rule</i>
+                    <div><strong>Fewer titles than expected (a ⚠ chip such as "9 of 10" on the source)</strong>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Titles that are not in your library are left out: <em>Preview</em> lists them under <em>Not in your library</em>, and <em>Log missing movies and shows</em> (Settings) puts them in the log.</li>
+                            <li>External lists match by <strong>IMDb id</strong>. A movie you do have but without an IMDb id in Emby is not found: open it in Emby, check its metadata (<em>Identify</em> or <em>Refresh metadata</em>) and run again.</li>
+                            <li>The source's <strong>filters</strong> and <strong>Blacklist</strong> also take titles out, and every URL has its own <strong>Max</strong>.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">cloud_off</i>
+                    <div><strong>A source came back empty, or its tags disappeared</strong>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>The log says why, e.g. a missing or wrong key, a private list, or a site that could not be reached. Check the key under <em>External list settings</em> and use <strong>Test</strong> next to the URL.</li>
+                            <li>Turn on <em>Preserve tags and collections on empty result</em> so a failed fetch keeps the old titles instead of removing them.</li>
+                            <li>A source saved without a URL (or with nothing picked) is skipped and changes nothing.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">smart_toy</i>
+                    <div><strong>An AI list is empty or odd</strong>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li><strong>Test AI Source</strong> shows the raw answer, or the error (a wrong key or model name is the usual cause).</li>
+                            <li>An edited system prompt can make the answer unreadable: <em>Reset to default</em> under <em>Edit system prompt</em>.</li>
+                            <li>A wrong title matched by name? Put its IMDb id in the source's <strong>Blacklist</strong>, or make the prompt more specific.</li>
+                            <li>The list doesn't change? <em>Refresh every</em> keeps the last answer until it is due.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">hourglass_top</i>
+                    <div><strong>Nothing happens after Save, or a run seems stuck</strong>
+                        <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
+                            <li>Save only stores the settings: changes reach Emby on the next run. Use <strong>Run Group</strong> on the source, or <strong>Run</strong>.</li>
+                            <li>Runs wait for each other; <em>Last run</em> at the top shows what is running and what is waiting.</li>
+                            <li><em>Dry Run Mode</em> (Settings) left on? Then nothing is changed.</li>
+                            <li>Emby apps keep posters and the home screen for a while: refresh, or sign out and in again.</li>
+                        </ul></div>
+                </div>
+                <div class="help-feature-row" style="margin-bottom:0;">
+                    <i class="md-icon help-feat-icon">bug_report</i>
+                    <div><strong>Still stuck?</strong> Turn on <em>Extended log</em>, run again and click <strong>Report a Bug</strong> at the top of the page: it links to GitHub Issues and the plugin's Emby forum thread. Say what you expected, what happened, the source type and settings, and copy the relevant log lines.</div>
                 </div>
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
@@ -2352,6 +2639,7 @@
                 </div>
 
             </div>
+            <button type="button" id="btnHelpBackToTop" class="hsc-back-to-top" aria-label="Back to top" title="Back to top"><i class="md-icon">keyboard_arrow_up</i></button>
         </div>
     </div>
 
