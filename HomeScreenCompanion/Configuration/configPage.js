@@ -52,6 +52,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var x = Object.assign({}, t);
             delete x.HomeSectionTracked; delete x.PlaylistMappings;
             delete x.CollectionPosterReplaced; delete x.CollectionBackgroundReplaced;
+            delete x.CollectionThumbReplaced; delete x.CollectionBannerReplaced;
             delete x.AiLastRunDate; delete x.NextWatchUsersMigrated;
             delete x.LastRunCount; delete x.LastRunLimit;
             try {
@@ -958,12 +959,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             CollectionName: source.PlaylistName || source.Name || source.Tag, CollectionPosterStyle: source.PlaylistPosterStyle,
             CollectionBackgroundStyle: source.PlaylistBackgroundStyle, CollectionArtTitle: source.PlaylistArtTitle,
             CollectionBackgroundPath: source.PlaylistBackgroundPath,
-            CollectionPosterOptions: source.PlaylistPosterOptions, CollectionBackgroundOptions: source.PlaylistBackgroundOptions
+            CollectionPosterOptions: source.PlaylistPosterOptions, CollectionBackgroundOptions: source.PlaylistBackgroundOptions,
+            CollectionThumbStyle: ''
         }); }
         if (forTag) source = Object.assign({}, source, {
             CollectionName: source.Tag, CollectionPosterStyle: source.TagPosterStyle, CollectionBackgroundStyle: source.TagBackgroundStyle,
             CollectionArtTitle: source.TagArtTitle, CollectionBackgroundPath: source.TagBackgroundPath,
-            CollectionPosterOptions: source.TagPosterOptions, CollectionBackgroundOptions: source.TagBackgroundOptions
+            CollectionPosterOptions: source.TagPosterOptions, CollectionBackgroundOptions: source.TagBackgroundOptions,
+            CollectionThumbStyle: ''
         });
         var overlay = previewOverlay(view);
         var body = overlay.querySelector('.mi-preview-body');
@@ -983,6 +986,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var html = '<div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">';
             if (res.Poster) html += '<div><div class="fieldDescription" style="margin-bottom:6px;">Poster</div><img src="' + res.Poster + '" style="width:180px; border-radius:4px; display:block;" /></div>';
             if (res.Background) html += '<div style="flex:1; min-width:260px;"><div class="fieldDescription" style="margin-bottom:6px;">Background</div><img src="' + res.Background + '" style="width:100%; border-radius:4px; display:block;" /></div>';
+            if (res.Thumb) html += '<div style="flex:1; min-width:260px;"><div class="fieldDescription" style="margin-bottom:6px;">Thumb</div><img src="' + res.Thumb + '" style="width:100%; border-radius:4px; display:block;" /></div>';
             html += '</div>';
             if (res.Note) html += '<div class="fieldDescription" style="margin-top:8px;">' + escapeHtml(res.Note) + '</div>';
             body.innerHTML = html;
@@ -1129,10 +1133,17 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     function readCollectionArt(row) {
         var poster = row.querySelector('.collection-tab .coll-style-picker[data-kind="poster"] input:checked');
         var bg = row.querySelector('.collection-tab .coll-style-picker[data-kind="background"] input:checked');
+        var thumb = row.querySelector('.collection-tab .coll-style-picker[data-kind="thumb"] input:checked');
+        var banner = row.querySelector('.collection-tab .coll-style-picker[data-kind="banner"] input:checked');
         return {
             CollectionPosterStyle: poster ? poster.value : '',
             CollectionBackgroundStyle: bg ? bg.value : '',
-            CollectionBackgroundPath: (row.querySelector('.collection-tab .hiddenBgPath') || {}).value || '',
+            CollectionBackgroundPath: (row.querySelector('.collection-tab .coll-bg-upload .hiddenBgPath') || {}).value || '',
+            CollectionThumbStyle: thumb ? thumb.value : '',
+            CollectionThumbPath: (row.querySelector('.collection-tab .coll-thumb-upload .hiddenBgPath') || {}).value || '',
+            CollectionThumbOptions: artOptsOf(row.querySelector('.collection-tab .coll-style-picker[data-kind="thumb"]')),
+            CollectionBannerStyle: banner ? banner.value : '',
+            CollectionBannerPath: (row.querySelector('.collection-tab .coll-banner-upload .hiddenBgPath') || {}).value || '',
             CollectionKeepOrder: !!(row.querySelector('.chkCollKeepOrder') || {}).checked,
             CollectionArtTitle: ((row.querySelector('.txtCollArtTitle') || {}).value || '').trim(),
             CollectionPosterOptions: artOptsOf(row.querySelector('.collection-tab .coll-style-picker[data-kind="poster"]')),
@@ -1260,16 +1271,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // Keep current image is offered on an imported collection until a run has replaced that image
     // with HSC's own (TagConfig.CollectionPosterReplaced / CollectionBackgroundReplaced, set by the sync);
     // while 'keep' is selected it always shows, so nothing breaks.
+    // kind: 'poster', 'background', 'thumb' (16:9, drawn like the background) or 'banner' (no
+    // generated styles: Custom / Keep only, so no picker at all unless Keep is offered).
     function buildCollStylePickerHtml(kind, selected, scope, options, imported) {
         var sel = selected || '';
         var showKeep = (scope === 'collection' && !!imported) || isKeepArtStyle(sel);
+        if (kind === 'banner' && !showKeep) return '';
         var optsVal = (options || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         var embyOwn = scope === 'tag' && kind === 'poster';
         var name = 'collStyle_' + kind + '_' + (++_collPickerSeq);
         var cardBase = 'cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;border:2px solid transparent;transition:border-color 0.15s;';
-        var thumb = kind === 'poster' ? 'width:60px;height:90px;' : 'width:120px;height:68px;';
+        var thumb = kind === 'poster' ? 'width:60px;height:90px;' : kind === 'banner' ? 'width:150px;height:28px;' : 'width:120px;height:68px;';
         return '<div class="coll-style-picker" data-kind="' + kind + '" data-scope="' + (scope || 'collection') + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
-            COLLECTION_ART_STYLES.filter(function (o) { return !isKeepArtStyle(o[0]) || showKeep; }).map(function (o) {
+            COLLECTION_ART_STYLES.filter(function (o) { return (!isKeepArtStyle(o[0]) || showKeep) && (kind !== 'banner' || !isGenArtStyle(o[0])); }).map(function (o) {
                 var active = o[0] === sel;
                 return '<label class="coll-style-opt" style="' + cardBase + 'border-color:' + (active ? '#52B54B' : 'var(--line-color,rgba(255,255,255,0.12))') + ';">' +
                     '<input type="radio" name="' + name + '" value="' + o[0] + '" style="position:absolute;opacity:0;pointer-events:none;"' + (active ? ' checked' : '') + '>' +
@@ -1286,9 +1300,39 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<span class="coll-art-custom-note fieldDescription" style="margin:0;' + (options ? '' : 'display:none;') + '">Customised</span>' +
             '</div>' +
             '<div class="coll-art-keep-note fieldDescription" style="flex-basis:100%;margin:0;display:' + (isKeepArtStyle(sel) ? 'block' : 'none') + ';">' +
-                'Keeps the ' + (kind === 'poster' ? 'poster' : 'background') + ' this ' + (scope === 'tag' ? 'tag' : scope === 'playlist' ? 'playlist' : 'collection') +
+                'Keeps the ' + kind + ' this ' + (scope === 'tag' ? 'tag' : scope === 'playlist' ? 'playlist' : 'collection') +
                 ' has now, exactly as it is: nothing is drawn, uploaded or removed.</div>' +
             '</div>';
+    }
+
+    // Custom upload box (file or URL) for the collection thumb / banner: the same markup as the
+    // background's, so wireBgUpload drives it. Hidden while a generated style or Keep is chosen.
+    function collImageUploadHtml(cls, style, path, label, example, note, imgSize) {
+        var p = path || '';
+        var pAttr = p.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        var file = p ? p.split(/[\\/]/).pop().replace(/&/g, '&amp;').replace(/</g, '&lt;') : '';
+        return '<div class="' + cls + '" style="display:' + (style ? 'none' : 'block') + ';">' +
+            '<div class="bg-preview-container" style="margin-bottom:8px; display:' + (p ? 'block' : 'none') + ';">' +
+                '<span class="bg-filename" style="font-size:0.85em; opacity:0.7;">' + file + '</span>' +
+                '<button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>' +
+            '</div>' +
+            '<img class="bg-preview-img" src="" alt="" style="' + imgSize + ' border-radius:4px; display:none; margin-bottom:8px;" />' +
+            '<input type="file" class="inputBgFile" accept="image/*" style="display:none;" />' +
+            '<input type="hidden" class="hiddenBgPath" value="' + pAttr + '" />' +
+            '<button type="button" is="emby-button" class="btnChooseBg raised" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);">' +
+                '<i class="md-icon" style="margin-right:5px;">image</i>Choose ' + label + ' Image' +
+            '</button>' +
+            '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;">' +
+                '<div style="flex:1; height:1px; background:currentColor;"></div>' +
+                '<span style="font-size:0.75em;">or</span>' +
+                '<div style="flex:1; height:1px; background:currentColor;"></div>' +
+            '</div>' +
+            '<div style="display:flex; gap:6px; margin-top:6px;">' +
+                '<input class="txtBgUrl" is="emby-input" type="url" placeholder="https://example.com/' + example + '" style="flex:1;" />' +
+                '<button type="button" is="emby-button" class="btnLoadBgUrl raised btn-neutral">Load</button>' +
+            '</div>' +
+            '<div class="fieldDescription">' + note + '</div>' +
+        '</div>';
     }
 
     // The top-list badge's one Customise button is greyed (with a tooltip) when the choice has nothing to customise.
@@ -1345,13 +1389,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var checked = picker.querySelector('input[type=radio]:checked');
         var style = checked ? checked.value : '';
         if (!overlay || !style) return;
-        var kind = picker.dataset.kind, scope = picker.dataset.scope || 'collection';
-        var bg = kind === 'background';
+        var kindName = picker.dataset.kind, scope = picker.dataset.scope || 'collection';
+        // A thumb is drawn like the background (same 16:9 canvas, defaults and preview).
+        var bg = kindName !== 'poster';
+        var kind = bg ? 'background' : 'poster';
         var optsInput = picker.querySelector('.coll-art-opts');
         var body = overlay.querySelector('.artc-body');
         var scopeName = { collection: 'Collection', tag: 'Tag', playlist: 'Playlist' }[scope] || 'Collection';
-        overlay.querySelector('.artc-title').textContent = 'Customise ' + (bg ? 'background' : 'poster');
-        overlay.querySelector('.artc-subtitle').textContent = scopeName + ' ' + (bg ? 'background' : 'poster') + ' — ' + (ART_STYLE_NAMES[style] || style);
+        overlay.querySelector('.artc-title').textContent = 'Customise ' + kindName;
+        overlay.querySelector('.artc-subtitle').textContent = scopeName + ' ' + kindName + ' — ' + (ART_STYLE_NAMES[style] || style);
         body.innerHTML = '<div style="padding:20px 0; text-align:center; opacity:0.8;">Loading…</div>';
         overlay._artcCancel = null;
         overlay._artcOk = function () { overlay.classList.remove('modal-visible'); };   // until loaded: never the last popup's OK
@@ -1590,10 +1636,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var name = (v('.txtCollectionName') || v('.txtTagName') || v('.txtEntryLabel')).toLowerCase();
                 var bs = name && boxSets.filter(function (b) { return (b.Name || '').toLowerCase() === name; })[0];
                 if (!bs) return;
-                var bg = tile.dataset.kind === 'background';
-                var tag = bg ? (bs.BackdropImageTags || [])[0] : (bs.ImageTags || {}).Primary;
+                var k = tile.dataset.kind;
+                var tag = k === 'background' ? (bs.BackdropImageTags || [])[0]
+                    : (bs.ImageTags || {})[k === 'thumb' ? 'Thumb' : k === 'banner' ? 'Banner' : 'Primary'];
                 if (!tag) return;
-                var url = window.ApiClient.getImageUrl(bs.Id, bg ? { type: 'Backdrop', index: 0, maxWidth: 240, tag: tag } : { type: 'Primary', maxHeight: 180, tag: tag });
+                var url = window.ApiClient.getImageUrl(bs.Id, k === 'background' ? { type: 'Backdrop', index: 0, maxWidth: 240, tag: tag }
+                    : k === 'thumb' ? { type: 'Thumb', maxWidth: 240, tag: tag }
+                    : k === 'banner' ? { type: 'Banner', maxWidth: 300, tag: tag }
+                    : { type: 'Primary', maxHeight: 180, tag: tag });
                 tile.style.border = 'none';
                 tile.innerHTML = '<img alt="" src="' + url + '" style="width:100%;height:100%;border-radius:4px;object-fit:cover;display:block;" />';
             });
@@ -1611,7 +1661,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         _artSamplesPromise.then(function (samples) {
             if (!samples) return;
             document.querySelectorAll('img.coll-style-thumb:not([src])').forEach(function (img) {
-                var set = img.dataset.kind === 'poster' ? samples.Poster : samples.Background;
+                var set = img.dataset.kind === 'poster' ? samples.Poster : samples.Background;   // a thumb looks like the background
                 var url = set && set[img.dataset.style];
                 if (url) img.src = url;
             });
@@ -1903,6 +1953,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             CollectionArtTitle: readCollectionArt(row).CollectionArtTitle,
             CollectionPosterOptions: readCollectionArt(row).CollectionPosterOptions,
             CollectionBackgroundOptions: readCollectionArt(row).CollectionBackgroundOptions,
+            CollectionThumbStyle: readCollectionArt(row).CollectionThumbStyle, CollectionThumbOptions: readCollectionArt(row).CollectionThumbOptions,
+            CollectionThumbPath: readCollectionArt(row).CollectionThumbPath,
+            CollectionBannerStyle: readCollectionArt(row).CollectionBannerStyle, CollectionBannerPath: readCollectionArt(row).CollectionBannerPath,
+            CollectionThumbReplaced: row.dataset.thumbReplaced === '1', CollectionBannerReplaced: row.dataset.bannerReplaced === '1',
             TagPosterStyle: readTagArt(row).TagPosterStyle, TagBackgroundStyle: readTagArt(row).TagBackgroundStyle,
             TagBackgroundPath: readTagArt(row).TagBackgroundPath, TagArtTitle: readTagArt(row).TagArtTitle,
             TagPosterOptions: readTagArt(row).TagPosterOptions, TagBackgroundOptions: readTagArt(row).TagBackgroundOptions,
@@ -2834,7 +2888,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var newClass = isNew ? "just-added" : "";
 
         var html = `
-        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-dirty="false">
+        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-dirty="false">
             <div class="tag-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px; cursor:pointer;">
                 <div style="display:flex; align-items:center;">
                     <div class="header-actions" style="margin-right:15px; display:flex; align-items:center;" onclick="event.stopPropagation()">
@@ -3267,12 +3321,24 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             </div>
                         </div>
 
-                        <div class="inputContainer coll-art-title-row" style="margin-top:15px; display:${isGenArtStyle(tagConfig.CollectionPosterStyle) || isGenArtStyle(tagConfig.CollectionBackgroundStyle) ? 'block' : 'none'};">
+                        <div style="margin-top:15px;">
+                            <p style="margin:0 0 8px 0; font-size:0.9em; font-weight:bold; opacity:0.7;">Collection Thumb</p>
+                            ${buildCollStylePickerHtml('thumb', tagConfig.CollectionThumbStyle, 'collection', tagConfig.CollectionThumbOptions, tagConfig.CollectionImported && !tagConfig.CollectionThumbReplaced)}
+                            ${collImageUploadHtml('coll-thumb-upload', tagConfig.CollectionThumbStyle, tagConfig.CollectionThumbPath, 'Thumb', 'thumb.jpg', "Leave empty to keep Emby's own thumb. Wide 16:9 image, used where Emby shows items as thumbs.", 'max-width:240px; max-height:135px;')}
+                        </div>
+
+                        <div style="margin-top:15px;">
+                            <p style="margin:0 0 8px 0; font-size:0.9em; font-weight:bold; opacity:0.7;">Collection Banner</p>
+                            ${buildCollStylePickerHtml('banner', tagConfig.CollectionBannerStyle, 'collection', '', tagConfig.CollectionImported && !tagConfig.CollectionBannerReplaced)}
+                            ${collImageUploadHtml('coll-banner-upload', tagConfig.CollectionBannerStyle, tagConfig.CollectionBannerPath, 'Banner', 'banner.jpg', "Leave empty to keep Emby's own banner. Very wide image (about 1000 × 185), used where Emby shows items as banners.", 'max-width:300px; max-height:56px;')}
+                        </div>
+
+                        <div class="inputContainer coll-art-title-row" style="margin-top:15px; display:${isGenArtStyle(tagConfig.CollectionPosterStyle) || isGenArtStyle(tagConfig.CollectionBackgroundStyle) || isGenArtStyle(tagConfig.CollectionThumbStyle) ? 'block' : 'none'};">
                             <input is="emby-input" type="text" class="txtCollArtTitle" label="Title on the art" value="${(tagConfig.CollectionArtTitle || '').replace(/"/g, '&quot;')}" placeholder="{name}" />
                             <div class="fieldDescription coll-art-title-note">Leave empty to use the collection name. <b>{name}</b> = collection name, <b>{week}</b> = this week's number, e.g. <i>{name} {week}</i> → "Top Movies for the Week 41".</div>
                         </div>
 
-                        <div class="coll-art-preview-row" style="margin-top:10px; display:${isGenArtStyle(tagConfig.CollectionPosterStyle) || isGenArtStyle(tagConfig.CollectionBackgroundStyle) ? 'block' : 'none'};">
+                        <div class="coll-art-preview-row" style="margin-top:10px; display:${isGenArtStyle(tagConfig.CollectionPosterStyle) || isGenArtStyle(tagConfig.CollectionBackgroundStyle) || isGenArtStyle(tagConfig.CollectionThumbStyle) ? 'block' : 'none'};">
                             <button type="button" is="emby-button" class="btnCollArtPreview raised" style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">visibility</i><span>Preview art</span></button>
                         </div>
 
@@ -4120,7 +4186,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             row.querySelector('.coll-poster-upload').style.display = art.CollectionPosterStyle ? 'none' : 'block';
             row.querySelector('.coll-poster-gen-note').style.display = isGenArtStyle(art.CollectionPosterStyle) ? 'block' : 'none';
             row.querySelector('.coll-bg-upload').style.display = art.CollectionBackgroundStyle ? 'none' : 'block';
-            var collGen = isGenArtStyle(art.CollectionPosterStyle) || isGenArtStyle(art.CollectionBackgroundStyle);
+            row.querySelector('.coll-thumb-upload').style.display = art.CollectionThumbStyle ? 'none' : 'block';
+            row.querySelector('.coll-banner-upload').style.display = art.CollectionBannerStyle ? 'none' : 'block';
+            var collGen = isGenArtStyle(art.CollectionPosterStyle) || isGenArtStyle(art.CollectionBackgroundStyle) || isGenArtStyle(art.CollectionThumbStyle);
             row.querySelector('.coll-art-preview-row').style.display = collGen ? 'block' : 'none';
             row.querySelector('.coll-art-title-row').style.display = collGen ? 'block' : 'none';
         }
@@ -4210,6 +4278,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
         }
         wireBgUpload(row.querySelector('.coll-bg-upload'));
+        wireBgUpload(row.querySelector('.coll-thumb-upload'));
+        wireBgUpload(row.querySelector('.coll-banner-upload'));
         wireBgUpload(row.querySelector('.tag-bg-upload'));
         wireBgUpload(row.querySelector('.pl-bg-upload'));
         row.querySelector('.btnPlArtPreview').addEventListener('click', function () {
@@ -5514,6 +5584,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 CollectionArtTitle: readCollectionArt(row).CollectionArtTitle,
                 CollectionPosterOptions: readCollectionArt(row).CollectionPosterOptions,
                 CollectionBackgroundOptions: readCollectionArt(row).CollectionBackgroundOptions,
+                CollectionThumbStyle: readCollectionArt(row).CollectionThumbStyle, CollectionThumbOptions: readCollectionArt(row).CollectionThumbOptions,
+                CollectionThumbPath: readCollectionArt(row).CollectionThumbPath,
+                CollectionBannerStyle: readCollectionArt(row).CollectionBannerStyle, CollectionBannerPath: readCollectionArt(row).CollectionBannerPath,
+                CollectionThumbReplaced: row.dataset.thumbReplaced === '1', CollectionBannerReplaced: row.dataset.bannerReplaced === '1',
                 TagPosterStyle: readTagArt(row).TagPosterStyle, TagBackgroundStyle: readTagArt(row).TagBackgroundStyle,
                 TagBackgroundPath: readTagArt(row).TagBackgroundPath, TagArtTitle: readTagArt(row).TagArtTitle,
                 TagPosterOptions: readTagArt(row).TagPosterOptions, TagBackgroundOptions: readTagArt(row).TagBackgroundOptions,
@@ -5853,6 +5927,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     CollectionPosterReplaced: !!t.CollectionPosterReplaced, CollectionBackgroundReplaced: !!t.CollectionBackgroundReplaced,
                     CollectionArtTitle: t.CollectionArtTitle || '',
                     CollectionPosterOptions: t.CollectionPosterOptions || '', CollectionBackgroundOptions: t.CollectionBackgroundOptions || '',
+                    CollectionThumbStyle: t.CollectionThumbStyle || '', CollectionThumbOptions: t.CollectionThumbOptions || '', CollectionThumbPath: t.CollectionThumbPath || '',
+                    CollectionBannerStyle: t.CollectionBannerStyle || '', CollectionBannerPath: t.CollectionBannerPath || '',
+                    CollectionThumbReplaced: !!t.CollectionThumbReplaced, CollectionBannerReplaced: !!t.CollectionBannerReplaced,
                     TagPosterStyle: t.TagPosterStyle || '', TagBackgroundStyle: t.TagBackgroundStyle || '',
                     TagBackgroundPath: t.TagBackgroundPath || '', TagArtTitle: t.TagArtTitle || '',
                     TagPosterOptions: t.TagPosterOptions || '', TagBackgroundOptions: t.TagBackgroundOptions || '',
@@ -9001,6 +9078,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         config.PlaylistMappings = [];
         config.CollectionImported = false;   // a copy makes its own collection
         config.CollectionPosterReplaced = false; config.CollectionBackgroundReplaced = false;
+        config.CollectionThumbReplaced = false; config.CollectionBannerReplaced = false;
         return config;
     }
 
@@ -11032,6 +11110,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     if (existing && existing.CollectionImported && t.CollectionImported) {
                         t.CollectionPosterReplaced = !!(t.CollectionPosterReplaced || existing.CollectionPosterReplaced);
                         t.CollectionBackgroundReplaced = !!(t.CollectionBackgroundReplaced || existing.CollectionBackgroundReplaced);
+                        t.CollectionThumbReplaced = !!(t.CollectionThumbReplaced || existing.CollectionThumbReplaced);
+                        t.CollectionBannerReplaced = !!(t.CollectionBannerReplaced || existing.CollectionBannerReplaced);
                     }
                     if (existing && existing.PlaylistMappings && existing.PlaylistMappings.length > 0
                         && (!t.PlaylistMappings || t.PlaylistMappings.length === 0)) {

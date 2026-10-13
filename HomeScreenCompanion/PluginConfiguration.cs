@@ -125,6 +125,14 @@ namespace HomeScreenCompanion
         public string CollectionBackgroundOptions { get; set; } = "";
         // Uploaded background (used when CollectionBackgroundStyle is "", i.e. Custom).
         public string CollectionBackgroundPath { get; set; } = "";
+        // Thumb (16:9, drawn like the background) and banner of the collection. Thumb: a generated
+        // style, "" = Custom (CollectionThumbPath) or "keep". Banner: "" = Custom (CollectionBannerPath)
+        // or "keep" — there is no generated banner.
+        public string CollectionThumbStyle { get; set; } = "";
+        public string CollectionThumbOptions { get; set; } = "";
+        public string CollectionThumbPath { get; set; } = "";
+        public string CollectionBannerStyle { get; set; } = "";
+        public string CollectionBannerPath { get; set; } = "";
         // Experimental (needs RankedCollectionsEnabled): the collection holds ranked .strm copies of
         // its movies so it opens in list order. See RankedCollections.
         public bool CollectionKeepOrder { get; set; } = false;
@@ -139,6 +147,8 @@ namespace HomeScreenCompanion
         // collection's original image; from then on "Keep current image" is no longer offered for it.
         public bool CollectionPosterReplaced { get; set; } = false;
         public bool CollectionBackgroundReplaced { get; set; } = false;
+        public bool CollectionThumbReplaced { get; set; } = false;
+        public bool CollectionBannerReplaced { get; set; } = false;
         public bool OnlyCollection { get; set; } = false;
 
         // Legacy, for migration only (stoep-labs fork, see LegacyForkCleanup): "Show at the top of

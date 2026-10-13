@@ -242,6 +242,7 @@ namespace HomeScreenCompanion
         public string Message { get; set; } = "";
         public string Poster { get; set; } = "";       // data: URL, empty when not generated
         public string Background { get; set; } = "";
+        public string Thumb { get; set; } = "";
         public int Titles { get; set; }
         public string Note { get; set; } = "";         // e.g. "this source has 12 titles; posters repeat"
         [System.Runtime.Serialization.IgnoreDataMember] public string Timing { get; set; } = "";   // for the log only
@@ -1321,7 +1322,7 @@ public class HomeScreenCompanionService : IService
             try { result = await PreviewCollectionArt(request.Source ?? new TagConfig()); }
             finally { ArtPreviewGate.Release(); }
             var src = request.Source ?? new TagConfig();
-            _logger.Info($"Collection art preview: '{src.Name}' [{src.SourceType}] tag '{src.Tag}' poster '{src.CollectionPosterStyle}' background '{src.CollectionBackgroundStyle}' -> "
+            _logger.Info($"Collection art preview: '{src.Name}' [{src.SourceType}] tag '{src.Tag}' poster '{src.CollectionPosterStyle}' background '{src.CollectionBackgroundStyle}' thumb '{src.CollectionThumbStyle}' -> "
                 + (result.Success ? $"drawn from {result.Titles} title(s)" : result.Message)
                 + $" in {sw.ElapsedMilliseconds} ms ({(waited > 0 ? $"waited {waited} ms; " : "")}{result.Timing})");
             return result;
@@ -1376,8 +1377,9 @@ public class HomeScreenCompanionService : IService
         {
             bool poster = CollectionArtRenderer.IsStyle(source.CollectionPosterStyle);
             bool background = CollectionArtRenderer.IsStyle(source.CollectionBackgroundStyle);
-            if (!poster && !background)
-                return new PreviewCollectionArtResponse { Message = "Choose \"Generate from the titles\" for the poster or the background first." };
+            bool thumb = CollectionArtRenderer.IsStyle(source.CollectionThumbStyle);
+            if (!poster && !background && !thumb)
+                return new PreviewCollectionArtResponse { Message = "Choose \"Generate from the titles\" for the poster, the background or the thumb first." };
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var timing = new List<string>();
@@ -1426,35 +1428,40 @@ public class HomeScreenCompanionService : IService
                 int distinct = titles.Count;
                 string repeatNote = "", rowsNote = "";
                 // The posters both drawings need, read once and side by side.
-                int need = Math.Max(
+                int need = Math.Max(Math.Max(
                     poster ? CollectionArtRenderer.PostersFor(source.CollectionPosterStyle, false, ArtOptions.Parse(source.CollectionPosterOptions)) : 0,
-                    background ? CollectionArtRenderer.PostersFor(source.CollectionBackgroundStyle, true, ArtOptions.Parse(source.CollectionBackgroundOptions)) : 0);
+                    background ? CollectionArtRenderer.PostersFor(source.CollectionBackgroundStyle, true, ArtOptions.Parse(source.CollectionBackgroundOptions)) : 0),
+                    thumb ? CollectionArtRenderer.PostersFor(source.CollectionThumbStyle!, true, ArtOptions.Parse(source.CollectionThumbOptions)) : 0);
                 timing.Add($"titles {clock.ElapsedMilliseconds} ms");
                 clock.Restart();
                 var paths = ArtPosterPaths(titles.Take(need).ToList(), _httpClient, tempDir);
                 timing.Add($"{need} poster files {clock.ElapsedMilliseconds} ms");
-                string Draw(string style, bool bg)
+                // kind: "poster", "background" or "thumb" (drawn like the background).
+                string Draw(string style, string kind, string? options)
                 {
-                    var opts = ArtOptions.Parse(bg ? source.CollectionBackgroundOptions : source.CollectionPosterOptions);
+                    bool bg = kind != "poster";
+                    var label = char.ToUpperInvariant(kind[0]) + kind.Substring(1);
+                    var opts = ArtOptions.Parse(options);
                     if (opts.Posters != null && style.Trim().ToLowerInvariant() != CollectionArtRenderer.Ranked && opts.Posters.Value > distinct)
                         repeatNote = $"This source has {distinct} title{(distinct == 1 ? "" : "s")}; the posters repeat to make {opts.Posters.Value} (never next to a copy).";
                     var posters = paths.Take(CollectionArtRenderer.PostersFor(style, bg, opts)).Where(p => p != null).Select(p => p!).ToList();
                     if (posters.Count == 0) return "";
-                    var output = Path.Combine(tempDir, bg ? "background.jpg" : "poster.jpg");
+                    var output = Path.Combine(tempDir, kind + ".jpg");
                     clock.Restart();
                     var note = CollectionArtRenderer.RowsNote(opts, CollectionArtRenderer.Render(style, posters, title, bg, output, opts));
-                    timing.Add($"{(bg ? "background" : "poster")} {clock.ElapsedMilliseconds} ms");
-                    if (note.Length > 0) rowsNote = rowsNote.Length == 0 ? (bg ? "Background: " : "Poster: ") + note : rowsNote + " Background: " + note;
+                    timing.Add($"{kind} {clock.ElapsedMilliseconds} ms");
+                    if (note.Length > 0) rowsNote = (rowsNote.Length == 0 ? "" : rowsNote + " ") + label + ": " + note;
                     return "data:image/jpeg;base64," + Convert.ToBase64String(File.ReadAllBytes(output));
                 }
                 var res = new PreviewCollectionArtResponse
                 {
                     Success = true,
                     Titles = items.Count,
-                    Poster = poster ? Draw(source.CollectionPosterStyle, false) : "",
-                    Background = background ? Draw(source.CollectionBackgroundStyle, true) : ""
+                    Poster = poster ? Draw(source.CollectionPosterStyle, "poster", source.CollectionPosterOptions) : "",
+                    Background = background ? Draw(source.CollectionBackgroundStyle, "background", source.CollectionBackgroundOptions) : "",
+                    Thumb = thumb ? Draw(source.CollectionThumbStyle!, "thumb", source.CollectionThumbOptions) : ""
                 };
-                if (res.Poster.Length == 0 && res.Background.Length == 0)
+                if (res.Poster.Length == 0 && res.Background.Length == 0 && res.Thumb.Length == 0)
                     return new PreviewCollectionArtResponse { Message = "None of this source's titles has a poster image on this server, so there is nothing to draw." };
                 res.Note = string.Join(" ", new[] { repeatNote, rowsNote }.Where(n => n.Length > 0));
                 res.Timing = string.Join(", ", timing);
@@ -2161,6 +2168,8 @@ public class HomeScreenCompanionService : IService
                         CollectionDescription = coll.Overview ?? "",
                         CollectionPosterStyle = CollectionArtRenderer.KeepStyle,
                         CollectionBackgroundStyle = CollectionArtRenderer.KeepStyle,
+                        CollectionThumbStyle = CollectionArtRenderer.KeepStyle,
+                        CollectionBannerStyle = CollectionArtRenderer.KeepStyle,
                         // A sort title set in Emby (locked) is kept as the source's sort title.
                         CollectionSortName = (coll.LockedFields ?? Array.Empty<MetadataFields>()).Contains(MetadataFields.SortName) ? sortName : "",
                         CollectionImported = true,
@@ -4012,6 +4021,11 @@ public class HomeScreenCompanionService : IService
             t.CollectionArtTitle        ??= "";
             t.CollectionBackgroundStyle ??= "";
             t.CollectionBackgroundPath  ??= "";
+            t.CollectionThumbStyle      ??= "";
+            t.CollectionThumbOptions    ??= "";
+            t.CollectionThumbPath       ??= "";
+            t.CollectionBannerStyle     ??= "";
+            t.CollectionBannerPath      ??= "";
             t.TagPosterStyle            ??= "";
             t.TagArtTitle               ??= "";
             t.TagBackgroundStyle        ??= "";
@@ -4176,6 +4190,7 @@ public class HomeScreenCompanionService : IService
             t.LastModified       = DateTime.MinValue;
             // On another server the collection is HSC's own, not one it took over.
             t.CollectionImported = false; t.CollectionPosterReplaced = false; t.CollectionBackgroundReplaced = false;
+            t.CollectionThumbReplaced = false; t.CollectionBannerReplaced = false;
         }
 
         // The user id inside a smart-filter rule (IsPlayed/LastPlayed/PlayCount:<userId>:<op>:<value>,
@@ -4302,6 +4317,8 @@ public class HomeScreenCompanionService : IService
 
                 AddImage(t.CollectionPosterPath, "Collection poster");
                 AddImage(t.CollectionBackgroundPath, "Collection background");
+                AddImage(t.CollectionThumbPath, "Collection thumb");
+                AddImage(t.CollectionBannerPath, "Collection banner");
                 AddImage(t.TagBackgroundPath, "Tag background");
             }
 
@@ -4480,6 +4497,8 @@ public class HomeScreenCompanionService : IService
 
                     t.CollectionPosterPath     = MapImage(t.CollectionPosterPath, "Collection poster");
                     t.CollectionBackgroundPath = MapImage(t.CollectionBackgroundPath, "Collection background");
+                    t.CollectionThumbPath      = MapImage(t.CollectionThumbPath, "Collection thumb");
+                    t.CollectionBannerPath     = MapImage(t.CollectionBannerPath, "Collection banner");
                     t.TagBackgroundPath        = MapImage(t.TagBackgroundPath, "Tag background");
 
                     if ((t.SourceType == "LocalCollection" || t.SourceType == "LocalPlaylist") && !string.IsNullOrWhiteSpace(t.LocalSourceId)

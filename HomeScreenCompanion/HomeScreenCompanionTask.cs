@@ -6683,7 +6683,10 @@ namespace HomeScreenCompanion
         {
             var withArt = created.Where(c => CollectionArtRenderer.IsStyle(c.Source.CollectionPosterStyle)
                 || CollectionArtRenderer.IsStyle(c.Source.CollectionBackgroundStyle)
-                || !string.IsNullOrWhiteSpace(c.Source.CollectionBackgroundPath)).ToList();
+                || !string.IsNullOrWhiteSpace(c.Source.CollectionBackgroundPath)
+                || CollectionArtRenderer.IsStyle(c.Source.CollectionThumbStyle)
+                || !string.IsNullOrWhiteSpace(c.Source.CollectionThumbPath)
+                || !string.IsNullOrWhiteSpace(c.Source.CollectionBannerPath)).ToList();
             if (withArt.Count == 0) return;
             foreach (var delay in new[] { 3000, 5000 })
             {
@@ -6705,7 +6708,9 @@ namespace HomeScreenCompanion
             {
                 if (SetGeneratedArt(coll, cName, "collection_art", tc.CollectionPosterStyle, tc.CollectionBackgroundStyle,
                         tc.CollectionArtTitle, tc.CollectionBackgroundPath, items, false,
-                        posterOptions: tc.CollectionPosterOptions, backgroundOptions: tc.CollectionBackgroundOptions))
+                        posterOptions: tc.CollectionPosterOptions, backgroundOptions: tc.CollectionBackgroundOptions,
+                        thumb: (tc.CollectionThumbStyle ?? "", tc.CollectionThumbOptions ?? "", tc.CollectionThumbPath ?? ""),
+                        banner: (tc.CollectionBannerStyle ?? "", tc.CollectionBannerPath ?? "")))
                 {
                     _libraryManager.UpdateItem(coll, coll.Parent, ItemUpdateType.ImageUpdate, null);
                     _log.Debug($"  {cName}  →  collection art applied");
@@ -6736,6 +6741,8 @@ namespace HomeScreenCompanion
                 if (!string.Equals(name, cName, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!CollectionArtRenderer.IsKeep(t.CollectionPosterStyle) && Ours(ImageType.Primary)) t.CollectionPosterReplaced = true;
                 if (!CollectionArtRenderer.IsKeep(t.CollectionBackgroundStyle) && Ours(ImageType.Backdrop)) t.CollectionBackgroundReplaced = true;
+                if (!CollectionArtRenderer.IsKeep(t.CollectionThumbStyle) && Ours(ImageType.Thumb)) t.CollectionThumbReplaced = true;
+                if (!CollectionArtRenderer.IsKeep(t.CollectionBannerStyle) && Ours(ImageType.Banner)) t.CollectionBannerReplaced = true;
             }
         }
 
@@ -6793,32 +6800,39 @@ namespace HomeScreenCompanion
         // Puts the generated (or uploaded) poster and background on the item's ImageInfos. With
         // removeWhenNone, a kind with no style drops the plugin's earlier image (the poster goes
         // back to Emby's own collage). posterPath: an uploaded poster used when no poster style is
-        // set (playlists). artKey: the art's folder name when it differs from name. True when the
-        // item's images changed.
+        // set (playlists). artKey: the art's folder name when it differs from name. thumb / banner
+        // (collections only): the collection's Thumb (drawn like the background) and Banner
+        // (upload only); null = not handled. True when the item's images changed.
         private bool SetGeneratedArt(BaseItem target, string name, string artFolder, string posterStyle, string backgroundStyle,
             string artTitle, string backgroundPath, IList<BaseItem> items, bool removeWhenNone, string? posterPath = null, string? artKey = null,
-            string? posterOptions = null, string? backgroundOptions = null)
+            string? posterOptions = null, string? backgroundOptions = null,
+            (string Style, string Options, string Path)? thumb = null, (string Style, string Path)? banner = null)
         {
             bool changed = false;
-            foreach (var (style, background) in new[] { (posterStyle, false), (backgroundStyle, true) })
+            var kinds = new List<(string Style, ImageType Type, bool Wide, string Options, string? Upload, string File)>
+            {
+                (posterStyle, ImageType.Primary, false, posterOptions ?? "", posterPath, "poster"),
+                (backgroundStyle, ImageType.Backdrop, true, backgroundOptions ?? "", backgroundPath, "background")
+            };
+            if (thumb != null) kinds.Add((thumb.Value.Style, ImageType.Thumb, true, thumb.Value.Options, thumb.Value.Path, "thumb"));
+            // No generated banner: any style but Keep is Custom (the upload).
+            if (banner != null) kinds.Add((CollectionArtRenderer.IsKeep(banner.Value.Style) ? banner.Value.Style : "", ImageType.Banner, true, "", banner.Value.Path, "banner"));
+            foreach (var (style, type, background, options, upload, file) in kinds)
             {
                 // Keep current image: this kind is never touched (no render, upload or removal).
                 if (CollectionArtRenderer.IsKeep(style)) continue;
-                var opts = ArtOptions.Parse(background ? backgroundOptions : posterOptions);
-                var type = background ? ImageType.Backdrop : ImageType.Primary;
+                var opts = ArtOptions.Parse(options);
                 var current = (target.ImageInfos ?? Array.Empty<ItemImageInfo>()).FirstOrDefault(i => i.Type == type);
                 string? path;
-                if (CollectionArtRenderer.IsStyle(style)) path = RenderCollectionArt(artKey ?? name, artFolder, CollectionArtRenderer.ArtTitle(artTitle, name), style, background, items, opts);
-                else if (background && !string.IsNullOrWhiteSpace(backgroundPath) && File.Exists(backgroundPath))
-                    path = backgroundPath;   // Custom: the uploaded background
-                else if (!background && !string.IsNullOrWhiteSpace(posterPath) && File.Exists(posterPath))
-                    path = posterPath;       // Custom: the uploaded poster
+                if (CollectionArtRenderer.IsStyle(style)) path = RenderCollectionArt(artKey ?? name, artFolder, CollectionArtRenderer.ArtTitle(artTitle, name), style, background, items, opts, file);
+                else if (!string.IsNullOrWhiteSpace(upload) && File.Exists(upload))
+                    path = upload;   // Custom: the uploaded image
                 else
                 {
                     if (removeWhenNone && current != null && IsPluginTagArt(current.Path))
                     {
                         var kept = (target.ImageInfos ?? Array.Empty<ItemImageInfo>()).Where(i => i.Type != type).ToList();
-                        if (!background) kept.Add(new ItemImageInfo { Path = EmbyCollagePoster, Type = ImageType.Primary, DateModified = DateTime.UtcNow });
+                        if (type == ImageType.Primary) kept.Add(new ItemImageInfo { Path = EmbyCollagePoster, Type = ImageType.Primary, DateModified = DateTime.UtcNow });
                         target.ImageInfos = kept.ToArray();
                         changed = true;
                     }
@@ -6839,7 +6853,8 @@ namespace HomeScreenCompanion
 
         // Draws the art into <plugin data>/<artFolder>/<name>/ (collection_art or tag_art) and
         // returns its path, or the existing file when nothing changed. Null when no poster could be found.
-        private string? RenderCollectionArt(string cName, string artFolder, string title, string style, bool background, IList<BaseItem> items, ArtOptions? opts = null)
+        // kind: the file name ("thumb" is drawn as a background); default poster / background.
+        private string? RenderCollectionArt(string cName, string artFolder, string title, string style, bool background, IList<BaseItem> items, ArtOptions? opts = null, string? kind = null)
         {
             opts ??= ArtOptions.None;
             var invalid = Path.GetInvalidFileNameChars();
@@ -6847,7 +6862,7 @@ namespace HomeScreenCompanion
             if (string.IsNullOrEmpty(safe)) safe = "collection";
             var dir = Path.Combine(Plugin.Instance!.DataFolderPath, artFolder, safe);
             Directory.CreateDirectory(dir);
-            var kind = background ? "background" : "poster";
+            kind ??= background ? "background" : "poster";
             var output = Path.Combine(dir, kind + ".jpg");
             var keyFile = Path.Combine(dir, kind + ".key");
 
