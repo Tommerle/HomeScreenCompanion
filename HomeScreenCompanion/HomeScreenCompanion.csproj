@@ -10,8 +10,8 @@
 		<AssemblyName>HomeScreenCompanion</AssemblyName>
 		<RootNamespace>HomeScreenCompanion</RootNamespace>
 		
-		<Version>4.4.0.0</Version>
-		<!-- "beta" shows "v4.4.0.0 beta" in the settings page footer; leave empty for a release. -->
+		<Version>4.4.1.0</Version>
+		<!-- "beta" shows "vX.X.X.X beta" in the settings page footer; leave empty for a release. -->
 		<ReleaseChannel>beta</ReleaseChannel>
 		<InformationalVersion Condition="'$(ReleaseChannel)' != ''">$(Version)-$(ReleaseChannel)</InformationalVersion>
 
