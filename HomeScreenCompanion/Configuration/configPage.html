@@ -181,22 +181,67 @@
         }
 
         .fab-btn {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            height: 45px !important;
-            border-radius: 25px !important;
-            padding: 0 20px !important;
+            box-shadow: var(--hsc-shadow-float) !important;
+            height: 44px !important;
+            border-radius: 8px !important;
+            padding: 0 18px !important;
             white-space: nowrap;
         }
 
-        .btn-save {
-            background-color: #52B54B !important;
-            color: #fff !important;
+        /* Buttons (DESIGN.md): one primary (Save), activity (start a job), secondary (default),
+           ghost (inline actions), danger (destructive). Added beside Emby's raised buttons. */
+        #HomeScreenCompanionConfigPage .emby-button, .modal-backdrop .emby-button, .hsc-modal .emby-button {
+            border-radius: 8px;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 500;
         }
-
-        .btn-run {
-            background-color: #00a4dc !important;
+        .btn-save, .hsc-btn-primary {
+            background-color: var(--hsc-primary) !important;
             color: #fff !important;
+            border: 1px solid transparent !important;
         }
+        .btn-save:hover, .hsc-btn-primary:hover { background-color: var(--hsc-primary-hover) !important; }
+        .btn-save:active, .hsc-btn-primary:active { background-color: var(--hsc-primary-pressed) !important; }
+        .btn-run, .hsc-btn-activity {
+            background-color: var(--hsc-activity) !important;
+            color: #fff !important;
+            border: 1px solid transparent !important;
+        }
+        .btn-run:hover, .hsc-btn-activity:hover { background-color: var(--hsc-activity-hover) !important; }
+        .btn-neutral, .hsc-btn-secondary {
+            background: var(--hsc-tint-1) !important;
+            border: 1px solid var(--hsc-hairline-strong) !important;
+            color: var(--theme-text-primary) !important;
+            box-shadow: none !important;
+        }
+        .btn-neutral:hover, .hsc-btn-secondary:hover { background: var(--hsc-tint-2) !important; }
+        .btn-neutral:active, .hsc-btn-secondary:active { background: var(--hsc-tint-3) !important; }
+        .btn-neutral:disabled, .hsc-btn-secondary:disabled { opacity: 0.5; }
+        .hsc-btn-ghost {
+            background: transparent !important;
+            border: 1px solid transparent !important;
+            color: var(--theme-text-secondary) !important;
+            box-shadow: none !important;
+            min-width: 0 !important;
+        }
+        .hsc-btn-ghost:hover { background: var(--hsc-tint-2) !important; color: var(--theme-text-primary) !important; }
+        .hsc-btn-danger {
+            background: transparent !important;
+            color: var(--hsc-danger-text) !important;
+            border: 1px solid rgba(229,115,115,0.4) !important;
+            box-shadow: none !important;
+        }
+        .hsc-btn-danger:hover { background: rgba(229,115,115,0.08) !important; border-color: var(--hsc-danger) !important; }
+        .hsc-btn-dashed {
+            width: 100%;
+            background: transparent !important;
+            border: 1px dashed var(--hsc-hairline-strong) !important;
+            color: var(--theme-text-secondary) !important;
+            box-shadow: none !important;
+        }
+        .hsc-btn-dashed:hover { background: var(--hsc-tint-1) !important; color: var(--theme-text-primary) !important; border-color: var(--theme-text-secondary) !important; }
+        .hsc-btn-sm { min-width: 60px; height: 36px; padding: 0 12px !important; font-size: 0.85em !important; }
 
         .status-dot {
             height: 10px;
@@ -237,28 +282,30 @@
             }
         }
 
+        /* Top row: Help, Quick Start, Report bug, Logs are secondary buttons */
         .btn-log-trigger, .btn-bug-trigger, .btn-help-trigger, .btn-quickstart-trigger {
-            background: var(--theme-background-level2) !important;
+            background: var(--hsc-tint-1) !important;
             color: var(--theme-text-primary) !important;
             padding: 0 12px !important;
             height: 32px !important;
-            border-radius: 16px !important;
-            margin-left: 8px;
+            border-radius: 8px !important;
+            margin-left: 0;
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 0.85em !important;
-            border: 1px solid rgba(128,128,128,0.4) !important;
-            transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+            font-size: 0.88em !important;
+            font-weight: 500 !important;
+            border: 1px solid var(--hsc-hairline-strong) !important;
+            box-shadow: none !important;
+            transition: border-color 0.15s, background-color 0.15s, color 0.15s;
         }
-
-            .btn-log-trigger:hover {
-                border-color: #00a4dc !important;
-            }
-
-            .btn-bug-trigger:hover {
-                border-color: #e57373 !important;
-            }
+        .btn-log-trigger .md-icon, .btn-bug-trigger .md-icon, .btn-help-trigger .md-icon, .btn-quickstart-trigger .md-icon {
+            font-size: 1.15em;
+            color: var(--theme-text-secondary);
+        }
+        .btn-log-trigger:hover, .btn-bug-trigger:hover, .btn-help-trigger:hover, .btn-quickstart-trigger:hover {
+            background: var(--hsc-tint-2) !important;
+        }
 
         /* The top row is as wide as the tab content (the form is max 900px). */
         .hsc-top-row { max-width: 900px; }
@@ -267,41 +314,6 @@
         #lastRunIndicator { flex: 1 1 0; min-width: 0; }
         #lastRunIndicator > span:not(#lastRunStatusLabel) { flex-shrink: 0; }
         #lastRunStatusLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        .btn-help-trigger {
-            background: rgba(82, 181, 75, 0.15) !important;
-            border-color: rgba(82, 181, 75, 0.55) !important;
-            color: var(--theme-text-primary) !important;
-            padding: 0 18px !important;
-            height: 40px !important;
-            border-radius: 20px !important;
-            font-size: 0.95em !important;
-            font-weight: 500 !important;
-            gap: 7px !important;
-        }
-
-            .btn-help-trigger:hover {
-                background: rgba(82, 181, 75, 0.28) !important;
-                border-color: #52B54B !important;
-            }
-
-        /* Quick Start: same pill as Help. */
-        .btn-quickstart-trigger {
-            background: rgba(82, 181, 75, 0.15) !important;
-            border-color: rgba(82, 181, 75, 0.55) !important;
-            color: var(--theme-text-primary) !important;
-            padding: 0 18px !important;
-            height: 40px !important;
-            border-radius: 20px !important;
-            font-size: 0.95em !important;
-            font-weight: 500 !important;
-            gap: 7px !important;
-        }
-
-            .btn-quickstart-trigger:hover {
-                background: rgba(82, 181, 75, 0.28) !important;
-                border-color: #52B54B !important;
-            }
 
         .qs-checklist { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
         .qs-starter {
@@ -859,12 +871,14 @@
             background: var(--theme-background-level1) !important;
         }
 
+        .man-btn-delete:hover, .btn-row-remove:hover { background: var(--hsc-tint-2) !important; }
         .man-btn-delete {
             background: transparent !important;
             min-width: 40px;
             width: 40px;
             padding: 0;
-            color: #cc3333;
+            color: var(--hsc-danger-text);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -996,21 +1010,24 @@
             background: var(--plugin-popup-bg, #2a2a2a);
             color: var(--plugin-popup-color, #e8e8e8);
             border: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12));
-            border-radius: 20px;
-            padding: 8px 16px;
+            border-radius: 8px;
+            padding: 8px 14px;
             cursor: pointer;
-            font-size: 0.85em;
+            font-family: inherit;
+            font-size: 0.88em;
+            font-weight: 500;
             white-space: nowrap;
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            transition: background 0.15s;
+            box-shadow: var(--hsc-shadow-float);
+            transition: background-color 0.15s;
         }
 
         .run-dial-item:hover {
             background: var(--plugin-popup-hover, rgba(128,128,128,0.15));
         }
+        .run-dial-item .md-icon { color: var(--hsc-activity-text); font-size: 1.15em; }
 
         .run-dial-chevron {
             transition: transform 0.18s ease;
@@ -1599,7 +1616,7 @@
                     <button is="emby-button" type="button" id="btnPasteSource" class="raised btn-neutral mb025" style="margin-right: 8px;" title="Add a source copied with Copy on a source card (this or another server)">
                         <i class="md-icon" style="margin-right:5px;">content_paste</i><span>Paste source</span>
                     </button>
-                    <button is="emby-button" type="button" id="btnAddTag" class="raised button-submit mb025">
+                    <button is="emby-button" type="button" id="btnAddTag" class="raised button-submit mb025 hsc-btn-secondary">
                         <span>+ Add New Source</span>
                     </button>
                 </div>
@@ -1738,7 +1755,7 @@
                 </div>
 
                 <div style="text-align:right;margin-top:20px;">
-                    <button is="emby-button" type="button" id="btnCloseBugReport" class="raised" style="background:#444;color:#fff;padding:0 20px;">Close</button>
+                    <button is="emby-button" type="button" id="btnCloseBugReport" class="raised hsc-btn-secondary">Close</button>
                 </div>
             </div>
         </div>
@@ -1769,7 +1786,7 @@
             <div class="modal-body-scroll" style="background: #0a0a0a; color: #ececec; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; padding: 20px; border-top: 1px solid #333;" id="logContent">
             </div>
             <div style="text-align:right; padding: 15px; background: #1a1a1a; border-top: 1px solid #333;">
-                <button is="emby-button" type="button" id="btnCloseLogs" class="raised" style="background: #444;">Close</button>
+                <button is="emby-button" type="button" id="btnCloseLogs" class="raised hsc-btn-secondary">Close</button>
             </div>
         </div>
     </div>
@@ -2623,7 +2640,7 @@
                 </div>
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
-                    <button is="emby-button" type="button" id="btnCloseHelp" class="raised button-submit" style="background:#52B54B; color:white; padding: 0 25px;">Close Guide</button>
+                    <button is="emby-button" type="button" id="btnCloseHelp" class="raised button-submit hsc-btn-secondary">Close Guide</button>
                 </div>
 
             </div>
@@ -2693,17 +2710,17 @@
                 <div class="qs-starter">
                     <i class="md-icon help-feat-icon">local_fire_department</i>
                     <div class="qs-starter-text"><strong>Popular on this server</strong><small>Smart Playlist: the 20 movies most users watched in the last 30 days</small></div>
-                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="popular"><span>Add</span></button>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter hsc-btn-secondary" data-starter="popular"><span>Add</span></button>
                 </div>
                 <div class="qs-starter">
                     <i class="md-icon help-feat-icon">fiber_new</i>
                     <div class="qs-starter-text"><strong>Recently added movies</strong><small>Smart Playlist: movies added in the last 30 days, newest first</small></div>
-                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="recent"><span>Add</span></button>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter hsc-btn-secondary" data-starter="recent"><span>Add</span></button>
                 </div>
                 <div class="qs-starter" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">trending_up</i>
                     <div class="qs-starter-text"><strong>Most watched this week</strong><small>Public MDBList list: the week's most watched movies, the ones in your library</small></div>
-                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter" data-starter="trending"><span>Add</span></button>
+                    <button is="emby-button" type="button" class="raised button-submit btnAddStarter hsc-btn-secondary" data-starter="trending"><span>Add</span></button>
                 </div>
 
                 <div class="help-section">
@@ -2733,7 +2750,7 @@
                 </div>
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
-                    <button is="emby-button" type="button" id="btnCloseQuickStart" class="raised button-submit" style="background:#52B54B; color:white; padding: 0 25px;">Close</button>
+                    <button is="emby-button" type="button" id="btnCloseQuickStart" class="raised button-submit hsc-btn-secondary">Close</button>
                 </div>
 
             </div>
@@ -2774,7 +2791,7 @@
             <div class="modal-body-scroll" style="padding:20px 24px;">
                 <div class="mi-preview-body"></div>
                 <div style="text-align:right;margin-top:20px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
-                    <button is="emby-button" type="button" id="btnCloseMiPreview" class="raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">Close</button>
+                    <button is="emby-button" type="button" id="btnCloseMiPreview" class="raised button-submit hsc-btn-secondary">Close</button>
                 </div>
             </div>
         </div>
@@ -2994,7 +3011,7 @@
                 </div>
 
                 <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
-                    <button is="emby-button" type="button" id="btnCloseMiHelp" class="raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">Got it</button>
+                    <button is="emby-button" type="button" id="btnCloseMiHelp" class="raised button-submit hsc-btn-secondary">Got it</button>
                 </div>
             </div>
         </div>
@@ -3030,7 +3047,7 @@
                 <div class="help-feature-row" style="margin-bottom:0;"><i class="md-icon help-feat-icon">info</i><div>To target a specific episode or season, add <b>MediaType:Episode</b> in the Source filter. Without it, the source returns whole series and all levels expand from there.</div></div>
 
                 <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
-                    <button is="emby-button" type="button" id="btnCloseTagTargetHelp" class="raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">Got it</button>
+                    <button is="emby-button" type="button" id="btnCloseTagTargetHelp" class="raised button-submit hsc-btn-secondary">Got it</button>
                 </div>
             </div>
         </div>

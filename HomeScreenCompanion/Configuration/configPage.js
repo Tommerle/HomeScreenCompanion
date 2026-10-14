@@ -681,7 +681,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             min-width: 40px;
             width: 40px;
             padding: 0;
-            color: #cc3333;
+            color: var(--hsc-danger-text);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -689,11 +690,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             margin-top: 12px;
         }
 
-        .btn-neutral {
-            background: var(--theme-background-level2) !important;
-            border: 1px solid rgba(128,128,128,0.4) !important;
-            color: var(--theme-text-primary) !important;
-        }
         .plugin-footer {
             position: fixed;
             bottom: 0;
@@ -744,7 +740,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 <div style="width:110px;">
                     <input is="emby-input" class="txtUrlLimit" type="number" label="Max (0=All)" value="${lim}" min="0" />
                 </div>
-                <button type="button" is="emby-button" class="raised button-submit btnTestUrl" style="min-width:60px; height:36px; padding:0 10px; font-size:0.8rem; margin-top:12px;" title="Test Source"><span>Test</span></button>
+                <button type="button" is="emby-button" class="raised button-submit btnTestUrl hsc-btn-secondary hsc-btn-sm" style="margin-top:12px;" title="Test Source"><span>Test</span></button>
                 <button type="button" is="emby-button" class="raised btnRemoveUrl btn-row-remove" title="Remove URL"><i class="md-icon">remove_circle_outline</i></button>
             </div>`;
     }
@@ -1254,7 +1250,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var file = function (p) { return p ? esc(p.split(/[\\/]/).pop()) : ''; };
         var gen = isGenArtStyle(tc.PlaylistPosterStyle) || isGenArtStyle(tc.PlaylistBackgroundStyle);
         var orRow = '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;"><div style="flex:1; height:1px; background:currentColor;"></div><span style="font-size:0.75em;">or</span><div style="flex:1; height:1px; background:currentColor;"></div></div>';
-        var btnStyle = 'width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);';
+        var btnStyle = '';
         return `
                         <div class="pl-look" style="margin-top:18px;">
                             <p style="margin:0 0 4px 0; font-size:0.95em; font-weight:bold;">Playlist look</p>
@@ -1276,7 +1272,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                     <img class="poster-preview-img" src="" alt="" style="max-width:120px; max-height:180px; border-radius:4px; display:none; margin-bottom:8px;" />
                                     <input type="file" class="inputPosterFile" accept="image/*" style="display:none;" />
                                     <input type="hidden" class="hiddenPosterPath" value="${esc(tc.PlaylistPosterPath)}" />
-                                    <button type="button" is="emby-button" class="btnChoosePoster raised" style="${btnStyle}"><i class="md-icon" style="margin-right:5px;">image</i>Choose Poster Image</button>
+                                    <button type="button" is="emby-button" class="btnChoosePoster raised hsc-btn-dashed" style="width:100%;"><i class="md-icon" style="margin-right:5px;">image</i>Choose Poster Image</button>
                                     ${orRow}
                                     <div style="display:flex; gap:6px; margin-top:6px;">
                                         <input class="txtPosterUrl" is="emby-input" type="url" placeholder="https://example.com/poster.jpg" style="flex:1;" />
@@ -1297,7 +1293,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                     <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                                     <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
                                     <input type="hidden" class="hiddenBgPath" value="${esc(tc.PlaylistBackgroundPath)}" />
-                                    <button type="button" is="emby-button" class="btnChooseBg raised" style="${btnStyle}"><i class="md-icon" style="margin-right:5px;">image</i>Choose Background Image</button>
+                                    <button type="button" is="emby-button" class="btnChooseBg raised hsc-btn-dashed" style="width:100%;"><i class="md-icon" style="margin-right:5px;">image</i>Choose Background Image</button>
                                     ${orRow}
                                     <div style="display:flex; gap:6px; margin-top:6px;">
                                         <input class="txtBgUrl" is="emby-input" type="url" placeholder="https://example.com/background.jpg" style="flex:1;" />
@@ -1376,7 +1372,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<img class="bg-preview-img" src="" alt="" style="' + imgSize + ' border-radius:4px; display:none; margin-bottom:8px;" />' +
             '<input type="file" class="inputBgFile" accept="image/*" style="display:none;" />' +
             '<input type="hidden" class="hiddenBgPath" value="' + pAttr + '" />' +
-            '<button type="button" is="emby-button" class="btnChooseBg raised" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);">' +
+            '<button type="button" is="emby-button" class="btnChooseBg raised hsc-btn-dashed" style="width:100%;">' +
                 '<i class="md-icon" style="margin-right:5px;">image</i>Choose ' + label + ' Image' +
             '</button>' +
             '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;">' +
@@ -2970,8 +2966,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             <div class="tag-body" style="${initialStyle} padding:15px; border-top:1px solid rgba(255,255,255,0.1);">
                 <div class="hsc-run-issue-box">${groupIssueBoxHtml(_groupIssues[groupIssueKey(tagConfig.Name, tagConfig.Tag)])}</div>
                 <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
-                    <button type="button" is="emby-button" class="btnCopySourceRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Copy this source to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em; margin-right:4px;">share</i><span>Copy</span></button>
-                    <button type="button" is="emby-button" class="btnDuplicateRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Duplicate this source"><i class="md-icon" style="font-size:1em; margin-right:4px;">content_copy</i><span>Duplicate</span></button>
+                    <button type="button" is="emby-button" class="btnCopySourceRow raised hsc-btn-ghost hsc-btn-sm" title="Copy this source to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em; margin-right:4px;">share</i><span>Copy</span></button>
+                    <button type="button" is="emby-button" class="btnDuplicateRow raised hsc-btn-ghost hsc-btn-sm" title="Duplicate this source"><i class="md-icon" style="font-size:1em; margin-right:4px;">content_copy</i><span>Duplicate</span></button>
                 </div>
                 <div class="tag-tabs">
                     <div class="tag-tab active" data-tab="general">Source</div>
@@ -3016,22 +3012,22 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <span style="font-size:0.75em; opacity:0.5;">— Find lists: <a href="https://trakt.tv/discover" target="_blank" style="color:inherit; text-decoration:underline;">Trakt</a> &middot; <a href="https://mdblist.com/toplists/" target="_blank" style="color:inherit; text-decoration:underline;">MDBList</a> &middot; <a href="https://www.themoviedb.org/" target="_blank" style="color:inherit; text-decoration:underline;">TMDb</a> &middot; <a href="https://developer.themoviedb.org/reference/getting-started" target="_blank" style="color:inherit; text-decoration:underline;">TMDb API</a></span>
                         </div>
                         <div class="url-list-container">${urls.map(u => getUrlRowHtml(u.url, u.limit)).join('')}</div>
-                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddUrl" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);"><i class="md-icon" style="margin-right:5px;">add</i>Add another URL</button></div>
+                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddUrl hsc-btn-dashed"><i class="md-icon" style="margin-right:5px;">add</i>Add another URL</button></div>
                     </div>
 
                     <div class="source-local-container" style="display: ${(sourceType === 'LocalCollection' || sourceType === 'LocalPlaylist') ? 'block' : 'none'};">
                         <div style="display:flex; align-items:center; gap:10px; margin:10px 0 10px 0;">
                             <p style="margin:0; font-size:0.9em; font-weight:bold; opacity:0.7;" class="local-type-label">${sourceType === 'LocalPlaylist' ? 'Select Playlists' : 'Select Collections'}</p>
-                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview hsc-btn-secondary hsc-btn-sm" style="margin-left:auto;" title="Preview Source"><span>Preview</span></button>
                         </div>
                         <div class="local-list-container">${localSources.map(ls => getLocalRowHtml(sourceType, ls.id, ls.limit)).join('')}</div>
-                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddLocal" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);"><i class="md-icon" style="margin-right:5px;">add</i>Add another</button></div>
+                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddLocal hsc-btn-dashed"><i class="md-icon" style="margin-right:5px;">add</i>Add another</button></div>
                     </div>
 
                     <div class="source-manual-container" data-manual-ids="${encodeURIComponent(JSON.stringify(tagConfig.ManualItemIds || []))}" style="display: ${sourceType === 'Manual' ? 'block' : 'none'};">
                         <div style="display:flex; align-items:center; gap:10px; margin:10px 0 10px 0;">
                             <p style="margin:0; font-size:0.9em; font-weight:bold; opacity:0.7;">Movies and Shows</p>
-                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview hsc-btn-secondary hsc-btn-sm" style="margin-left:auto;" title="Preview Source"><span>Preview</span></button>
                         </div>
                         <div style="position:relative; margin-bottom:10px;">
                             <input is="emby-input" type="text" class="txtManualSearch" autocomplete="off" label="Add a movie or show" placeholder="Type to search…" />
@@ -3110,7 +3106,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         <div class="mi-limit-row" style="display:${sourceType === 'MediaInfo' || sourceType === 'NextWatch' ? 'flex' : 'none'}; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
                             <label style="font-size:0.9em; white-space:nowrap; margin:0;">Max items</label>
                             <input is="emby-input" class="txtMediaInfoLimit" type="number" value="${mediaInfoLimit}" min="0" style="width:90px;" />
-                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview" style="margin-left:auto; min-width:60px; height:36px; padding:0 10px; font-size:0.8rem;" title="Preview Source"><span>Preview</span></button>
+                            <button type="button" is="emby-button" class="raised button-submit btnMiPreview hsc-btn-secondary hsc-btn-sm" style="margin-left:auto;" title="Preview Source"><span>Preview</span></button>
                             <button type="button" is="emby-button" class="btnMiHelp btnMiLimitHelp raised" style="display:${sourceType === 'MediaInfo' ? '' : 'none'}; background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">help_outline</i><span>How to (filter guide)</span></button>
                         </div>
                         <div class="nw-settings" style="display:${sourceType === 'NextWatch' ? 'block' : 'none'}; margin-bottom:14px;">
@@ -3136,7 +3132,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             </div>
                             <div class="mediainfo-filter-list">${filterGroupsHtml}</div>
                             <div style="display:flex; gap:8px; margin-top:8px;">
-                                <button type="button" is="emby-button" class="btnAddMediaInfoFilter raised" style="flex:1; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);"><i class="md-icon" style="margin-right:5px;">add</i>Add Filter Group</button>
+                                <button type="button" is="emby-button" class="btnAddMediaInfoFilter raised hsc-btn-dashed" style="flex:1;"><i class="md-icon" style="margin-right:5px;">add</i>Add Filter Group</button>
                                 <button type="button" is="emby-button" class="btnClearAllFilters raised" style="background:transparent; border:2px dashed rgba(204,51,51,0.4); color:#cc3333; padding:0 14px; min-width:0;" title="Clear all filters"><i class="md-icon" style="font-size:1em;">delete_sweep</i></button>
                             </div>
                             <div class="mi-presets-section" style="margin-top:30px; border-top:1px solid var(--line-color); padding-top:12px; display:${sourceType === 'MediaInfo' ? 'block' : 'none'};">
@@ -3225,7 +3221,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                                 <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
                                 <input type="hidden" class="hiddenBgPath" value="${tagConfig.TagBackgroundPath || ''}" />
-                                <button type="button" is="emby-button" class="btnChooseBg raised" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);">
+                                <button type="button" is="emby-button" class="btnChooseBg raised hsc-btn-dashed" style="width:100%;">
                                     <i class="md-icon" style="margin-right:5px;">image</i>Choose Background Image
                                 </button>
                                 <div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;">
@@ -3256,7 +3252,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 <div class="tab-content schedule-tab" style="display:none;">
                     <p style="margin:0 0 15px 0; font-size:0.9em; opacity:0.8;">Define when this tag should be active. If empty, it's always active.</p>
                     <div class="date-list-container">${intervals.map(i => getDateRowHtml(i)).join('')}</div>
-                    <button is="emby-button" type="button" class="btnAddDate" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary); margin-top:10px;"><i class="md-icon" style="margin-right:5px;">event</i>Add Schedule Rule</button>
+                    <button is="emby-button" type="button" class="btnAddDate hsc-btn-dashed" style="width:100%; margin-top:10px;"><i class="md-icon" style="margin-right:5px;">event</i>Add Schedule Rule</button>
                     <button type="button" is="emby-button" class="btnSchedulePresets raised btn-neutral" style="width:100%; margin-top:6px; background:transparent; border:1px solid var(--line-color); color:var(--theme-text-secondary); display:flex; align-items:center; justify-content:space-between;"><span><i class="md-icon" style="margin-right:5px;">celebration</i>Holiday presets</span><i class="md-icon mi-expand-icon" style="transition:transform 0.2s; font-size:1.2em;">expand_more</i></button>
                     <div class="schedule-preset-panel" style="display:none; border:1px solid var(--line-color); border-radius:6px; padding:10px 12px; margin-top:6px; background:rgba(128,128,128,0.06);">
                         <div style="font-size:0.8em; color:var(--theme-text-secondary); margin-bottom:10px;">Select a holiday to add it as a rule (you can change the dates afterwards):</div>
@@ -3337,7 +3333,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <img class="poster-preview-img" src="" alt="" style="max-width:120px; max-height:180px; border-radius:4px; display:none; margin-bottom:8px;" />
                             <input type="file" class="inputPosterFile" accept="image/*" style="display:none;" />
                             <input type="hidden" class="hiddenPosterPath" value="${collPosterPath}" />
-                            <button type="button" is="emby-button" class="btnChoosePoster raised" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);">
+                            <button type="button" is="emby-button" class="btnChoosePoster raised hsc-btn-dashed" style="width:100%;">
                                 <i class="md-icon" style="margin-right:5px;">image</i>Choose Poster Image
                             </button>
                             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;">
@@ -3364,7 +3360,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                             <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
                             <input type="hidden" class="hiddenBgPath" value="${tagConfig.CollectionBackgroundPath || ''}" />
-                            <button type="button" is="emby-button" class="btnChooseBg raised" style="width:100%; background:transparent; border:2px dashed rgba(128,128,128,0.4); color:var(--theme-text-secondary);">
+                            <button type="button" is="emby-button" class="btnChooseBg raised hsc-btn-dashed" style="width:100%;">
                                 <i class="md-icon" style="margin-right:5px;">image</i>Choose Background Image
                             </button>
                             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;">
@@ -3476,8 +3472,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 </div>
 
                 <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:20px; border-top:1px solid var(--line-color); padding-top:10px;">
-                    <button is="emby-button" type="button" class="raised button-submit btnRunEntry" style="background:#0099d5 !important; color:#fff !important;"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>
-                    <button is="emby-button" type="button" class="raised btnRemoveGroup" style="background:#cc3333 !important; color:#fff;"><i class="md-icon" style="margin-right:5px;">delete</i>Remove Group</button>
+                    <button is="emby-button" type="button" class="raised button-submit btnRunEntry hsc-btn-activity"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>
+                    <button is="emby-button" type="button" class="raised btnRemoveGroup hsc-btn-danger"><i class="md-icon" style="margin-right:5px;">delete</i>Remove Group</button>
                 </div>
             </div>
         </div>`;
@@ -8625,8 +8621,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var fieldStyle = 'margin-bottom:14px;';
 
         // Run Group: same button as on a source card (look, size, place next to Remove).
-        var runHtml = '<button type="button" is="emby-button" class="raised button-submit btnRunEntry btnTlRun" data-name="' + escAttr(tagName) + '" style="background:#0099d5 !important; color:#fff !important;"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>';
-        var deleteHtml = '<button type="button" is="emby-button" class="raised btnTlDelete" data-name="' + escAttr(tagName) + '" style="background:#cc3333 !important;color:#fff;"><i class="md-icon" style="margin-right:5px;">delete</i>Delete top-list</button>';
+        var runHtml = '<button type="button" is="emby-button" class="raised button-submit btnRunEntry btnTlRun hsc-btn-activity" data-name="' + escAttr(tagName) + '"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>';
+        var deleteHtml = '<button type="button" is="emby-button" class="raised btnTlDelete hsc-btn-danger" data-name="' + escAttr(tagName) + '"><i class="md-icon" style="margin-right:5px;">delete</i>Delete top-list</button>';
         // Copy (same look and place as on a source card): the saved list, to paste on another server.
         var copyBarHtml = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
             '<button type="button" is="emby-button" class="btnCopyTopList raised" style="background:transparent;color:var(--theme-text-secondary);font-size:0.82em;padding:0 10px;min-width:0;box-shadow:none;" title="Copy this top-list to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em;margin-right:4px;">share</i><span>Copy</span></button>' +
@@ -10117,7 +10113,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<button type="button" id="btnPasteTopList" is="emby-button" class="raised btn-neutral mb025" style="margin-right:8px;" title="Add a top-list copied with Copy on a top-list (this or another server)">' +
                 '<i class="md-icon" style="margin-right:5px;">content_paste</i><span>Paste top-list</span>' +
                 '</button>' +
-                '<button type="button" id="btnCreateNewTopList" is="emby-button" class="raised button-submit mb025">' +
+                '<button type="button" id="btnCreateNewTopList" is="emby-button" class="raised button-submit mb025 hsc-btn-secondary">' +
                 '<span>+ Create New</span>' +
                 '</button>' +
                 '</div>' +
@@ -10361,13 +10357,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     userOptions,
                     '</select>',
                     '</div>',
-                    '<button type="button" is="emby-button" class="raised btn-neutral" id="btnRefreshManageSections" style="height:36px;min-width:90px;margin-bottom:2px;" disabled>',
+                    '<button type="button" is="emby-button" class="raised btn-neutral" id="btnRefreshManageSections" style="min-width:90px;margin-bottom:2px;" disabled>',
                     '<i class="md-icon" style="margin-right:4px;">refresh</i>Refresh',
                     '</button>',
                     '</div>',
                     '<div id="manSectionList"></div>',
                     '<div style="margin-top:16px;display:flex;justify-content:flex-end;">',
-                    '<button type="button" is="emby-button" class="raised button-submit" id="btnApplyManage" disabled>',
+                    '<button type="button" is="emby-button" class="raised button-submit hsc-btn-secondary" id="btnApplyManage" disabled>',
                     '<i class="md-icon" style="margin-right:4px;">check</i><span>Apply changes</span>',
                     '</button>',
                     '</div>',
