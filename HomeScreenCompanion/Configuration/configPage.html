@@ -259,6 +259,26 @@
             box-shadow: none !important;
         }
         .hsc-btn-dashed:hover { background: var(--hsc-tint-1) !important; color: var(--theme-text-primary) !important; border-color: var(--theme-text-secondary) !important; }
+        /* Buttons inside JS-built popups (plain <button>, not emby-button) */
+        .hsc-mbtn {
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-family: inherit;
+            font-size: 0.9em;
+            font-weight: 500;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+        .hsc-mbtn.hsc-btn-secondary { color: inherit !important; border-color: var(--plugin-popup-border, var(--hsc-hairline-strong)) !important; }
+        .hsc-mbtn:disabled { opacity: 0.5; cursor: default; }
+        .hsc-btn-danger-fill { background: var(--hsc-danger-strong) !important; color: #fff !important; border: 1px solid transparent !important; }
+        .hsc-btn-danger-fill:hover { filter: brightness(1.1); }
+        .hsc-x:hover { opacity: 1 !important; background: var(--plugin-popup-hover, var(--hsc-tint-2)) !important; }
         .hsc-btn-sm { min-width: 60px; height: 36px; padding: 0 12px !important; font-size: 0.85em !important; }
 
         .status-dot {
@@ -375,11 +395,11 @@
             border-radius: 12px;
             max-width: 650px;
             width: 90%;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            box-shadow: var(--hsc-shadow-modal);
             border: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.15));
             position: relative;
-            transform: translateY(20px);
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateY(12px);
+            transition: transform 0.25s ease-out;
             overflow: hidden;
         }
 
@@ -387,25 +407,35 @@
             transform: translateY(0);
         }
 
+        /* Modal header (DESIGN.md): transparent, hairline below, green icon, section-title */
         .modal-header-bar {
-            background: linear-gradient(135deg, #52B54B 0%, #3a8c34 100%);
-            padding: 20px;
+            background: transparent;
+            padding: 16px 20px;
             display: flex;
             align-items: center;
-            gap: 15px;
-            color: #fff;
-            border-bottom: 1px solid rgba(0,0,0,0.2);
+            gap: 12px;
+            color: var(--plugin-popup-color, inherit);
+            border-bottom: 1px solid var(--plugin-popup-border, var(--hsc-hairline));
         }
 
         .modal-header-icon {
-            font-size: 2.2em !important;
+            font-size: 1.5em !important;
+            color: var(--hsc-primary-text);
+            flex-shrink: 0;
         }
 
         .modal-header-title {
-            font-size: 1.5em;
-            font-weight: bold;
+            font-size: 1.05em;
+            font-weight: 600;
+            line-height: 1.3;
+            letter-spacing: -0.1px;
             margin: 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .modal-header-sub {
+            display: block;
+            margin-top: 2px;
+            font-size: 0.85em;
+            color: var(--plugin-popup-muted, inherit);
         }
 
         /* Close (X) at the right of a popup header: does what the popup's own Close/Cancel button does */
@@ -417,18 +447,21 @@
             color: inherit;
             cursor: pointer;
             padding: 4px;
-            border-radius: 50%;
+            border-radius: 8px;
             line-height: 1;
-            opacity: 0.85;
+            color: var(--plugin-popup-muted, inherit);
             display: inline-flex;
             align-items: center;
             justify-content: center;
         }
-        .modal-header-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
-        .modal-header-close .md-icon { font-size: 1.6em; }
+        .modal-header-close:hover { color: var(--plugin-popup-color, inherit); background: var(--plugin-popup-hover, var(--hsc-tint-2)); }
+        .modal-header-close .md-icon { font-size: 1.4em; }
+        /* Modal footer: hairline above, secondary first, primary last */
+        .modal-body-scroll > .hsc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--plugin-popup-border, var(--hsc-hairline)); }
 
         .modal-body-scroll {
-            padding: 30px;
+            padding: 24px;
+            overscroll-behavior: contain;
             max-height: 70vh;
             overflow-y: auto;
         }
@@ -440,15 +473,15 @@
             bottom: 20px;
             width: 44px;
             height: 44px;
-            border-radius: 50%;
-            border: none;
-            background: #52B54B;
-            color: #fff;
+            border-radius: 8px;
+            border: 1px solid var(--plugin-popup-border, var(--hsc-hairline));
+            background: var(--plugin-popup-bg2, #333);
+            color: var(--plugin-popup-color, inherit);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            box-shadow: var(--hsc-shadow-float);
             opacity: 0;
             pointer-events: none;
             transform: translateY(10px);
@@ -457,16 +490,14 @@
         }
         .hsc-back-to-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
         .hsc-back-to-top.visible.raised { transform: translateY(-56px); }
-        .hsc-back-to-top:hover { background: #3a8c34; }
+        .hsc-back-to-top:hover { background: var(--plugin-popup-hover, var(--hsc-tint-2)); }
         .hsc-back-to-top .md-icon { font-size: 1.8em; }
 
         /* Source test results */
         .stm-content { max-width: 640px; display: flex; flex-direction: column; max-height: 88vh; }
-        .stm-header { padding: 18px 20px; }
-        .stm-header .modal-header-title { font-size: 1.25em; }
-        .stm-sub { opacity: 0.85; font-size: 0.85em; display: block; margin-top: 2px; word-break: break-all; }
-        .stm-close { margin-left: auto; background: transparent; border: none; color: #fff; cursor: pointer; opacity: 0.8; padding: 4px; border-radius: 50%; line-height: 0; }
-        .stm-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .stm-sub { color: var(--plugin-popup-muted, inherit); font-size: 0.85em; display: block; margin-top: 2px; word-break: break-all; }
+        .stm-close { margin-left: auto; background: transparent; border: none; color: var(--plugin-popup-muted, inherit); cursor: pointer; padding: 4px; border-radius: 8px; line-height: 0; }
+        .stm-close:hover { color: var(--plugin-popup-color, inherit); background: var(--plugin-popup-hover, var(--hsc-tint-2)); }
         .stm-summary { padding: 16px 20px 6px; }
         .stm-bar { height: 4px; border-radius: 9999px; background: rgba(229,115,115,0.3); overflow: hidden; }
         .stm-bar-fill { height: 100%; background: var(--hsc-primary); border-radius: 9999px; transition: width 0.6s ease; }
@@ -478,9 +509,9 @@
         .stm-chip-in .md-icon { color: var(--hsc-primary-text); }
         .stm-chip-out .md-icon { color: var(--hsc-danger-text); }
         .stm-list { overflow-y: auto; padding: 6px 12px 12px; flex: 1; min-height: 120px; }
-        .stm-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; animation: stmIn 0.25s ease both; }
+        .stm-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 6px; animation: stmIn 0.25s ease both; }
         .stm-row:hover { background: var(--plugin-popup-hover, rgba(255,255,255,0.08)); }
-        .stm-rank { width: 2em; text-align: right; font-size: 0.85em; color: var(--plugin-popup-muted, #aaa); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .stm-rank { width: 2em; text-align: right; font-size: 0.85em; font-variant-numeric: tabular-nums; color: var(--plugin-popup-muted, #aaa); font-variant-numeric: tabular-nums; flex-shrink: 0; }
         .stm-poster { width: 34px; height: 50px; border-radius: 4px; flex-shrink: 0; background: var(--plugin-popup-bg2, #333) center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--plugin-popup-muted, #aaa); }
         .stm-poster .md-icon { font-size: 18px; opacity: 0.6; }
         .stm-row.missing .stm-poster { opacity: 0.55; }
@@ -496,7 +527,8 @@
         .stm-status.out { background: rgba(229,115,115,0.15); color: var(--hsc-danger-text); }
         .stm-empty { text-align: center; padding: 30px; color: var(--plugin-popup-muted, #aaa); }
         .stm-footer { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12)); font-size: 0.82em; color: var(--plugin-popup-muted, #aaa); }
-        .stm-footer button { margin-left: auto; cursor: pointer; border: none; background: #52B54B; color: #fff; border-radius: 4px; padding: 8px 20px; font-size: 1.1em; }
+        .stm-footer button { margin-left: auto; cursor: pointer; border: 1px solid var(--plugin-popup-border, var(--hsc-hairline-strong)); background: var(--hsc-tint-1); color: inherit; border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 1.05em; font-weight: 500; }
+        .stm-footer button:hover { background: var(--plugin-popup-hover, var(--hsc-tint-2)); }
         @keyframes stmIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
         /* Customise popup (generated art) */
         .artc-wrap { display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
@@ -591,9 +623,16 @@
         .log-line.log-blank { height: 0.6em; }
         .log-legend { font-size: 0.8em; opacity: 0.65; margin-left: auto; white-space: nowrap; }
         .log-legend span { margin-left: 10px; }
-        .log-tabs { display: flex; gap: 6px; padding: 10px 20px; background: #141414; border-top: 1px solid #333; }
+        .hsc-log-modal { background-color: #1a1a1a !important; color: #d0d0d0 !important; border-color: #333 !important; }
+        .hsc-log-modal .modal-header-bar { border-bottom-color: #333; color: #e8e8e8; }
+        .hsc-log-modal .modal-header-icon { color: #22b4e6; }
+        .hsc-log-modal .modal-header-sub, .hsc-log-modal .modal-header-close { color: #9a9a9a; }
+        .hsc-log-modal .modal-header-close:hover { color: #e8e8e8; background: rgba(255,255,255,0.08); }
+        .hsc-log-modal .hsc-btn-secondary { color: #e8e8e8 !important; border-color: rgba(255,255,255,0.2) !important; background: rgba(255,255,255,0.04) !important; }
+        .hsc-log-modal .hsc-btn-secondary:hover { background: rgba(255,255,255,0.08) !important; }
+        .log-tabs { display: flex; gap: 6px; padding: 10px 20px; background: #1a1a1a; border-bottom: 1px solid #333; }
         .log-tab {
-            display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 14px;
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px;
             font-size: 0.85em; cursor: pointer; border: 1px solid rgba(255,255,255,0.15);
             background: transparent; color: #bbb; font-family: inherit;
         }
@@ -607,25 +646,25 @@
         .log-tab.log-issues-toggle.active { background: rgba(230,193,90,0.18); border-color: #e6c15a; color: #e6c15a; }
 
         .help-step {
-            margin-bottom: 25px;
+            margin-bottom: 24px;
             display: flex;
-            gap: 20px;
+            gap: 16px;
         }
 
         .step-num {
-            background: var(--plugin-popup-bg2, #333);
+            background: var(--hsc-tint-3);
             color: var(--plugin-popup-color, #e8e8e8);
-            border: 2px solid #52B54B;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 9999px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
+            font-weight: 600;
             flex-shrink: 0;
-            font-size: 1.1em;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            font-size: 0.95em;
+            font-variant-numeric: tabular-nums;
         }
 
         .step-text {
@@ -660,7 +699,7 @@
             padding: 6px 10px;
             border: 1px solid var(--line-color);
             border-radius: 6px;
-            background: rgba(128,128,128,0.06);
+            background: var(--hsc-tint-1);
         }
         .help-search:focus-within { border-color: var(--hsc-primary); }
         .help-search .md-icon { opacity: 0.6; font-size: 1.2em; }
@@ -1121,16 +1160,15 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 0.82em;
-            font-weight: bold;
-            color: #52B54B;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            margin: 26px 0 12px;
-            padding-bottom: 7px;
-            border-bottom: 1px solid rgba(82,181,75,0.3);
+            font-size: 1.05em;
+            font-weight: 600;
+            letter-spacing: -0.1px;
+            color: var(--plugin-popup-color, inherit);
+            margin: 28px 0 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--plugin-popup-border, var(--hsc-hairline));
         }
-        .help-section-icon { font-size: 1.15em !important; }
+        .help-section-icon { font-size: 1.15em !important; color: var(--plugin-popup-muted, inherit); }
 
         .src-cards {
             display: grid;
@@ -1166,10 +1204,9 @@
         }
         .help-feat-icon {
             font-size: 1em !important;
-            color: #52B54B;
+            color: var(--plugin-popup-muted, inherit);
             flex-shrink: 0;
-            margin-top: 1px;
-            opacity: 0.85;
+            margin-top: 2px;
         }
         .mi-help-grid {
             display: grid;
@@ -1188,11 +1225,11 @@
         }
         .mi-help-category {
             font-weight: 600;
-            color: var(--hsc-activity-text);
+            color: var(--plugin-popup-color, inherit);
             margin-bottom: 4px;
-            font-size: 0.82em;
+            font-size: 0.75em;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
         }
         @media (max-width: 600px) {
             .src-cards, .mi-help-grid { grid-template-columns: 1fr; }
@@ -1211,8 +1248,8 @@
         }
         .ex-header {
             background: var(--plugin-popup-bg2, #333);
-            font-size: 0.8em;
-            font-weight: bold;
+            font-size: 0.75em;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.6px;
             color: var(--plugin-popup-muted, #aaa);
@@ -1237,18 +1274,16 @@
         }
         .ex-badge {
             display: inline-block;
-            border-radius: 3px;
-            padding: 1px 6px;
+            border-radius: 9999px;
+            padding: 2px 8px;
             font-size: 0.78em;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
+            font-weight: 500;
             width: fit-content;
             margin-bottom: 2px;
         }
-        .ex-easy   { background: rgba(82,181,75,0.2);  color: #52b54b; }
-        .ex-medium { background: rgba(0,164,220,0.2);  color: #00a4dc; }
-        .ex-hard   { background: rgba(220,120,0,0.2);  color: #dc7800; }
+        .ex-easy   { background: rgba(82,181,75,0.15);  color: var(--hsc-primary-text); }
+        .ex-medium { background: rgba(0,164,220,0.15);  color: var(--hsc-activity-text); }
+        .ex-hard   { background: rgba(230,193,90,0.15); color: var(--hsc-warning-text); }
         .ex-group {
             display: flex;
             flex-wrap: wrap;
@@ -1274,10 +1309,10 @@
         }
         .ex-group-connector {
             font-size: 0.75em;
-            font-weight: bold;
+            font-weight: 600;
             color: var(--plugin-popup-muted, #aaa);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
             margin: 2px 0;
             padding-left: 2px;
         }
@@ -1287,7 +1322,7 @@
             color: var(--plugin-popup-color, #e8e8e8);
             border-radius: 4px;
             padding: 1px 7px;
-            font-family: monospace;
+            font-family: ui-monospace, Consolas, Menlo, monospace;
             font-size: 0.9em;
         }
 
@@ -1787,11 +1822,11 @@
 
     <div id="bugReportModalOverlay" class="modal-backdrop">
         <div class="modal-content" style="max-width:560px;">
-            <div class="modal-header-bar" style="background:linear-gradient(135deg,#b71c1c 0%,#c62828 100%);">
+            <div class="modal-header-bar">
                 <i class="md-icon modal-header-icon">bug_report</i>
                 <div>
                     <h2 class="modal-header-title">Report a Bug</h2>
-                    <span style="opacity:0.9;font-size:0.9em;">Help us improve Home Screen Companion</span>
+                    <span class="modal-header-sub">Help us improve Home Screen Companion</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseBugReport" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
@@ -1801,38 +1836,38 @@
                     A <strong>bug</strong> is when the plugin behaves in an unexpected or incorrect way — for example items not being tagged, a home screen section not updating, or an error appearing in the logs.
                 </p>
 
-                <div style="background:rgba(82,181,75,0.08);border:1px solid rgba(82,181,75,0.35);border-radius:6px;padding:14px 16px;margin-bottom:16px;">
+                <div style="background:var(--hsc-tint-1);border:1px solid var(--plugin-popup-border);border-radius:8px;padding:16px;margin-bottom:12px;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                        <svg viewBox="0 0 16 16" width="1.3em" height="1.3em" style="vertical-align:middle;color:#52B54B;" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                        <svg viewBox="0 0 16 16" width="1.3em" height="1.3em" style="vertical-align:middle;" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
                         <strong style="font-size:1em;">Preferred: GitHub Issues</strong>
                     </div>
                     <p style="margin:0 0 10px;font-size:0.9em;line-height:1.6;">If you have a GitHub account, please report there. It gives the best visibility and lets you track progress on your report.</p>
                     <a href="https://github.com/soderlund91/HomeScreenCompanion/issues" target="_blank"
-                       style="display:inline-flex;align-items:center;gap:7px;background:#52B54B;color:#fff;padding:7px 16px;border-radius:4px;text-decoration:none;font-size:0.88em;font-weight:500;">
+                       style="display:inline-flex;align-items:center;gap:7px;background:var(--hsc-primary);color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:0.88em;font-weight:500;">
                         <i class="md-icon" style="font-size:1em;">open_in_new</i>Open GitHub Issues
                     </a>
                 </div>
 
-                <div style="background:rgba(0,164,220,0.07);border:1px solid rgba(0,164,220,0.3);border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+                <div style="background:var(--hsc-tint-1);border:1px solid var(--plugin-popup-border);border-radius:8px;padding:16px;margin-bottom:16px;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                        <i class="md-icon" style="color:#00a4dc;font-size:1.3em;">forum</i>
+                        <i class="md-icon" style="font-size:1.3em;">forum</i>
                         <strong style="font-size:1em;">Alternative: Emby Community Forum</strong>
                     </div>
                     <p style="margin:0 0 10px;font-size:0.9em;line-height:1.6;">No GitHub account? You can also post in the plugin's dedicated thread on the Emby forum.</p>
                     <a href="https://emby.media/community/topic/146080-plugin-home-screen-companion/" target="_blank"
-                       style="display:inline-flex;align-items:center;gap:7px;background:#00a4dc;color:#fff;padding:7px 16px;border-radius:4px;text-decoration:none;font-size:0.88em;font-weight:500;">
+                       style="display:inline-flex;align-items:center;gap:7px;background:var(--hsc-tint-1);border:1px solid var(--hsc-hairline-strong);color:inherit;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:0.88em;font-weight:500;">
                         <i class="md-icon" style="font-size:1em;">open_in_new</i>Open Emby Forum Thread
                     </a>
                 </div>
 
-                <div style="background:rgba(128,128,128,0.06);border:1px solid var(--line-color);border-radius:6px;padding:12px 14px;font-size:0.85em;line-height:1.7;color:var(--theme-text-secondary);">
+                <div class="info-box" style="margin-top:0;line-height:1.7;color:var(--plugin-popup-muted);">
                     <strong style="color:var(--theme-text);">Tips for a useful bug report:</strong><br>
                     • What did you expect to happen, and what happened instead?<br>
                     • Which source type and settings were you using?<br>
                     • Copy the relevant lines from the <strong>Logs</strong> (enable <em>Extended log</em> in Settings first if needed).
                 </div>
 
-                <div style="text-align:right;margin-top:20px;">
+                <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseBugReport" class="raised hsc-btn-secondary">Close</button>
                 </div>
             </div>
@@ -1840,12 +1875,12 @@
     </div>
 
     <div id="logModalOverlay" class="modal-backdrop">
-        <div class="modal-content" style="max-width: 850px; width: 95%;">
-            <div class="modal-header-bar" style="background: #222;">
-                <i class="md-icon modal-header-icon" style="color: #00a4dc;">terminal</i>
+        <div class="modal-content hsc-log-modal" style="max-width: 850px; width: 95%;">
+            <div class="modal-header-bar">
+                <i class="md-icon modal-header-icon">terminal</i>
                 <div>
                     <h2 class="modal-header-title">Live Execution Log</h2>
-                    <span style="opacity:0.7; font-size:0.85em;">Showing the latest run of the selected task — updates every few seconds</span>
+                    <span class="modal-header-sub">Showing the latest run of the selected task — updates every few seconds</span>
                 </div>
                 <div class="log-legend">
                     <span style="color:#7ec97e;">✔ ok</span>
@@ -1861,9 +1896,9 @@
                 <button type="button" class="log-tab" data-log="tl"><span class="status-dot"></span>Top-list<span class="log-tab-time"></span></button>
                 <button type="button" class="log-tab log-issues-toggle" id="btnLogIssuesOnly" title="Show only warnings and errors, each under its group"><i class="md-icon" style="font-size:1.1em;">warning</i>Warnings &amp; errors only</button>
             </div>
-            <div class="modal-body-scroll" style="background: #0a0a0a; color: #ececec; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; padding: 20px; border-top: 1px solid #333;" id="logContent">
+            <div class="modal-body-scroll" style="background: #1a1a1a; color: #d0d0d0; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 0.85em; padding: 16px 20px;" id="logContent">
             </div>
-            <div style="text-align:right; padding: 15px; background: #1a1a1a; border-top: 1px solid #333;">
+            <div style="text-align:right; padding: 12px 20px; background: #1a1a1a; border-top: 1px solid #333;">
                 <button is="emby-button" type="button" id="btnCloseLogs" class="raised hsc-btn-secondary">Close</button>
             </div>
         </div>
@@ -1875,15 +1910,15 @@
                 <i class="md-icon modal-header-icon">school</i>
                 <div>
                     <h2 class="modal-header-title">Home Screen Companion — Setup Guide</h2>
-                    <span style="opacity:0.9; font-size:0.9em;">All features at a glance</span>
+                    <span class="modal-header-sub">All features at a glance</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll">
 
                 <!-- PLUGIN INTRO -->
-                <div style="background:rgba(82,181,75,0.08);border:1px solid rgba(82,181,75,0.3);border-radius:6px;padding:12px 16px;margin-bottom:20px;font-size:0.92em;line-height:1.6;">
-                    <strong style="color:#52B54B;">What does this plugin do?</strong><br>
+                <div class="info-box" style="margin:0 0 20px;padding:12px 16px;font-size:0.92em;line-height:1.6;">
+                    <strong>What does this plugin do?</strong><br>
                     Home Screen Companion keeps your Emby home screen up to date automatically. Each <strong>source</strong> is a list of movies and shows: from a site like Trakt, MDBList or TMDb, from your own collections and playlists, picked by hand, built by filters on your files, written by an AI, or worked out per user from what they watch (<em>Your Next Watch</em>).
                     <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7;">
                         <li>The plugin finds those titles in your library and keeps them up to date as a <strong>tag</strong>, an Emby <strong>collection</strong> and/or a <strong>playlist</strong> per user.</li>
@@ -1903,7 +1938,7 @@
                 </div>
 
                 <!-- NAV MENU -->
-                <nav style="background:rgba(128,128,128,0.06);border:1px solid var(--line-color);border-radius:6px;padding:10px 16px;margin-bottom:20px;">
+                <nav style="background:var(--hsc-tint-1);border:1px solid var(--plugin-popup-border);border-radius:6px;padding:12px 16px;margin-bottom:20px;">
                     <div class="hsc-eyebrow" style="margin-bottom:8px;">Contents</div>
                     <ol style="margin:0;padding:0 0 0 18px;column-count:2;column-gap:28px;">
                         <li><a href="javascript:void(0)" class="help-nav-link hsc-open-quickstart">Quick Start</a></li>
@@ -1935,27 +1970,27 @@
                 <div class="step-text" style="margin-bottom:12px;font-size:0.92em;">A <strong>source</strong> is where the plugin gets its list of movies or shows. Each source is linked to a <strong>tag</strong> — once the plugin has fetched the list, it marks matching titles in your Emby library with that tag. Choose the source type that suits how you want to build your list:</div>
                 <div class="src-cards">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">public</i> External</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">public</i> External</div>
                         Paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong> or <strong>TMDb</strong>; the plugin downloads the list and tags every matching title it finds in your library. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-external').scrollIntoView({behavior:'smooth'});return false;">More about External below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">video_library</i> Local</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">video_library</i> Local</div>
                         Use an existing <strong>playlist</strong> or <strong>collection</strong> already in Emby as the source; every movie and show in it gets the configured tag. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-local').scrollIntoView({behavior:'smooth'});return false;">More about Local below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">format_list_numbered</i> Manual List</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">format_list_numbered</i> Manual List</div>
                         Pick <strong>movies and shows</strong> by hand, right inside the plugin, in the order you want. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-manual').scrollIntoView({behavior:'smooth'});return false;">More about Manual List below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> MediaInfo (Smart Playlist)</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">tune</i> MediaInfo (Smart Playlist)</div>
                         Build a list from the properties of your own files, e.g. "all 4K HDR movies" — including <strong>Popular on this server</strong>: most-watched titles by number of viewers. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-mediainfo').scrollIntoView({behavior:'smooth'});return false;">More about MediaInfo below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">auto_awesome</i> AI created lists</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">auto_awesome</i> AI created lists</div>
                         Describe what you want in plain language — for example <em>"Best sci-fi films from the 90s"</em> — and let <strong>Anthropic Claude</strong>, <strong>Google Gemini</strong>, <strong>OpenAI (ChatGPT)</strong> or a local <strong>Ollama</strong> model write the list. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ai').scrollIntoView({behavior:'smooth'});return false;">More about AI lists below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">recommend</i> Personal: Your Next Watch</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">recommend</i> Personal: Your Next Watch</div>
                         Personal recommendations, worked out on your server (no AI, no internet): every ticked user gets their own playlist of unwatched titles most like what they have been watching, refreshed on every sync. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2b').scrollIntoView({behavior:'smooth'});return false;"><em>Your Next Watch</em> below</a> for how it picks and how to set it up.
                     </div>
                 </div>
@@ -2127,11 +2162,11 @@
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(2, 1fr); margin-bottom:10px;">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">play_arrow</i> Run Group</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">play_arrow</i> Run Group</div>
                         Syncs just this source. If you have unsaved changes, it first asks <em>You have unsaved changes. Save and run?</em> — choose OK to save them and run the group, or Cancel to do neither. If you renamed the tag, the run also removes the old tag from your items. A source saved without a URL yet (or with no collection or playlist picked) is skipped by Run Group and the full sync: its tags, collection, playlist and home row stay as they are. Clicked while another sync is busy, Run Group says <em>Queued</em> and starts as soon as that sync has finished.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">delete</i> Remove Group</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">delete</i> Remove Group</div>
                         Asks <em>Delete "&lt;name&gt;"?</em> with the source's name. The card goes at once, but nothing is deleted until you click <strong>Save Settings</strong>. Changed your mind before saving? Reload the page and click <em>Discard</em> in the <em>Unsaved changes restored</em> bar. Saving only removes the source from the settings; what it made in Emby is cleaned up by the runs after that:
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>Its <strong>tag</strong> (taken off every title), its <strong>home rows</strong> and its users' <strong>playlists</strong> go on the next full sync, or the next <em>Run Group</em> of any source.</li>
@@ -2143,31 +2178,31 @@
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">input</i> Source tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">input</i> Source tab</div>
                         Choose the source type and add URLs, local sources, or hand-picked titles. Set the <strong>Max items</strong> limit to cap how many items are fetched (0 = no limit). When the last run found fewer titles than <strong>Max items</strong>, the card header shows an amber chip such as <strong>9 of 10</strong>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">label</i> Tag tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">label</i> Tag tab</div>
                         Tick <em>Apply Tag</em> to put an invisible label (the <strong>Tag Name</strong>) on every matched item. Renamed and deleted tags are cleaned up, and the tag's page can get its own art. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-tagtab').scrollIntoView({behavior:'smooth'});return false;">More about the Tag tab below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">collections_bookmark</i> Collection tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">collections_bookmark</i> Collection tab</div>
                         Optionally group the matched items into an Emby collection with a custom name, description, poster and background. Upload your own art or let the plugin draw it in a style you pick. Enable <em>Only Collection</em> to skip tagging and only maintain the collection.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">queue_music</i> Playlist tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">queue_music</i> Playlist tab</div>
                         Keep an Emby playlist of the matched items, in the source's order, for each user you tick — with an optional shared poster, background and description (<strong>Playlist look</strong>). <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-playlisttab').scrollIntoView({behavior:'smooth'});return false;">More about the Playlist tab below</a>.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">calendar_month</i> Schedule tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">calendar_month</i> Schedule tab</div>
                         Limit when this source is active — for example only between certain dates, on specific recurring days, around a date that moves every year (like Easter), or at a time of day. Ready-made <em>Holiday presets</em> add a rule in one click. Add a <em>Priority Override</em> to make this source take over from other sources that share the same tag when it is active.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">block</i> Blacklist tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">block</i> Blacklist tab</div>
                         IMDb ids, one per line (e.g. <code>tt1234567</code>), that this source always leaves out, whatever the list says: they get no tag and are kept out of its collection and playlists. Works for every source type; a title without an IMDb id cannot be blacklisted.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tv</i> Home Screen tab</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">tv</i> Home Screen tab</div>
                         Show this source as a home screen row for the users you tick — a collection, a tag row or each user's own playlist — updated on every sync. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-hometab').scrollIntoView({behavior:'smooth'});return false;">More about the Home Screen tab below</a>.
                     </div>
                 </div>
@@ -2278,11 +2313,11 @@
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">sort_by_alpha</i> Sort Title</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">sort_by_alpha</i> Sort Title</div>
                         Optional. Used instead of the name when collections are sorted by name, e.g. "001" to show this collection first. Leave it empty to sort by the collection name; a sort title set in Emby by hand is never touched.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">format_list_numbered</i> Keep the list order — movies only (experimental)</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">format_list_numbered</i> Keep the list order — movies only (experimental)</div>
                         The collection opens in the order of the list instead of Emby's own order, using hidden ranked copies of the films. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">More about keeping the list order below</a>.
                     </div>
                 </div>
@@ -2477,15 +2512,15 @@
                 </div>
                 <div class="src-cards" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">palette</i> Badge style &amp; Max items</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">palette</i> Badge style &amp; Max items</div>
                         Pick how the rank number looks, for movie and show lists alike: a number badge in one of six colours (<em>Neutral</em>, <em>Slate grey</em>, <em>Emby green</em>, <em>Ocean blue</em>, <em>Soft red</em>, <em>Violet</em>), <em>No number</em>, or <em>Top 10 tile</em>. <em>Top 10 tile</em> draws a big outlined number beside the poster on a flat background in the colour of Emby's dark theme, so the row reads as one strip, like Netflix. On a lighter or black theme the tile edges show faintly. <strong>Max items</strong> limits how many titles the list shows (0 = all). <strong>Card size</strong> works as on the Home Screen tab: <em>Smaller</em> fits more tiles on screen.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">tune</i> Customise the Top 10 tile</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">tune</i> Customise the Top 10 tile</div>
                         With <em>Top 10 tile</em> selected, <em>⚙ Customise</em> under the badge choices opens a popup with a live preview (rank 7 on a stand-in poster): the number's font, style and colours, where it sits, the tile background, medal colours, a #1 special and extras (rank movement, weeks in list, plays, a red TOP 10 logo). <em>Layout</em> puts each extra that is on in its own spot: a corner or the bottom centre of the poster, or the top left of the number area; picking a taken spot swaps the two. Emby draws its own unplayed count (shows) or ✓ (watched movies) in the tile's top-right corner, and the preview shows a sample of it. <em>Beside Emby's count</em> / <em>✓</em> moves an extra in the top-right spot just left of it; on by default for show lists. <em>Reset</em> goes back to the standard tile. Nothing changes until you press <em>OK</em> and then <em>Save</em>; the next sync redraws the list. The colour badges and <em>No number</em> have nothing to customise. Lists with a Popular rule compare with where each title stood one week ago; other lists compare with the previous run.
                     </div>
                     <div class="src-card">
-                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:#52B54B;">verified</i> Real posters</div>
+                        <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">verified</i> Real posters</div>
                         Tick <em>Badge the real posters too</em> to put a red TOP 10 square on each listed title's own poster everywhere in Emby. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-realposters').scrollIntoView({behavior:'smooth'});return false;">More about real posters below</a>.
                     </div>
                 </div>
@@ -2717,7 +2752,7 @@
                     <div><strong>Still stuck?</strong> Turn on <em>Extended log</em>, run again and click <strong>Report a Bug</strong> at the top of the page: it links to GitHub Issues and the plugin's Emby forum thread. Say what you expected, what happened, the source type and settings, and copy the relevant log lines.</div>
                 </div>
 
-                <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
+                <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseHelp" class="raised button-submit hsc-btn-secondary">Close Guide</button>
                 </div>
 
@@ -2732,7 +2767,7 @@
                 <i class="md-icon modal-header-icon">rocket_launch</i>
                 <div>
                     <h2 class="modal-header-title">Quick Start</h2>
-                    <span style="opacity:0.9; font-size:0.9em;">From a list to a row on the home screen</span>
+                    <span class="modal-header-sub">From a list to a row on the home screen</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseQuickStart" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
@@ -2813,21 +2848,21 @@
                         (this is just a required placeholder — don't visit that address).
                         Click Save, then copy the <em>Client ID</em> and paste it here.
                     </div>
-                    <div style="border-top:1px dashed #444; padding-top:10px; margin-bottom:10px;">
+                    <div style="border-top:1px solid var(--plugin-popup-border); padding-top:10px; margin-bottom:10px;">
                         <strong>MDBList:</strong> Only needed for private lists; public lists work without it. Go to <a href="https://mdblist.com/preferences/" target="_blank" class="help-link">mdblist.com/preferences</a>,
                         scroll down to the <em>API Access</em> section, and copy your API key.
                     </div>
-                    <div style="border-top:1px dashed #444; padding-top:10px; margin-bottom:10px;">
+                    <div style="border-top:1px solid var(--plugin-popup-border); padding-top:10px; margin-bottom:10px;">
                         <strong>TMDb:</strong> Needed for every TMDb source, public lists too. Go to <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a>,
                         scroll to <em>API Read Access Token</em>, and copy the long token — not the short API Key above it.
                     </div>
-                    <div style="border-top:1px dashed #444; padding-top:10px;">
+                    <div style="border-top:1px solid var(--plugin-popup-border); padding-top:10px;">
                         <strong>OpenAI / Gemini:</strong> Only needed if you want to use the <em>AI created lists</em> source type.
                         API key fields are hidden by default — tick the <em>Show</em> checkbox next to each field to see what you've entered.
                     </div>
                 </div>
 
-                <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #333;">
+                <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseQuickStart" class="raised button-submit hsc-btn-secondary">Close</button>
                 </div>
 
@@ -2837,20 +2872,20 @@
 
     <div id="artCustomiseModalOverlay" class="modal-backdrop">
         <div class="modal-content" style="max-width:900px; width:96%;">
-            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+            <div class="modal-header-bar">
                 <i class="md-icon modal-header-icon">settings</i>
                 <div>
                     <h2 class="modal-header-title artc-title">Customise</h2>
-                    <span class="artc-subtitle" style="opacity:0.9;font-size:0.9em;"></span>
+                    <span class="artc-subtitle modal-header-sub"></span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnArtcCancel" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll" style="padding:18px 24px;">
                 <div class="artc-body"></div>
-                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
-                    <button is="emby-button" type="button" class="btnArtcReset raised btn-neutral" style="margin-right:auto;background:transparent;border:1px solid rgba(128,128,128,0.35);color:var(--theme-text-secondary);">Reset</button>
-                    <button is="emby-button" type="button" class="btnArtcCancel raised btn-neutral" style="background:transparent;border:1px solid rgba(128,128,128,0.35);color:var(--theme-text-secondary);">Cancel</button>
-                    <button is="emby-button" type="button" class="btnArtcOk raised button-submit" style="background:#00a4dc;color:white;padding:0 25px;">OK</button>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--plugin-popup-border);">
+                    <button is="emby-button" type="button" class="btnArtcReset raised btn-neutral" style="margin-right:auto;">Reset</button>
+                    <button is="emby-button" type="button" class="btnArtcCancel raised btn-neutral">Cancel</button>
+                    <button is="emby-button" type="button" class="btnArtcOk raised button-submit hsc-btn-primary">OK</button>
                 </div>
             </div>
         </div>
@@ -2858,17 +2893,17 @@
 
     <div id="miPreviewModalOverlay" class="modal-backdrop">
         <div class="modal-content" style="max-width:640px; width:95%;">
-            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+            <div class="modal-header-bar">
                 <i class="md-icon modal-header-icon">visibility</i>
                 <div>
                     <h2 class="modal-header-title">Preview</h2>
-                    <span class="mi-preview-subtitle" style="opacity:0.9;font-size:0.9em;">What this source would tag right now</span>
+                    <span class="mi-preview-subtitle modal-header-sub">What this source would tag right now</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseMiPreview" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
             <div class="modal-body-scroll" style="padding:20px 24px;">
                 <div class="mi-preview-body"></div>
-                <div style="text-align:right;margin-top:20px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
+                <div style="text-align:right;margin-top:20px;padding-top:16px;border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseMiPreview" class="raised button-submit hsc-btn-secondary">Close</button>
                 </div>
             </div>
@@ -2877,11 +2912,11 @@
 
     <div id="miHelpModalOverlay" class="modal-backdrop">
         <div class="modal-content" style="max-width:700px; width:95%;">
-            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+            <div class="modal-header-bar">
                 <i class="md-icon modal-header-icon">filter_list</i>
                 <div>
                     <h2 class="modal-header-title">Local Media Information — Filter Guide</h2>
-                    <span style="opacity:0.9;font-size:0.9em;">How the smart filter rules work</span>
+                    <span class="modal-header-sub">How the smart filter rules work</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseMiHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
@@ -3088,7 +3123,7 @@
                     </div>
                 </div>
 
-                <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
+                <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseMiHelp" class="raised button-submit hsc-btn-secondary">Got it</button>
                 </div>
             </div>
@@ -3097,11 +3132,11 @@
 
     <div id="tagTargetHelpModalOverlay" class="modal-backdrop">
         <div class="modal-content" style="max-width:600px; width:95%;">
-            <div class="modal-header-bar" style="background:linear-gradient(135deg,#00a4dc 0%,#007ba8 100%);">
+            <div class="modal-header-bar">
                 <i class="md-icon modal-header-icon">label</i>
                 <div>
                     <h2 class="modal-header-title">Tag &amp; Collection Target Level</h2>
-                    <span style="opacity:0.9;font-size:0.9em;">How Series, Season and Episode targeting works</span>
+                    <span class="modal-header-sub">How Series, Season and Episode targeting works</span>
                 </div>
                 <button type="button" class="modal-header-close" data-close="btnCloseTagTargetHelp" aria-label="Close" title="Close"><i class="md-icon">close</i></button>
             </div>
@@ -3124,7 +3159,7 @@
                 <div class="help-section"><i class="md-icon help-section-icon">lightbulb</i>Tip</div>
                 <div class="help-feature-row" style="margin-bottom:0;"><i class="md-icon help-feat-icon">info</i><div>To target a specific episode or season, add <b>MediaType:Episode</b> in the Source filter. Without it, the source returns whole series and all levels expand from there.</div></div>
 
-                <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--line-color,rgba(128,128,128,0.3));">
+                <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--plugin-popup-border);">
                     <button is="emby-button" type="button" id="btnCloseTagTargetHelp" class="raised button-submit hsc-btn-secondary">Got it</button>
                 </div>
             </div>

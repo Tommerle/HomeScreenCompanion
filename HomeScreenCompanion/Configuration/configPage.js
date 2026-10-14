@@ -83,8 +83,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<p style="' + _backupHintStyle + '">Settings were changed elsewhere since you opened this page (another tab, another admin, or a run). Saving now would overwrite those changes, so nothing was saved.</p>' +
             '<p style="' + _backupHintStyle + '"><strong>Reload page</strong> shows the current settings and discards your unsaved changes here. <strong>Cancel</strong> keeps editing (note your changes, reload, then make them again).</p>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">' +
-            '<button type="button" class="btnConflictCancel" style="' + _backupBtnSecondary + '">Cancel</button>' +
-            '<button type="button" class="btnConflictReload" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">refresh</i>Reload page</button>' +
+            '<button type="button" class="btnConflictCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="btnConflictReload hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">refresh</i>Reload page</button>' +
             '</div>'
         );
         modal.querySelector('.btnConflictCancel').addEventListener('click', modal.close);
@@ -1272,7 +1272,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return '<div class="coll-style-picker" data-kind="' + kind + '" data-scope="' + (scope || 'collection') + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
             COLLECTION_ART_STYLES.filter(function (o) { return (!isKeepArtStyle(o[0]) || showKeep) && (kind !== 'banner' || !isGenArtStyle(o[0])); }).map(function (o) {
                 var active = o[0] === sel;
-                return '<label class="coll-style-opt" style="' + cardBase + 'border-color:' + (active ? '#52B54B' : 'var(--line-color,rgba(255,255,255,0.12))') + ';">' +
+                return '<label class="coll-style-opt" style="' + cardBase + 'border-color:' + (active ? 'var(--hsc-primary)' : 'var(--line-color,rgba(255,255,255,0.12))') + ';">' +
                     '<input type="radio" name="' + name + '" value="' + o[0] + '" style="position:absolute;opacity:0;pointer-events:none;"' + (active ? ' checked' : '') + '>' +
                     (isGenArtStyle(o[0])
                         ? '<img class="coll-style-thumb" data-kind="' + kind + '" data-style="' + o[0] + '" alt="" style="' + thumb + 'border-radius:4px;object-fit:cover;background:rgba(128,128,128,0.15);display:block;" />'
@@ -1737,22 +1737,22 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var body = o.removed.length
             ? heading('Will also be removed') + list(o.removed, '#cc3333')
             : '<div style="opacity:0.75;margin-top:8px;">' + o.empty + '</div>';
-        if (o.kept && o.kept.length) body += heading('Kept') + list(o.kept, '#52B54B');
+        if (o.kept && o.kept.length) body += heading('Kept') + list(o.kept, 'var(--hsc-primary)');
         body += '<div style="font-size:0.82em;opacity:0.65;margin-top:16px;line-height:1.5;">' + o.note + '</div>';
 
         var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML =
-            '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;padding:24px 28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;">' +
+            '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;padding:24px 28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
-            '<h3 style="margin:0;font-size:1.1em;">' + o.title + '</h3>' +
-            '<button type="button" class="dgClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+            '<h3 style="margin:0;font-size:1.05em;font-weight:600;">' + o.title + '</h3>' +
+            '<button type="button" class="dgClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
             '</div>' +
             (o.subtitle ? '<div style="font-size:0.82em;opacity:0.6;margin-top:2px;">' + o.subtitle + '</div>' : '') +
             body +
             '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;border-top:1px solid var(--line-color);padding-top:16px;">' +
-            '<button type="button" class="dgCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
-            '<button type="button" class="dgDelete" style="cursor:pointer;border:none;background:#cc3333;color:#fff;border-radius:3px;padding:8px 18px;font-size:0.9em;font-weight:500;"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:5px;">delete</i>' + o.button + '</button>' +
+            '<button type="button" class="dgCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="dgDelete hsc-mbtn hsc-btn-danger-fill"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:5px;">delete</i>' + o.button + '</button>' +
             '</div></div>';
         function close() { modal.remove(); document.removeEventListener('keydown', onKey); }
         function onKey(e) { if (e.key === 'Escape') close(); }
@@ -4154,7 +4154,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             opts.forEach(function (label) {
                 label.addEventListener('click', function () {
                     opts.forEach(function (l) { l.style.borderColor = 'var(--line-color,rgba(255,255,255,0.12))'; });
-                    label.style.borderColor = '#52B54B';
+                    label.style.borderColor = 'var(--hsc-primary)';
                 });
             });
             picker.addEventListener('change', picker.dataset.scope === 'tag' ? syncTagArt : picker.dataset.scope === 'playlist' ? syncPlArt : syncCollArt);
@@ -4511,7 +4511,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div class="stm-summary">' +
                     '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
                         '<span><strong style="font-size:1.4em;">' + inCount + '</strong> <span style="opacity:0.7;">of ' + items.length + ' in your library</span></span>' +
-                        '<span style="font-weight:bold;color:' + (pct >= 50 ? '#52B54B' : '#e6c15a') + ';">' + pct + '%</span>' +
+                        '<span style="font-weight:bold;color:' + (pct >= 50 ? 'var(--hsc-primary)' : '#e6c15a') + ';">' + pct + '%</span>' +
                     '</div>' +
                     '<div class="stm-bar"><div class="stm-bar-fill" style="width:0%"></div></div>' +
                     '<div class="stm-filters">' +
@@ -4855,8 +4855,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // users without / with a parental rating limit.
     function userSelectLinksInnerHtml() {
         return '<span style="opacity:0.6;">Select only:</span>' +
-            '<a href="#" class="hsc-user-select-unrestricted" style="color:#52B54B;" title="Select only users without a parental rating limit">Unrestricted</a>' +
-            '<a href="#" class="hsc-user-select-restricted" style="color:#52B54B;" title="Select only users with a parental rating limit">Restricted</a>';
+            '<a href="#" class="hsc-user-select-unrestricted" style="color:var(--hsc-primary-text);" title="Select only users without a parental rating limit">Unrestricted</a>' +
+            '<a href="#" class="hsc-user-select-restricted" style="color:var(--hsc-primary-text);" title="Select only users with a parental rating limit">Restricted</a>';
     }
 
     // Applies one of the quick picks to a list of user checkboxes (never the Select all box); one
@@ -6790,31 +6790,31 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var tagList = Object.values(pendingTagDeletes);
                     var collList = Object.values(pendingCollDeletes);
                     var tagSection = tagList.length > 0
-                        ? '<div style="margin-bottom:20px;"><h4 style="margin:0 0 8px;color:#52B54B;">Tags to remove (' + tagList.length + ')</h4>' + buildRows(tagList, true) + '</div>'
+                        ? '<div style="margin-bottom:20px;"><h4 style="margin:0 0 8px;font-weight:600;">Tags to remove (' + tagList.length + ')</h4>' + buildRows(tagList, true) + '</div>'
                         : '';
                     var collSection = collList.length > 0
-                        ? '<div style="margin-bottom:20px;"><h4 style="margin:0 0 8px;color:#52B54B;">Collections to remove (' + collList.length + ')</h4>' + buildRows(collList, false) + '</div>'
+                        ? '<div style="margin-bottom:20px;"><h4 style="margin:0 0 8px;font-weight:600;">Collections to remove (' + collList.length + ')</h4>' + buildRows(collList, false) + '</div>'
                         : '';
                     return tagSection + collSection;
                 }
 
                 var modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
                 function renderModal() {
                     var tagList = Object.values(pendingTagDeletes);
                     var collList = Object.values(pendingCollDeletes);
                     if (tagList.length === 0 && collList.length === 0) { modal.remove(); updateSaveButton(); return; }
                     modal.innerHTML =
-                        '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;padding:28px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">' +
+                        '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;padding:28px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">' +
                         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
-                        '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">Summary — Pending changes</h3>' +
-                        '<button type="button" id="tcModalClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+                        '<h3 style="margin:0;font-size:1.05em;font-weight:600;">Summary — Pending changes</h3>' +
+                        '<button type="button" id="tcModalClose" class="hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
                         '</div>' +
                         '<div id="tcModalBody">' + buildContent() + '</div>' +
                         '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;border-top:1px solid var(--line-color);padding-top:16px;">' +
-                        '<button type="button" id="tcModalCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
-                        '<button type="button" id="tcModalConfirm" style="cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:3px;padding:8px 18px;font-size:0.9em;font-weight:500;"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:5px;">check</i>Confirm &amp; Save</button>' +
+                        '<button type="button" id="tcModalCancel" class="hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+                        '<button type="button" id="tcModalConfirm" class="hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:5px;">check</i>Confirm &amp; Save</button>' +
                         '</div></div>';
 
                     modal.querySelector('#tcModalCancel').addEventListener('click', function () { modal.remove(); });
@@ -7293,13 +7293,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var innerBox = ui.innerBox || modal.querySelector('div');
             innerBox.innerHTML =
                 '<div style="text-align:center;padding:10px 0 20px;">' +
-                '<i class="md-icon" style="font-size:2.5em;color:#52B54B;display:block;margin-bottom:12px;">check_circle</i>' +
+                '<i class="md-icon" style="font-size:2.5em;color:var(--hsc-primary-text);display:block;margin-bottom:12px;">check_circle</i>' +
                 '<p style="margin:0 0 6px;font-size:1.05em;font-weight:500;">Top-list created!</p>' +
                 '<p style="margin:0;opacity:0.65;font-size:0.9em;">' + prepareResult.FilesCreated + (isShows ? ' show' : ' movie') + (prepareResult.FilesCreated !== 1 ? 's' : '') + ' included.</p>' +
                 '<p style="margin:8px 0 0;opacity:0.5;font-size:0.82em;font-style:italic;">Finishing touches will continue in the background.</p>' +
                 '</div>' +
                 '<div style="display:flex;justify-content:center;padding-top:16px;border-top:1px solid var(--line-color);margin-top:20px;">' +
-                '<button type="button" class="btnTlmDone" style="cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:3px;padding:8px 22px;font-size:0.9em;font-weight:500;">Close</button>' +
+                '<button type="button" class="btnTlmDone hsc-mbtn hsc-btn-primary">Close</button>' +
                 '</div>';
             innerBox.querySelector('.btnTlmDone').addEventListener('click', function () {
                 if (typeof ui.closeHandler === 'function') { ui.closeHandler(); }
@@ -7347,7 +7347,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var sel = selectedVal || 'neutral';
         var esc = function (v) { return String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
         var cardBase = 'cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;border:2px solid transparent;transition:border-color 0.15s;';
-        var cardActive = cardBase + 'border-color:#52B54B;';
+        var cardActive = cardBase + 'border-color:var(--hsc-primary-text);';
         var cardInactive = cardBase + 'border-color:var(--line-color,rgba(255,255,255,0.12));';
         var tileSel = sel === 'top10';
         // Same Customise chip as the art pickers, under the tiles (Top 10 tile only).
@@ -7552,7 +7552,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         opts.forEach(function (label) {
             label.addEventListener('click', function () {
                 opts.forEach(function (l) { l.style.borderColor = 'var(--line-color,rgba(255,255,255,0.12))'; });
-                label.style.borderColor = '#52B54B';
+                label.style.borderColor = 'var(--hsc-primary)';
             });
         });
         // One Customise button: the Top 10 tile's popup; greyed for the presets and No number.
@@ -8048,12 +8048,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var fieldStyle = 'margin-bottom:16px;';
 
         var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
         function renderBox(content) {
             modal.innerHTML =
                 '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
-                'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;' +
+                'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
                 'padding:28px;max-width:520px;width:90%;max-height:85vh;overflow-y:auto;">' +
                 content + '</div>';
         }
@@ -8071,8 +8071,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             var html =
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">' +
-                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">' + (existingData ? 'Edit' : 'Create') + (isShows ? ' TV Show' : '') + ' Top-List: ' + escHtml(displayName) + '</h3>' +
-                '<button type="button" class="btnTlmClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+                '<h3 style="margin:0;font-size:1.05em;font-weight:600;">' + (existingData ? 'Edit' : 'Create') + (isShows ? ' TV Show' : '') + ' Top-List: ' + escHtml(displayName) + '</h3>' +
+                '<button type="button" class="btnTlmClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
                 '</div>' +
                 (prefill ? sourceNoticesHtml(prefill.notices) : '') +
 
@@ -8115,8 +8115,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 '<div class="tlm-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
-                '<button type="button" class="btnTlmCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
-                '<button type="button" class="btnTlmSave" style="cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:4px;padding:10px 26px;font-size:0.95em;font-weight:600;">' +
+                '<button type="button" class="btnTlmCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+                '<button type="button" class="btnTlmSave hsc-mbtn hsc-btn-primary">' +
                 '<i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">check</i>Save and apply</button>' +
                 '</div>';
 
@@ -8182,7 +8182,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
         }).catch(function (err) {
             renderBox('<div style="color:#cc3333;padding:10px 0;">Failed to load: ' + (err.message || err) + '</div>' +
-                '<div style="margin-top:16px;text-align:right;"><button type="button" class="btnTlmClose" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:inherit;border-radius:3px;padding:6px 14px;font-size:0.9em;">Close</button></div>');
+                '<div style="margin-top:16px;text-align:right;"><button type="button" class="btnTlmClose hsc-mbtn hsc-btn-secondary">Close</button></div>');
             modal.querySelector('.btnTlmClose').addEventListener('click', function () { modal.remove(); });
         });
     }
@@ -8211,10 +8211,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var colHeaderStyle = 'font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;opacity:0.7;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--plugin-popup-border, var(--hsc-hairline));';
 
         var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML =
             '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
-            'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;' +
+            'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
             'padding:28px;max-width:720px;width:95%;max-height:90vh;overflow-y:auto;">' +
             '<div style="padding:10px 0;display:flex;align-items:center;gap:10px;">Loading <span class="tc-dot-loader"><span></span><span></span><span></span></span></div>' +
             '</div>';
@@ -8273,8 +8273,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             innerBox.innerHTML =
                 // ── Header ──────────────────────────────────────────────────
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">' +
-                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">' + escHtml(titleText) + '</h3>' +
-                '<button type="button" class="btnMtlClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+                '<h3 style="margin:0;font-size:1.05em;font-weight:600;">' + escHtml(titleText) + '</h3>' +
+                '<button type="button" class="btnMtlClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
                 '</div>' +
                 (options && options.prefill ? sourceNoticesHtml(options.prefill.notices) : '') +
 
@@ -8332,8 +8332,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;margin-top:8px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
                 '<span class="mtl-create-hint" style="margin-right:auto;font-size:0.82em;opacity:0.65;"></span>' +
-                '<button type="button" class="btnMtlCancel" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;">Cancel</button>' +
-                '<button type="button" class="btnMtlCreate" disabled style="cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:4px;padding:10px 26px;font-size:0.95em;font-weight:600;display:flex;align-items:center;gap:6px;">' +
+                '<button type="button" class="btnMtlCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+                '<button type="button" class="btnMtlCreate hsc-mbtn hsc-btn-primary" disabled>' +
                 '<i class="md-icon" style="font-size:1em;">playlist_add</i>' + escHtml(createBtnLabel) + '</button>' +
                 '</div>';
 
@@ -8526,7 +8526,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             innerBox.innerHTML =
                 '<div style="color:#cc3333;padding:10px 0;">Failed to load: ' + (err.message || String(err)).replace(/</g, '&lt;') + '</div>' +
                 '<div style="margin-top:16px;text-align:right;">' +
-                '<button type="button" class="btnMtlClose" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:inherit;border-radius:3px;padding:6px 14px;font-size:0.9em;">Close</button>' +
+                '<button type="button" class="btnMtlClose hsc-mbtn hsc-btn-secondary">Close</button>' +
                 '</div>';
             modal.querySelector('.btnMtlClose').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
         });
@@ -8966,7 +8966,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
         document.body.appendChild(modal);
 
         function onEsc(e) { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onEsc); } }
@@ -8974,35 +8974,35 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         modal.addEventListener('click', function (e) { if (e.target === modal) { modal.remove(); document.removeEventListener('keydown', onEsc); } });
 
         var innerStyle = 'background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
-            'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;' +
+            'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
             'padding:28px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;';
 
         var contentType = 'Movies';
 
         function renderStep1() {
             var isShows = contentType === 'Shows';
-            var segBase = 'flex:1;cursor:pointer;border:none;padding:8px 12px;font-size:0.9em;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;';
-            var segOn  = segBase + 'background:#52B54B;color:#fff;';
-            var segOff = segBase + 'background:transparent;color:inherit;opacity:0.75;';
+            var segBase = 'flex:1;cursor:pointer;border:none;border-radius:6px;padding:8px 12px;font-family:inherit;font-size:0.9em;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;';
+            var segOn  = segBase + 'background:var(--plugin-popup-bg2, var(--theme-background-level3));color:inherit;';
+            var segOff = segBase + 'background:transparent;color:inherit;opacity:0.7;';
             modal.innerHTML =
                 '<div style="' + innerStyle + '">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">' +
-                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">Create Top-List</h3>' +
-                '<button type="button" class="btnChooserClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+                '<h3 style="margin:0;font-size:1.05em;font-weight:600;">Create Top-List</h3>' +
+                '<button type="button" class="btnChooserClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
                 '</div>' +
-                '<div style="display:flex;border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:6px;overflow:hidden;margin-bottom:20px;">' +
+                '<div style="display:flex;border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;overflow:hidden;margin-bottom:20px;padding:2px;gap:2px;background:var(--hsc-tint-1);">' +
                 '<button type="button" class="btnChooseType" data-type="Movies" style="' + (isShows ? segOff : segOn) + '"><i class="md-icon" style="font-size:1.1em;">movie</i>Movies</button>' +
                 '<button type="button" class="btnChooseType" data-type="Shows" style="' + (isShows ? segOn : segOff) + '"><i class="md-icon" style="font-size:1.1em;">tv</i>TV Shows</button>' +
                 '</div>' +
                 '<p style="margin:0 0 20px;font-size:0.9em;color:var(--theme-text-secondary);">How do you want to create this top-list?</p>' +
                 '<div style="display:flex;gap:16px;">' +
                 '<button type="button" class="btnChooseManual" style="flex:1;cursor:pointer;background:var(--plugin-input-bg,rgba(255,255,255,0.05));border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:8px;padding:20px 16px;text-align:left;color:inherit;">' +
-                '<div style="font-size:1.4em;margin-bottom:10px;color:#52B54B;"><i class="md-icon">format_list_numbered</i></div>' +
+                '<div style="font-size:1.4em;margin-bottom:10px;color:var(--hsc-primary-text);"><i class="md-icon">format_list_numbered</i></div>' +
                 '<div style="font-weight:600;font-size:0.95em;margin-bottom:6px;">Manual</div>' +
                 '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Pick ' + (isShows ? 'shows' : 'movies') + ' manually and build a custom list</div>' +
                 '</button>' +
                 '<button type="button" class="btnChooseByTag" style="flex:1;cursor:pointer;background:var(--plugin-input-bg,rgba(255,255,255,0.05));border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:8px;padding:20px 16px;text-align:left;color:inherit;">' +
-                '<div style="font-size:1.4em;margin-bottom:10px;color:#52B54B;"><i class="md-icon">label</i></div>' +
+                '<div style="font-size:1.4em;margin-bottom:10px;color:var(--hsc-primary-text);"><i class="md-icon">label</i></div>' +
                 '<div style="font-weight:600;font-size:0.95em;margin-bottom:6px;">By tag</div>' +
                 '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Create from an existing tag in your library</div>' +
                 '</button>' +
@@ -9019,7 +9019,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var btnByTagCard  = modal.querySelector('.btnChooseByTag');
 
             [btnManualCard, btnByTagCard].forEach(function (btn) {
-                btn.addEventListener('mouseover', function () { this.style.borderColor = '#52B54B'; });
+                btn.addEventListener('mouseover', function () { this.style.borderColor = 'var(--hsc-primary)'; });
                 btn.addEventListener('mouseout',  function () { this.style.borderColor = 'var(--plugin-input-border,rgba(255,255,255,0.12))'; });
             });
 
@@ -9063,9 +9063,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
                 '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<button type="button" class="btnChooserBack" style="background:transparent;border:none;color:var(--theme-text-secondary);cursor:pointer;padding:2px;line-height:1;opacity:0.7;"><i class="md-icon">arrow_back</i></button>' +
-                '<h3 style="margin:0;font-size:1.1em;color:#52B54B;">Select Tag</h3>' +
+                '<h3 style="margin:0;font-size:1.05em;font-weight:600;">Select Tag</h3>' +
                 '</div>' +
-                '<button type="button" class="btnChooserClose" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
+                '<button type="button" class="btnChooserClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
                 '</div>' +
                 '<div style="margin-bottom:14px;">' +
                 '<input type="text" id="tlChooserSearch" placeholder="Search tags…" style="' + inputStyle + '" />' +
@@ -9120,11 +9120,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     function buildBackupModalShell() {
         var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
         modal.renderBox = function (content) {
             modal.innerHTML =
                 '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
-                'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;' +
+                'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
                 'padding:28px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;position:relative;">' +
                 '<button type="button" class="btnShellClose" aria-label="Close" title="Close" style="position:absolute;top:22px;right:18px;background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;"><i class="md-icon">close</i></button>' +
                 content + '</div>';
@@ -9159,9 +9159,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return flags;
     }
 
-    var _backupBtnPrimary = 'cursor:pointer;border:none;background:#52B54B;color:#fff;border-radius:4px;padding:10px 26px;font-size:0.95em;font-weight:600;';
-    var _backupBtnSecondary = 'cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-primary);border-radius:3px;padding:8px 18px;font-size:0.9em;';
-    var _backupTitleStyle = 'margin:0 0 6px;font-size:1.15em;font-weight:600;';
+    var _backupTitleStyle = 'margin:0 0 6px;font-size:1.05em;font-weight:600;letter-spacing:-0.1px;';
     var _backupHintStyle = 'font-size:0.88em;opacity:0.7;margin:0 0 14px;line-height:1.45;';
 
     // ── Copy / Paste source (between servers) ──
@@ -9220,12 +9218,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         modal = modal || buildBackupModalShell();
         modal.renderBox(
             '<div style="text-align:center;padding:4px 0 14px;">' +
-            '<i class="md-icon" style="font-size:2.5em;color:#52B54B;display:block;margin-bottom:8px;">check_circle</i>' +
+            '<i class="md-icon" style="font-size:2.5em;color:var(--hsc-primary-text);display:block;margin-bottom:8px;">check_circle</i>' +
             '<p style="margin:0;font-size:1.05em;font-weight:500;">' + title + '</p>' +
             '</div>' + sourceNoticesHtml(notices) +
             (hint ? '<p style="' + _backupHintStyle + '">' + hint + '</p>' : '') +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;padding-top:14px;border-top:1px solid var(--line-color);">' +
-            '<button type="button" class="btnSourceDone" style="' + _backupBtnPrimary + '">Close</button></div>'
+            '<button type="button" class="btnSourceDone hsc-mbtn hsc-btn-primary">Close</button></div>'
         );
         modal.querySelector('.btnSourceDone').addEventListener('click', modal.close);
     }
@@ -9290,8 +9288,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             sourceNoticesHtml(notices) +
             '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
-            '<button type="button" class="btnCopySourceClose" style="' + _backupBtnSecondary + '">Close</button>' +
-            '<button type="button" class="btnCopySourceAgain" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">share</i>Copy</button>' +
+            '<button type="button" class="btnCopySourceClose hsc-mbtn hsc-btn-secondary">Close</button>' +
+            '<button type="button" class="btnCopySourceAgain hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">share</i>Copy</button>' +
             '</div>'
         );
         var ta = modal.querySelector('.txtCopySource');
@@ -9376,8 +9374,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<textarea class="txtPasteSource" rows="8" placeholder=\'{"' + kind.header + '":1, …}\' style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:4px;padding:8px;margin-bottom:8px;"></textarea>' +
             '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
-            '<button type="button" class="btnPasteCancel" style="' + _backupBtnSecondary + '">Cancel</button>' +
-            '<button type="button" class="btnPasteApply" style="' + _backupBtnPrimary + '">' + applyHtml + '</button>' +
+            '<button type="button" class="btnPasteCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="btnPasteApply hsc-mbtn hsc-btn-primary">' + applyHtml + '</button>' +
             '</div>'
         );
         var ta = modal.querySelector('.txtPasteSource');
@@ -9542,8 +9540,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
                 '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
                 '<span class="imp-coll-count" style="margin-right:auto;font-size:0.85em;opacity:0.7;"></span>' +
-                '<button type="button" class="btnImpCancel" style="' + _backupBtnSecondary + '">Cancel</button>' +
-                '<button type="button" class="btnImpApply" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">library_add</i>Import</button>' +
+                '<button type="button" class="btnImpCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+                '<button type="button" class="btnImpApply hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">library_add</i>Import</button>' +
                 '</div>'
             );
             var applyBtn = modal.querySelector('.btnImpApply');
@@ -9634,7 +9632,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }).catch(function (err) {
             modal.renderBox('<h3 style="' + _backupTitleStyle + '">Import collection</h3>' +
                 '<p style="color:#cc3333;font-size:0.9em;">The collections could not be loaded: ' + esc(err && (err.message || err.statusText) || err) + '</p>' +
-                '<div style="display:flex;justify-content:flex-end;"><button type="button" class="btnImpCancel" style="' + _backupBtnSecondary + '">Close</button></div>');
+                '<div style="display:flex;justify-content:flex-end;"><button type="button" class="btnImpCancel hsc-mbtn hsc-btn-secondary">Close</button></div>');
             modal.querySelector('.btnImpCancel').addEventListener('click', modal.close);
         });
     }
@@ -9685,8 +9683,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<div style="margin-bottom:16px;">' + buildBackupSectionsHtml(null, 'chkBackupSection') + '</div>' +
             '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
-            '<button type="button" class="btnBackupCancel" style="' + _backupBtnSecondary + '">Cancel</button>' +
-            '<button type="button" class="btnBackupDownload" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download</button>' +
+            '<button type="button" class="btnBackupCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="btnBackupDownload hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download</button>' +
             '</div>'
         );
         modal.querySelector('.btnBackupCancel').addEventListener('click', modal.close);
@@ -9780,8 +9778,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<div style="margin-bottom:16px;">' + buildBackupSectionsHtml(info.sections, 'chkRestoreSection') + '</div>' +
             '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
-            '<button type="button" class="btnRestoreCancel" style="' + _backupBtnSecondary + '">Cancel</button>' +
-            '<button type="button" class="btnRestoreApply" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">upload</i>Restore</button>' +
+            '<button type="button" class="btnRestoreCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="btnRestoreApply hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">upload</i>Restore</button>' +
             '</div>'
         );
         modal.querySelector('.btnRestoreCancel').addEventListener('click', modal.close);
@@ -9824,7 +9822,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         var html =
             '<div style="text-align:center;padding:4px 0 14px;">' +
-            '<i class="md-icon" style="font-size:2.5em;color:#52B54B;display:block;margin-bottom:8px;">check_circle</i>' +
+            '<i class="md-icon" style="font-size:2.5em;color:var(--hsc-primary-text);display:block;margin-bottom:8px;">check_circle</i>' +
             '<p style="margin:0;font-size:1.05em;font-weight:500;">Backup restored</p>' +
             '</div>' +
             '<span class="hsc-eyebrow" style="display:block;margin-bottom:4px;color:inherit;opacity:0.7;">Applied</span>' +
@@ -9846,8 +9844,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         html += '<p style="' + _backupHintStyle + '">Run a sync afterwards to rebuild tags, collections, playlists and home sections from the restored configuration.</p>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;padding-top:14px;border-top:1px solid var(--line-color);">' +
-            (pending.length > 0 ? '<button type="button" class="btnRestoreCreateLibs" style="' + _backupBtnPrimary + '"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">library_add</i>Create libraries now</button>' : '') +
-            '<button type="button" class="btnRestoreDone" style="' + (pending.length > 0 ? _backupBtnSecondary : _backupBtnPrimary) + '">Close</button>' +
+            (pending.length > 0 ? '<button type="button" class="btnRestoreCreateLibs hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">library_add</i>Create libraries now</button>' : '') +
+            '<button type="button" class="btnRestoreDone hsc-mbtn ' + (pending.length > 0 ? 'hsc-btn-secondary' : 'hsc-btn-primary') + '">Close</button>' +
             '</div>';
 
         modal.renderBox(html);
@@ -9883,7 +9881,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     delete modal.dataset.busy;
                     modal.querySelector('.btnRestoreDone').disabled = false;
                     if (failures.length === 0) {
-                        progressEl.style.color = '#52B54B';
+                        progressEl.style.color = 'var(--hsc-primary)';
                         progressEl.textContent = 'All ' + pending.length + ' librar' + (pending.length === 1 ? 'y' : 'ies') + ' created. Finishing touches continue in the background.';
                         createBtn.style.display = 'none';
                     } else {
@@ -10862,7 +10860,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <label class="filter-chk-row"><input type="checkbox" id="chkFilterSrcPlaylist" /><span>Local Playlist</span></label>
                                 <div class="filter-dropdown-divider"></div>
                                 <div class="filter-dropdown-label">Status</div>
-                                <label class="filter-chk-row"><input type="checkbox" id="chkFilterActive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:#52B54B;flex-shrink:0;"></span>Active</span></label>
+                                <label class="filter-chk-row"><input type="checkbox" id="chkFilterActive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--hsc-primary);flex-shrink:0;"></span>Active</span></label>
                                 <label class="filter-chk-row"><input type="checkbox" id="chkFilterInactive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:rgba(128,128,128,0.5);flex-shrink:0;"></span>Inactive</span></label>
                                 <div class="filter-dropdown-divider"></div>
                                 <div class="filter-dropdown-label">Last run</div>
@@ -11096,7 +11094,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (!bar) {
                 bar = document.createElement('div');
                 bar.className = 'hsc-draft-bar';
-                bar.style.cssText = 'max-width:900px;box-sizing:border-box;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;margin-bottom:16px;border-radius:5px;background:rgba(82,181,75,0.15);border:1px solid #52B54B;';
+                bar.style.cssText = 'max-width:900px;box-sizing:border-box;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;margin-bottom:16px;border-radius:8px;background:rgba(82,181,75,0.08);border:1px solid rgba(82,181,75,0.45);';
                 bar.innerHTML = '<i class="md-icon" style="font-size:1.3em;">restore</i><span class="hsc-draft-text" style="flex:1;min-width:200px;"></span>' +
                     '<button type="button" is="emby-button" class="raised button-cancel hsc-draft-discard" style="margin:0;"><span>Discard</span></button>';
                 // Above every page tab, since restored settings can live on any of them.
