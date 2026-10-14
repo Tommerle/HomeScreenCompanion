@@ -2973,14 +2973,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <button type="button" is="emby-button" class="btnCopySourceRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Copy this source to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em; margin-right:4px;">share</i><span>Copy</span></button>
                     <button type="button" is="emby-button" class="btnDuplicateRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Duplicate this source"><i class="md-icon" style="font-size:1em; margin-right:4px;">content_copy</i><span>Duplicate</span></button>
                 </div>
-                <div class="tag-tabs" style="display: flex; gap: 20px; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <div class="tag-tab active" data-tab="general" style="padding: 8px 0; cursor: pointer; font-weight: bold; border-bottom: 2px solid #52B54B;">Source</div>
-                    <div class="tag-tab" data-tab="tag" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Tag</div>
-                    <div class="tag-tab" data-tab="collection" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Collection</div>
-                    <div class="tag-tab" data-tab="playlist" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Playlist</div>
-                    <div class="tag-tab" data-tab="schedule" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Schedule</div>
-                    <div class="tag-tab" data-tab="advanced" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Blacklist</div>
-                    <div class="tag-tab" data-tab="homescreen" style="padding: 8px 0; cursor: pointer; opacity: 0.6; font-weight: bold; border-bottom: 2px solid transparent;">Home Screen</div>
+                <div class="tag-tabs">
+                    <div class="tag-tab active" data-tab="general">Source</div>
+                    <div class="tag-tab" data-tab="tag">Tag</div>
+                    <div class="tag-tab" data-tab="collection">Collection</div>
+                    <div class="tag-tab" data-tab="playlist">Playlist</div>
+                    <div class="tag-tab" data-tab="schedule">Schedule</div>
+                    <div class="tag-tab" data-tab="advanced">Blacklist</div>
+                    <div class="tag-tab" data-tab="homescreen">Home Screen</div>
                 </div>
                 
                 <div class="tab-content general-tab">
@@ -3575,8 +3575,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         row.querySelectorAll('.tag-tab').forEach(tab => {
             tab.addEventListener('click', function () {
-                row.querySelectorAll('.tag-tab').forEach(t => { t.style.opacity = "0.6"; t.style.borderBottomColor = "transparent"; });
-                this.style.opacity = "1"; this.style.borderBottomColor = "#52B54B";
+                row.querySelectorAll('.tag-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
                 var target = this.getAttribute('data-tab');
                 row.dataset.activeTab = target;
                 row.querySelector('.general-tab').style.display = target === 'general' ? 'block' : 'none';
