@@ -192,37 +192,35 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     var customCss = `
     <style id="homeScreenCompanionCustomCss">
         .day-toggle {
-            background: rgba(128,128,128,0.08);
+            background: transparent;
             color: var(--theme-text-secondary);
-            border: 1px solid var(--line-color);
-            border-radius: 4px;
-            padding: 8px 12px;
+            border: 1px solid var(--hsc-hairline-strong);
+            border-radius: 6px;
+            padding: 7px 12px;
             cursor: pointer;
-            font-size: 0.9em;
-            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-            text-transform: uppercase;
-            font-weight: bold;
+            font-family: inherit;
+            font-size: 0.88em;
+            font-weight: 500;
+            transition: background-color 0.15s, border-color 0.15s, color 0.15s;
             flex-grow: 1;
             text-align: center;
         }
         .day-toggle:hover {
-            background: var(--theme-background-level2);
+            background: var(--hsc-tint-2);
             color: var(--theme-text-primary);
-            border-color: var(--theme-primary-color);
         }
         .day-toggle.active {
-            background: #52B54B;
-            color: #fff;
-            border-color: #52B54B;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            background: rgba(82,181,75,0.15);
+            color: var(--hsc-primary-text);
+            border-color: rgba(82,181,75,0.5);
         }
 
         .date-row-container {
-            background: rgba(128,128,128,0.06);
-            border: 1px solid var(--line-color);
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 10px;
+            background: var(--hsc-tint-1);
+            border: 1px solid var(--hsc-hairline);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 8px;
         }
 
         .selectLabel {
@@ -233,40 +231,41 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             display: block;
         }
 
+        /* Type chips (DESIGN.md): neutral chip, only the icon carries the category colour */
         .tag-indicator {
-            margin-left: 10px;
-            font-size: 0.75em;
-            padding: 2px 8px;
+            margin-left: 8px;
+            font-size: 0.78em;
+            padding: 2px 7px;
             border-radius: 4px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 4px;
             font-weight: 500;
+            line-height: 1.4;
             position: relative;
+            white-space: nowrap;
+            color: var(--theme-text-secondary);
+            background: transparent;
+            border: 1px solid var(--hsc-hairline-strong);
         }
+        .tag-indicator .md-icon { font-size: 1.1em !important; }
+        .tag-indicator.schedule .md-icon { color: var(--hsc-activity-text); }
+        .tag-indicator.collection .md-icon { color: var(--hsc-cat-collection); }
+        .tag-indicator.imported .md-icon { color: var(--hsc-cat-imported); }
+        .tag-indicator.homescreen .md-icon { color: var(--hsc-primary-text); }
+        .tag-indicator.tag .md-icon { color: var(--hsc-cat-tag); }
+        .tag-indicator.playlist .md-icon { color: var(--hsc-cat-playlist); }
+        .tag-indicator.toplist .md-icon { color: var(--hsc-cat-toplist); }
+        .tag-indicator.ct-movies .md-icon { color: var(--hsc-cat-movies); }
+        .tag-indicator.ct-shows .md-icon { color: var(--hsc-cat-shows); }
 
-        .tag-indicator.schedule {
-            color: #00a4dc;
-            background: rgba(0,164,220,0.15);
-            border: 1px solid rgba(0,164,220,0.35);
-        }
-
-        .tag-indicator.collection {
-            color: #8459ca;
-            background: rgba(126, 77, 172, 0.15);
-            border: 1px solid rgba(126, 77, 172, 0.35);
-        }
-
-        .tag-indicator.imported {
-            color: #d9822b;
-            background: rgba(217,130,43,0.15);
-            border: 1px solid rgba(217,130,43,0.35);
-        }
-
+        /* "25 of 30": a status pill (warning) */
         .tag-indicator.short {
-            color: #e8a838;
-            background: rgba(232,168,56,0.15);
-            border: 1px solid rgba(232,168,56,0.35);
+            color: var(--hsc-warning-text);
+            background: rgba(230,193,90,0.15);
+            border-color: transparent;
+            border-radius: 9999px;
+            padding: 2px 8px;
         }
 
         .hsc-run-issue:not(:empty) {
@@ -275,8 +274,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             margin-left: 12px;
         }
         .hsc-run-issue:not(:empty) + .tag-title { margin-left: 6px; }
-        .hsc-run-issue i { color: #ff9800; }
-        .hsc-run-issue i.error { color: #e53935; }
+        .hsc-run-issue i { color: var(--hsc-warning); }
+        .hsc-run-issue i.error { color: var(--hsc-danger-strong); }
 
         .hsc-run-issue-box > div {
             margin-bottom: 12px;
@@ -301,32 +300,29 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
         .hsc-run-issue-box .error .hsc-run-issue-head { color: #e53935; }
 
+        /* "N groups need attention": a status pill that also filters the list */
         .hsc-issue-counter {
             display: flex;
             align-items: center;
             gap: 5px;
             margin-left: 10px;
-            padding: 5px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(255,152,0,0.45);
-            background: rgba(255,152,0,0.12);
-            color: #ff9800;
-            font-size: 0.9em;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            border: 1px solid transparent;
+            background: rgba(230,193,90,0.15);
+            color: var(--hsc-warning-text);
+            font-size: 0.85em;
+            font-weight: 500;
             font-family: inherit;
             white-space: nowrap;
             cursor: pointer;
+            transition: background-color 0.15s, border-color 0.15s;
         }
-        .hsc-issue-counter:hover { background: rgba(255,152,0,0.22); }
-        .hsc-issue-counter.error { border-color: rgba(229,57,53,0.5); background: rgba(229,57,53,0.12); color: #e53935; }
-        .hsc-issue-counter.error:hover { background: rgba(229,57,53,0.22); }
-        .hsc-issue-counter.active { box-shadow: inset 0 0 0 1px currentColor; font-weight: bold; }
+        .hsc-issue-counter:hover { background: rgba(230,193,90,0.25); }
+        .hsc-issue-counter.error { background: rgba(229,115,115,0.15); color: var(--hsc-danger-text); }
+        .hsc-issue-counter.error:hover { background: rgba(229,115,115,0.25); }
+        .hsc-issue-counter.active { border-color: currentColor; }
         .hsc-run-issue-box ul { margin: 0; padding-left: 20px; }
-
-        .tag-indicator.homescreen {
-            color: #4CAF50;
-            background: rgba(76,175,80,0.15);
-            border: 1px solid rgba(76,175,80,0.35);
-        }
 
         .tag-indicator.schedule::after {
             content: '';
@@ -336,51 +332,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: #f59e0b;
-            box-shadow: 0 0 0 1.5px var(--theme-background, #101010);
+            background: var(--hsc-warning);
+            box-shadow: 0 0 0 1.5px var(--theme-background-level2, #101010);
         }
 
         .tag-indicator.schedule.schedule-active::after {
-            background: #52B54B;
-        }
-
-        .tag-indicator.tag {
-            color: #909090;
-            background: rgba(80,80,80,0.18);
-            border: 1px solid rgba(80,80,80,0.35);
-        }
-
-        .tag-indicator.playlist {
-            color: #2db396;
-            background: rgba(45, 184, 154, 0.15);
-            border: 1px solid rgba(43, 190, 154, 0.35);
-        }
-
-        .tag-indicator.toplist {
-            color: #c9a84c;
-            background: rgba(180,140,50,0.15);
-            border: 1px solid rgba(180,140,50,0.4);
-        }
-
-        .tag-indicator.ct-movies {
-            color: #a8927c;
-            background: rgba(168,146,124,0.10);
-            border: 1px solid rgba(168,146,124,0.28);
-        }
-
-        .tag-indicator.ct-shows {
-            color: #8f8aa8;
-            background: rgba(143,138,168,0.10);
-            border: 1px solid rgba(143,138,168,0.28);
+            background: var(--hsc-primary);
         }
 
         .tag-indicator.source {
-            color: #78909c;
-            background: rgba(120,144,156,0.15);
-            border: 1px solid rgba(120,144,156,0.35);
             padding: 2px 5px;
             margin-left: 0;
             margin-right: 8px;
+            background: var(--hsc-tint-1);
         }
 
         .badge-container {
@@ -466,11 +430,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         .control-row {
-            background: rgba(128,128,128,0.06);
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            border: 1px solid var(--line-color);
+            background: var(--hsc-tint-1);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border: 1px solid var(--hsc-hairline);
             display: flex;
             flex-direction: column;
             gap: 12px;
@@ -520,22 +484,22 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         #btnClearSearch:hover {
             opacity: 1;
-            color: #cc3333;
+            color: var(--hsc-danger-text);
         }
 
         #txtSearchTags {
             width: 100%;
-            background: rgba(128,128,128,0.06) !important;
-            border: 1px solid var(--line-color) !important;
-            border-radius: 4px !important;
+            background: var(--hsc-tint-1) !important;
+            border: 1px solid var(--hsc-hairline-strong) !important;
+            border-radius: 6px !important;
             padding: 6px 30px 6px 35px !important;
             color: inherit;
             font-size: 0.95em;
         }
 
         #txtSearchTags:focus {
-            border-color: var(--theme-primary-color) !important;
-            background: rgba(128,128,128,0.1) !important;
+            border-color: var(--hsc-primary) !important;
+            outline: none;
         }
 
         .filter-dropdown-wrapper {
@@ -547,11 +511,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             display: flex;
             align-items: center;
             gap: 5px;
-            padding: 5px 10px;
-            background: var(--plugin-input-bg, rgba(128,128,128,0.08));
-            border: 1px solid var(--plugin-input-border, var(--line-color));
-            border-radius: 4px;
-            font-size: 0.9em;
+            padding: 5px 12px;
+            background: var(--hsc-tint-1);
+            border: 1px solid var(--hsc-hairline-strong);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.88em;
+            font-weight: 500;
             cursor: pointer;
             color: var(--plugin-popup-color, inherit);
             white-space: nowrap;
@@ -559,7 +525,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         .filter-dropdown-btn:hover {
-            background: var(--plugin-popup-hover, rgba(128,128,128,0.15));
+            background: var(--hsc-tint-2);
         }
 
         html[data-plugin-theme="dark"] select,
@@ -575,8 +541,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         .filter-dropdown-btn.active {
-            border-color: #52B54B;
-            color: #52B54B;
+            background: var(--hsc-tint-3);
+            border-color: var(--theme-text-secondary);
+            color: var(--theme-text-primary);
         }
 
         .filter-dropdown-panel {
@@ -588,8 +555,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             background: var(--plugin-popup-bg, #2a2a2a);
             color: var(--plugin-popup-color, #e8e8e8);
             border: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12));
-            border-radius: 6px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+            border-radius: 8px;
+            box-shadow: var(--hsc-shadow-float);
             padding: 10px 14px;
             min-width: 200px;
         }
@@ -2335,17 +2302,17 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var parsed = parseCriterion(criterion || '');
         var prop = parsed.prop || 'Resolution';
         var notActive = parsed.not;
-        var notBg = notActive ? 'rgba(200,50,50,0.75)' : 'transparent';
-        var notColor = notActive ? '#fff' : '';
-        var notBorder = notActive ? '1px solid rgba(200,50,50,0.6)' : '1px solid rgba(128,128,128,0.4)';
+        var notBg = notActive ? 'rgba(229,115,115,0.15)' : 'transparent';
+        var notColor = notActive ? 'var(--hsc-danger-text)' : '';
+        var notBorder = notActive ? '1px solid rgba(229,115,115,0.5)' : '1px solid var(--hsc-hairline-strong)';
         return '<div class="mi-rule" style="margin-bottom:6px;">' +
             '<div style="display:flex; gap:6px; align-items:center;">' +
             '<button type="button" class="btnNotToggle" data-not="' + (notActive ? '1' : '0') + '"' +
-            ' style="border:' + notBorder + '; border-radius:10px; padding:3px 10px; font-size:0.78em; font-weight:bold; cursor:pointer; letter-spacing:0.5px; flex-shrink:0;' +
+            ' style="border:' + notBorder + '; border-radius:6px; padding:3px 10px; font-family:inherit; font-size:0.78em; font-weight:600; cursor:pointer; letter-spacing:0.3px; flex-shrink:0;' +
             ' background:' + notBg + '; color:' + notColor + ';" title="Negate this rule">NOT</button>' +
             '<select class="selMiProperty" is="emby-select" style="flex:0 0 155px;">' + propertyOptionsHtml(prop) + '</select>' +
             '<div class="mi-value-wrapper" style="flex:1; display:flex; gap:6px; align-items:center;">' + getMiValueHtml(prop, parsed.op, parsed.val, parsed.userId || '') + '</div>' +
-            '<button type="button" class="btnRemoveMiRule" style="background:transparent; border:none; color:#cc3333; cursor:pointer; padding:2px 8px; font-size:1em; flex-shrink:0;" title="Remove rule">✕</button>' +
+            '<button type="button" class="btnRemoveMiRule" style="background:transparent; border:none; border-radius:6px; color:var(--hsc-danger-text); cursor:pointer; padding:2px 8px; font-size:1em; flex-shrink:0;" title="Remove rule">✕</button>' +
             '</div>' +
             getMiHintHtml(prop) +
             '</div>';
@@ -2361,17 +2328,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="flex:1; height:1px; background:rgba(128,128,128,0.25);"></div>' +
                 '<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
                     '<span class="hsc-eyebrow">Connect groups with</span>' +
-                    '<div style="display:flex; border-radius:14px; overflow:hidden; border:1px solid rgba(128,128,128,0.4);">' +
+                    '<div style="display:flex; border-radius:8px; overflow:hidden; border:1px solid var(--hsc-hairline-strong); background:var(--hsc-tint-1); padding:2px; gap:2px;">' +
                         '<button type="button" class="btnGroupOpChoice" data-value="AND"' +
-                        ' style="border:none; padding:4px 16px; font-size:0.82em; font-weight:bold; cursor:pointer; letter-spacing:0.5px;' +
-                        ' background:' + (groupOp === 'AND' ? 'rgba(0,164,220,0.75)' : 'transparent') + ';' +
-                        ' color:' + (groupOp === 'AND' ? '#fff' : 'inherit') + ';"' +
+                        ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
+                        ' background:' + (groupOp === 'AND' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
+                        ' color:' + (groupOp === 'AND' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                         ' title="Both filter groups must match">AND</button>' +
-                        '<div style="width:1px; background:rgba(128,128,128,0.4);"></div>' +
-                        '<button type="button" class="btnGroupOpChoice" data-value="OR"' +
-                        ' style="border:none; padding:4px 16px; font-size:0.82em; font-weight:bold; cursor:pointer; letter-spacing:0.5px;' +
-                        ' background:' + (groupOp === 'OR' ? 'rgba(220,120,0,0.75)' : 'transparent') + ';' +
-                        ' color:' + (groupOp === 'OR' ? '#fff' : 'inherit') + ';"' +
+                                                '<button type="button" class="btnGroupOpChoice" data-value="OR"' +
+                        ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
+                        ' background:' + (groupOp === 'OR' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
+                        ' color:' + (groupOp === 'OR' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                         ' title="Either filter group is enough">OR</button>' +
                     '</div>' +
                     '<span class="group-op-desc" style="font-size:0.7em; opacity:0.55; white-space:nowrap;">' +
@@ -2389,17 +2355,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
                     '<span class="hsc-label">Match rules:</span>' +
                     '<div style="display:flex; flex-direction:column; gap:3px;">' +
-                        '<div style="display:flex; border-radius:14px; overflow:hidden; border:1px solid rgba(128,128,128,0.4);">' +
+                        '<div style="display:flex; border-radius:8px; overflow:hidden; border:1px solid var(--hsc-hairline-strong); background:var(--hsc-tint-1); padding:2px; gap:2px;">' +
                             '<button type="button" class="btnGroupInnerOpChoice" data-value="AND"' +
-                            ' style="border:none; padding:4px 16px; font-size:0.82em; font-weight:bold; cursor:pointer; letter-spacing:0.5px;' +
-                            ' background:' + (op === 'AND' ? 'rgba(0,164,220,0.75)' : 'transparent') + ';' +
-                            ' color:' + (op === 'AND' ? '#fff' : 'inherit') + ';"' +
+                            ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
+                            ' background:' + (op === 'AND' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
+                            ' color:' + (op === 'AND' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                             ' title="All rules in this group must match">ALL</button>' +
-                            '<div style="width:1px; background:rgba(128,128,128,0.4);"></div>' +
-                            '<button type="button" class="btnGroupInnerOpChoice" data-value="OR"' +
-                            ' style="border:none; padding:4px 16px; font-size:0.82em; font-weight:bold; cursor:pointer; letter-spacing:0.5px;' +
-                            ' background:' + (op === 'OR' ? 'rgba(220,120,0,0.75)' : 'transparent') + ';' +
-                            ' color:' + (op === 'OR' ? '#fff' : 'inherit') + ';"' +
+                                                        '<button type="button" class="btnGroupInnerOpChoice" data-value="OR"' +
+                            ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
+                            ' background:' + (op === 'OR' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
+                            ' color:' + (op === 'OR' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                             ' title="Any rule in this group is enough">ANY</button>' +
                         '</div>' +
                         '<span class="inner-op-desc" style="font-size:0.7em; opacity:0.55;">' +
@@ -2461,10 +2426,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             savedFilters.map(function (sf, i) {
                 return '<div style="display:flex; align-items:center; gap:0;">' +
                     '<button type="button" class="btnApplyMySavedFilter" data-index="' + i + '"' +
-                    ' style="border:1.5px solid #000; border-radius:14px 0 0 14px; padding:4px 10px; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' +
+                    ' style="border:1px solid var(--hsc-hairline-strong); border-radius:9999px 0 0 9999px; padding:4px 10px; font-family:inherit; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' +
                     escapeHtml(sf.Name) + '</button>' +
                     '<button type="button" class="btnDeleteMySavedFilter" data-index="' + i + '"' +
-                    ' style="border:1.5px solid #000; border-left:none; border-radius:0 14px 14px 0; background:transparent; color:#cc3333; cursor:pointer; padding:4px 8px; font-size:0.82em; line-height:1;" title="Delete">✕</button>' +
+                    ' style="border:1px solid var(--hsc-hairline-strong); border-left:none; border-radius:0 9999px 9999px 0; background:transparent; color:var(--hsc-danger-text); cursor:pointer; padding:4px 8px; font-size:0.82em; line-height:1;" title="Delete">✕</button>' +
                     '</div>';
             }).join('') +
             '</div>';
@@ -3109,7 +3074,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                             '<div style="display:flex; flex-wrap:wrap; gap:6px;">' +
                                             cat.presets.map(function(p, pi) {
                                                 return '<button type="button" class="btnApplyMiPreset" data-preset="' + ci + ',' + pi + '"' +
-                                                    ' style="border:1.5px solid #000; border-radius:14px; padding:4px 12px; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' + p.name + '</button>';
+                                                    ' style="border:1px solid var(--hsc-hairline-strong); border-radius:9999px; padding:4px 12px; font-family:inherit; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' + p.name + '</button>';
                                             }).join('') + '</div></div>';
                                     }).join('')}
                                 </div>
@@ -3222,7 +3187,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         <div style="display:flex; flex-wrap:wrap; gap:6px;">
                             ${SCHEDULE_PRESETS.map(function(p, pi) {
                                 return '<button type="button" class="btnApplySchedulePreset" data-preset="' + pi + '"' +
-                                    ' style="border:1.5px solid #000; border-radius:14px; padding:4px 12px; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' + p.name + '</button>';
+                                    ' style="border:1px solid var(--hsc-hairline-strong); border-radius:9999px; padding:4px 12px; font-family:inherit; font-size:0.82em; cursor:pointer; background:transparent; color:var(--theme-text-primary);">' + p.name + '</button>';
                             }).join('')}
                         </div>
                     </div>
@@ -3917,9 +3882,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 group.querySelectorAll('.btnGroupOpChoice').forEach(function(b) {
                     var active = b.dataset.value === newOp;
                     b.style.background = active
-                        ? (newOp === 'AND' ? 'rgba(0,164,220,0.75)' : 'rgba(220,120,0,0.75)')
+                        ? 'var(--theme-background-level3)'
                         : 'transparent';
-                    b.style.color = active ? '#fff' : '';
+                    b.style.color = active ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)';
                 });
                 var desc = group.querySelector('.group-op-desc');
                 if (desc) desc.textContent = newOp === 'AND' ? 'Both groups must match' : 'Either group is enough';
@@ -3934,9 +3899,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 group.querySelectorAll('.btnGroupInnerOpChoice').forEach(function(b) {
                     var active = b.dataset.value === newOp;
                     b.style.background = active
-                        ? (newOp === 'AND' ? 'rgba(0,164,220,0.75)' : 'rgba(220,120,0,0.75)')
+                        ? 'var(--theme-background-level3)'
                         : 'transparent';
-                    b.style.color = active ? '#fff' : '';
+                    b.style.color = active ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)';
                 });
                 var desc = group.querySelector('.inner-op-desc');
                 if (desc) desc.textContent = newOp === 'AND' ? 'All rules must match' : 'Any rule is enough';
@@ -3948,9 +3913,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var active = btn.dataset.not === '1';
                 active = !active;
                 btn.dataset.not = active ? '1' : '0';
-                btn.style.background = active ? 'rgba(200,50,50,0.75)' : 'transparent';
-                btn.style.color = active ? '#fff' : '';
-                btn.style.border = active ? '1px solid rgba(200,50,50,0.6)' : '1px solid rgba(128,128,128,0.4)';
+                btn.style.background = active ? 'rgba(229,115,115,0.15)' : 'transparent';
+                btn.style.color = active ? 'var(--hsc-danger-text)' : '';
+                btn.style.border = active ? '1px solid rgba(229,115,115,0.5)' : '1px solid var(--hsc-hairline-strong)';
                 setTimeout(checkFormState, 0);
             }
 
