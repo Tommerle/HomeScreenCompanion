@@ -507,6 +507,9 @@
         .log-tab.empty { opacity: 0.45; }
         .log-tab .status-dot { height: 8px; width: 8px; margin-right: 0; }
         .log-tab .log-tab-time { font-size: 0.85em; opacity: 0.7; }
+        .log-tab.log-issues-toggle { margin-left: auto; }
+        .log-tab.log-issues-toggle:hover { border-color: #e6c15a; }
+        .log-tab.log-issues-toggle.active { background: rgba(230,193,90,0.18); border-color: #e6c15a; color: #e6c15a; }
 
         .help-step {
             margin-bottom: 25px;
@@ -1778,6 +1781,7 @@
                 <button type="button" class="log-tab" data-log="sync"><span class="status-dot"></span>Sync<span class="log-tab-time"></span></button>
                 <button type="button" class="log-tab" data-log="hsc"><span class="status-dot"></span>Home Screen<span class="log-tab-time"></span></button>
                 <button type="button" class="log-tab" data-log="tl"><span class="status-dot"></span>Top-list<span class="log-tab-time"></span></button>
+                <button type="button" class="log-tab log-issues-toggle" id="btnLogIssuesOnly" title="Show only warnings and errors, each under its group"><i class="md-icon" style="font-size:1.1em;">warning</i>Warnings &amp; errors only</button>
             </div>
             <div class="modal-body-scroll" style="background: #0a0a0a; color: #ececec; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; padding: 20px; border-top: 1px solid #333;" id="logContent">
             </div>

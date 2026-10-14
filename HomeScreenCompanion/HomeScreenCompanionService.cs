@@ -100,6 +100,7 @@ namespace HomeScreenCompanion
         public string StartedUtc { get; set; } = string.Empty;
         public string Step { get; set; } = string.Empty;   // what a running sync is doing now
         public string Waiting { get; set; } = string.Empty; // runs waiting for this one to finish (see RunGate)
+        public List<GroupIssue> GroupIssues { get; set; } = new List<GroupIssue>(); // each group's warnings / error from its last run
     }
 
     [Route("/HomeScreenCompanion/RunEntry", "POST")]
@@ -896,7 +897,8 @@ public class HomeScreenCompanionService : IService
                 IsRunning = HomeScreenCompanionTask.IsRunning,
                 StartedUtc = HomeScreenCompanionTask.LastStartedUtc?.ToString("o") ?? "",
                 Step = HomeScreenCompanionTask.Progress.Step,
-                Waiting = RunGate.WaitingFor(HomeScreenCompanionTask.Progress.Step, HomeScreenCompanionTask.IsRunning)
+                Waiting = RunGate.WaitingFor(HomeScreenCompanionTask.Progress.Step, HomeScreenCompanionTask.IsRunning),
+                GroupIssues = GroupIssues.All()
             };
         }
 

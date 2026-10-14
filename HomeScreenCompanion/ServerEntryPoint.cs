@@ -56,6 +56,7 @@ namespace HomeScreenCompanion
 
             // Last run logs survive a restart (shown in the log modal and "Last run").
             LogStore.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
+            GroupIssues.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
             HomeScreenCompanionTask.RestoreLog();
             HomeSectionSyncTask.RestoreLog();
             TopListSyncTask.RestoreLog();

@@ -89,6 +89,7 @@ namespace HomeScreenCompanion
         private class GroupRunStats
         {
             public string? DisplayName;
+            public string? GroupName;   // the group's Name (with TagName: its key in GroupIssues)
             public string? SourceType;
             public bool Skipped;
             public string? SkipReason;
@@ -123,6 +124,9 @@ namespace HomeScreenCompanion
             public int PlaylistUsersUpdated;
             public int PlaylistUsersFailed;
             public List<string> Warnings = new List<string>();
+            // A source could not be read (HTTP error, no API key …): reported as an error, but the
+            // group is handled exactly as for the matching "returned 0 items" warning.
+            public List<string> Errors = new List<string>();
             public List<string> MissingItems = new List<string>(); // list titles not found in the library
             public long ElapsedMs;
         }
@@ -558,6 +562,7 @@ namespace HomeScreenCompanion
                     var gs = new GroupRunStats
                     {
                         DisplayName = displayName,
+                        GroupName = tagConfig.Name,
                         SourceType = srcLabel,
                         EnableTag = tagConfig.EnableTag && !tagConfig.OnlyCollection,
                         EnableCollection = tagConfig.EnableCollection,
@@ -1093,11 +1098,16 @@ namespace HomeScreenCompanion
                         // For External and AI sources: if the remote returned zero items and the user has
                         // opted to preserve tags on empty results, treat it as a failed fetch.
                         bool isRemoteSource = string.IsNullOrEmpty(tagConfig.SourceType) || tagConfig.SourceType == "External" || tagConfig.SourceType == "AI";
+                        // A group with several URLs gets one message per URL: say which one.
+                        string emptySrc = isRemoteSource && gs.ListCount == 0 && tagConfig.SourceType != "AI"
+                            && config.Tags.Count(t => string.Equals(GroupKey(t), GroupKey(tagConfig), StringComparison.OrdinalIgnoreCase)) > 1
+                            ? (tagConfig.Url ?? "").Trim() + ": " : "";
+                        var emptyList = ListFetcher.IsFailure(fetchError) ? gs.Errors : gs.Warnings;
                         if (isRemoteSource && gs.ListCount == 0 && config.PreserveTagsOnEmptyResult)
                         {
-                            gs.Warnings.Add(tagConfig.SourceType == "AI"
+                            emptyList.Add(emptySrc + (tagConfig.SourceType == "AI"
                                 ? $"The AI returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the prompt and the API key in Settings."
-                                : $"The list returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the list URL and the API key in Settings.");
+                                : $"The list returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the list URL and the API key in Settings."));
                             failedFetches.Add(tagName);
                             if (tagConfig.EnableCollection) failedFetches.Add(cName);
                             playlistGroupsToSkip.Add(GroupKey(tagConfig));
@@ -1109,9 +1119,9 @@ namespace HomeScreenCompanion
                             continue;
                         }
                         if (isRemoteSource && gs.ListCount == 0)
-                            gs.Warnings.Add(tagConfig.SourceType == "AI"
+                            emptyList.Add(emptySrc + (tagConfig.SourceType == "AI"
                                 ? $"The AI returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings)"
-                                : $"The list returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings). Check the list URL and the API key.");
+                                : $"The list returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings). Check the list URL and the API key."));
 
                         if (tagConfig.EnableTag && !tagConfig.OnlyCollection && !IsBoxSetHomeSectionEntry(tagConfig))
                         {
@@ -1605,6 +1615,7 @@ namespace HomeScreenCompanion
                         {
                             existing.BoxSetTaggedCount += gs.BoxSetTaggedCount;
                             existing.Warnings.AddRange(gs.Warnings);
+                            existing.Errors.AddRange(gs.Errors);
                             existing.ElapsedMs += gs.ElapsedMs;
                             if (gs.HomeSectionSynced)
                             {
@@ -1641,6 +1652,7 @@ namespace HomeScreenCompanion
                                 PlaylistUsersUpdated = gs.PlaylistUsersUpdated,
                                 PlaylistUsersFailed = gs.PlaylistUsersFailed,
                                 Warnings         = new List<string>(gs.Warnings),
+                                Errors           = new List<string>(gs.Errors),
                                 MissingItems     = new List<string>(gs.MissingItems),
                                 ElapsedMs        = gs.ElapsedMs,
                             };
@@ -1665,6 +1677,7 @@ namespace HomeScreenCompanion
                 _log.Info("Results");
                 foreach (var gs in displayStatsList)
                     WriteGroupBlock(gs, dryRun, logMissing);
+                RecordGroupIssues(statsList, config.Tags.Select(t => GroupIssues.Key(t.Name, t.Tag)).ToList());
 
                 // Log cleanup of tags from deleted/disabled groups (tags that had removals but
                 // no matching entry in displayStatsList to attribute them to).
@@ -1692,9 +1705,9 @@ namespace HomeScreenCompanion
                 if (aiConfigChanged)
                     Plugin.Instance.SaveConfiguration();
 
-                int groupsFailed  = displayStatsList.Count(g => g.ErrorMessage != null);
+                int groupsFailed  = displayStatsList.Count(g => g.ErrorMessage != null || g.Errors.Count > 0);
                 int groupsSkipped = displayStatsList.Count(g => g.Skipped);
-                int groupsWarned  = displayStatsList.Count(g => !g.Skipped && g.ErrorMessage == null && g.Warnings.Count > 0);
+                int groupsWarned  = displayStatsList.Count(g => !g.Skipped && g.ErrorMessage == null && g.Errors.Count == 0 && g.Warnings.Count > 0);
                 int groupsOk      = displayStatsList.Count - groupsFailed - groupsSkipped - groupsWarned;
                 string finalStatus = BuildFinalStatus(dryRun, groupsFailed, groupsWarned);
                 LastRunStatus = $"{finalStatus} ({DateTime.Now:HH:mm})";
@@ -1967,6 +1980,7 @@ namespace HomeScreenCompanion
             var gs = new GroupRunStats
             {
                 DisplayName = _displayName,
+                GroupName = tagConfig.Name,
                 SourceType = _srcLabel,
                 SourceLabel = DescribeSource(tagConfig),
                 EnableTag = tagConfig.EnableTag && !tagConfig.OnlyCollection,
@@ -2257,6 +2271,7 @@ namespace HomeScreenCompanion
             // List sources (URLs / the AI) that returned nothing: with "Preserve tags and collections
             // on empty result" the run leaves the group as it is, like the full sync.
             var _emptySources = new List<string>();
+            var _failedSources = new List<string>();   // the empty sources that could not be read (see ListFetcher.IsFailure)
 
             _log.Blank();
             _log.Info("» Fetching sources");
@@ -2292,6 +2307,7 @@ namespace HomeScreenCompanion
                         fetchTimer.Stop();
                         _listCount += items.Count;
                         if (items.Count == 0) _emptySources.Add(src.Url.Trim() + (fetcher.LastError != null ? $" ({fetcher.LastError})" : ""));
+                        if (items.Count == 0 && ListFetcher.IsFailure(fetcher.LastError)) _failedSources.Add(_emptySources[_emptySources.Count - 1]);
                         int _srcMatched = 0, _srcBlacklisted = 0, _srcMissingBefore = gs.MissingItems.Count;
                         foreach (var extItem in items)
                         {
@@ -2497,6 +2513,7 @@ namespace HomeScreenCompanion
 
                     _listCount = aiItems.Count;
                     if (aiItems.Count == 0) _emptySources.Add((string.IsNullOrWhiteSpace(tagConfig.AiProvider) ? "the AI" : tagConfig.AiProvider) + (fetcher.LastError != null ? $" ({fetcher.LastError})" : ""));
+                    if (aiItems.Count == 0 && ListFetcher.IsFailure(fetcher.LastError)) _failedSources.Add(_emptySources[_emptySources.Count - 1]);
                     int _aiTitleMatched = 0, _aiBlacklisted = 0;
 
                     foreach (var aiItem in aiItems)
@@ -2569,7 +2586,7 @@ namespace HomeScreenCompanion
             if (_preview == null && _emptySources.Count > 0 && config.PreserveTagsOnEmptyResult)
             {
                 gs.ListCount = _listCount;
-                gs.Warnings.Add((tagConfig.SourceType == "AI" ? "The AI returned 0 items" : $"{(_emptySources.Count == 1 ? "A list" : $"{_emptySources.Count} lists")} returned 0 items")
+                (_failedSources.Count > 0 ? gs.Errors : gs.Warnings).Add((tagConfig.SourceType == "AI" ? "The AI returned 0 items" : $"{(_emptySources.Count == 1 ? "A list" : $"{_emptySources.Count} lists")} returned 0 items")
                     + $" ({string.Join(", ", _emptySources)}) — existing tags, collection and playlist were kept (\"Preserve tags and collections on empty result\" is on in Settings).");
                 gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
                 WriteFetchLine(gs);
@@ -2624,9 +2641,13 @@ namespace HomeScreenCompanion
 
             if (!IsNextWatch(tagConfig)) gs.ListCount = _listCount;
             if ((string.IsNullOrEmpty(tagConfig.SourceType) || tagConfig.SourceType == "External" || tagConfig.SourceType == "AI") && _listCount == 0)
-                gs.Warnings.Add(tagConfig.SourceType == "AI"
+                (_failedSources.Count > 0 ? gs.Errors : gs.Warnings).Add(tagConfig.SourceType == "AI"
                     ? $"The AI returned 0 items{Why(_emptySources)} — the group's tags, collection and playlist are being cleared. Check the prompt and the API key in Settings."
                     : $"The list returned 0 items{Why(_emptySources)} — the group's tags, collection and playlist are being cleared. Check the list URL and the API key in Settings.");
+            else
+                // Some of the group's URLs came back empty, the others were used (same as the full sync).
+                foreach (var _empty in _emptySources)
+                    (_failedSources.Contains(_empty) ? gs.Errors : gs.Warnings).Add($"{_empty}: the list returned 0 items — the group's other lists were used");
             {
                 var _outIds = new HashSet<Guid>(tagOutputItems.Select(i => i.Id));
                 foreach (var _id in collectionOutputItems.Select(i => i.Id)) _outIds.Add(_id);
@@ -6304,6 +6325,12 @@ namespace HomeScreenCompanion
                 _log.Error($"{head}  ·  {gs.ErrorMessage}");
                 return;
             }
+            if (gs.Errors.Count > 0)
+            {
+                int more = gs.Errors.Count - 1 + gs.Warnings.Count;
+                _log.Error($"{head}  ·  {gs.Errors[0]}{(more > 0 ? $"  (+{more} more, see results)" : "")}");
+                return;
+            }
             if (gs.Warnings.Count > 0)
             {
                 _log.Warn($"{head}  ·  {gs.Warnings[0]}{(gs.Warnings.Count > 1 ? $"  (+{gs.Warnings.Count - 1} more, see results)" : "")}");
@@ -6355,7 +6382,8 @@ namespace HomeScreenCompanion
             }
             else if (gs.ListCount > 0)
                 _log.Ok($"List: {gs.ListCount} items  ·  {gs.MatchCount} in your library");
-            if (gs.LimitShort != null) _log.Warn($"Found {gs.LimitShort} (Max items)");
+            // A list that came back empty has its own warning / error below.
+            if (gs.LimitShort != null && !(isRemote && gs.ListCount == 0)) _log.Warn($"Found {gs.LimitShort} (Max items)");
 
             if (gs.EnableTag && !gs.BoxSetHse)
             {
@@ -6397,6 +6425,7 @@ namespace HomeScreenCompanion
                 else _log.Skip("Home section: not synced");
             }
 
+            foreach (var e in gs.Errors) _log.Error(e);
             foreach (var w in gs.Warnings) _log.Warn(w);
 
             if (isRemote && gs.MissingItems.Count > 0)
@@ -6420,8 +6449,9 @@ namespace HomeScreenCompanion
             _log.Blank();
             _log.Info("Results");
             WriteGroupBlock(gs, dryRun, logMissing);
+            if (_preview == null) RecordGroupIssues(new[] { gs });
 
-            int failed = gs.ErrorMessage != null ? 1 : 0;
+            int failed = gs.ErrorMessage != null || gs.Errors.Count > 0 ? 1 : 0;
             int warned = failed == 0 && gs.Warnings.Count > 0 ? 1 : 0;
             string finalStatus = BuildFinalStatus(dryRun, failed, warned);
             LastRunStatus = $"{finalStatus} ({DateTime.Now:HH:mm})";
@@ -6440,6 +6470,31 @@ namespace HomeScreenCompanion
                 _log.Info($"  Home sections: {(gs.HomeSectionSynced ? 1 : 0)} synced");
             _log.Info($"  Done in {RunLog.Elapsed(DateTime.Now - startTime)}  ·  {StatusSymbol(failed, warned)} {finalStatus}");
             _log.Rule();
+        }
+
+        // Stores each group's warnings / error for the flag on its card (see GroupIssues). A group
+        // stored as several flat sources has one stats entry per source; skipped ones are left out.
+        private static void RecordGroupIssues(IEnumerable<GroupRunStats> stats, ICollection<string>? liveKeys = null)
+        {
+            var results = stats
+                .Where(g => !g.Skipped && g.TagName != null)
+                .GroupBy(g => GroupIssues.Key(g.GroupName, g.TagName), StringComparer.OrdinalIgnoreCase)
+                .Select(grp =>
+                {
+                    var first = grp.First();
+                    var errors = grp.Where(g => g.ErrorMessage != null).Select(g => g.ErrorMessage!)
+                        .Concat(grp.SelectMany(g => g.Errors)).Distinct().ToList();
+                    var messages = errors.Concat(grp.SelectMany(g => g.Warnings)).Distinct().ToList();
+                    GroupIssue? issue = messages.Count == 0 ? null : new GroupIssue
+                    {
+                        Level = errors.Count > 0 ? "error" : "warning",
+                        Messages = messages,
+                        RunUtc = DateTime.UtcNow
+                    };
+                    return (first.GroupName ?? "", first.TagName!, issue);
+                })
+                .ToList();
+            GroupIssues.Record(results, liveKeys);
         }
 
         private static string BuildFinalStatus(bool dryRun, int failed, int warned)

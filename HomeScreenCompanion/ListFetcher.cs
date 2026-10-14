@@ -46,6 +46,14 @@ namespace HomeScreenCompanion
 
         // A list read part-way (a later page failed) is not used: it would drop every title after
         // that page. It counts as a failed fetch, so "Preserve tags on empty result" keeps them.
+        // LastError of an AI that answered without titles: an empty result, not a failure.
+        internal const string EmptyAnswer = "the answer held no titles";
+
+        /// <summary>True when LastError says the source could not be read (HTTP or network error,
+        /// missing API key, unreadable URL, AI error), rather than that it was empty.</summary>
+        internal static bool IsFailure(string? lastError) =>
+            !string.IsNullOrEmpty(lastError) && lastError != EmptyAnswer;
+
         private List<ExternalItemDto> PageFailed(List<ExternalItemDto> all, int pageNumber, Exception ex, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -560,7 +568,7 @@ namespace HomeScreenCompanion
 
                 var cleaned = CleanAiJsonOutput(rawJson);
                 var items = _jsonSerializer.DeserializeFromString<List<AiListItem>>(cleaned);
-                if (items == null || items.Count == 0) LastError = "the answer held no titles";
+                if (items == null || items.Count == 0) LastError = EmptyAnswer;
                 return items ?? new List<AiListItem>();
             }
             catch (Exception ex)

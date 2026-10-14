@@ -28,6 +28,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // Live log modal: latest status per task and the tab the user picked (null = automatic)
     var _lastStatus = { sync: null, hsc: null, tl: null };
     var _logTab = null;
+    var _logIssuesOnly = false;   // log modal: only warning / error lines (with their group's header)
     var originalConfigState = null;
     var statusRequestId = 0;
 
@@ -184,6 +185,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     var currentManageSections = [];
     var savedFilters = [];
     var _topListTagNames = new Set();
+    // Each group's warnings / error from its last run (Status → GroupIssues), by groupIssueKey.
+    var _groupIssues = {};
+    var _groupIssuesSig = '';
 
     var customCss = `
     <style id="homeScreenCompanionCustomCss">
@@ -264,6 +268,59 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             background: rgba(232,168,56,0.15);
             border: 1px solid rgba(232,168,56,0.35);
         }
+
+        .hsc-run-issue:not(:empty) {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 12px;
+        }
+        .hsc-run-issue:not(:empty) + .tag-title { margin-left: 6px; }
+        .hsc-run-issue i { color: #ff9800; }
+        .hsc-run-issue i.error { color: #e53935; }
+
+        .hsc-run-issue-box > div {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-left: 3px solid #ff9800;
+            border-radius: 4px;
+            background: rgba(255,152,0,0.1);
+            font-size: 0.9em;
+            line-height: 1.45;
+        }
+        .hsc-run-issue-box > div.error {
+            border-left-color: #e53935;
+            background: rgba(229,57,53,0.1);
+        }
+        .hsc-run-issue-box .hsc-run-issue-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: bold;
+            color: #ff9800;
+            margin-bottom: 4px;
+        }
+        .hsc-run-issue-box .error .hsc-run-issue-head { color: #e53935; }
+
+        .hsc-issue-counter {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,152,0,0.45);
+            background: rgba(255,152,0,0.12);
+            color: #ff9800;
+            font-size: 0.9em;
+            font-family: inherit;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .hsc-issue-counter:hover { background: rgba(255,152,0,0.22); }
+        .hsc-issue-counter.error { border-color: rgba(229,57,53,0.5); background: rgba(229,57,53,0.12); color: #e53935; }
+        .hsc-issue-counter.error:hover { background: rgba(229,57,53,0.22); }
+        .hsc-issue-counter.active { box-shadow: inset 0 0 0 1px currentColor; font-weight: bold; }
+        .hsc-run-issue-box ul { margin: 0; padding-left: 20px; }
 
         .tag-indicator.homescreen {
             color: #4CAF50;
@@ -2888,7 +2945,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var newClass = isNew ? "just-added" : "";
 
         var html = `
-        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-dirty="false">
+        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-group-key="${encodeURIComponent(groupIssueKey(tagConfig.Name, tagConfig.Tag))}" data-dirty="false">
             <div class="tag-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px; cursor:pointer;">
                 <div style="display:flex; align-items:center;">
                     <div class="header-actions" style="margin-right:15px; display:flex; align-items:center;" onclick="event.stopPropagation()">
@@ -2903,6 +2960,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     </div>
                     <div class="tag-info" style="display:flex; align-items:center;">
                         <span class="source-badge">${sourceBadgeHtml}</span>
+                        <span class="hsc-run-issue">${groupIssueFlagHtml(_groupIssues[groupIssueKey(tagConfig.Name, tagConfig.Tag)])}</span>
                         <span class="tag-title" style="font-weight:bold; font-size:1.1em;">${labelName || tagName || 'New'}</span>
                         <span class="badge-container" style="display:flex; align-items:center;">${indicatorsHtml}</span>
                     </div>
@@ -2910,6 +2968,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 <i class="md-icon expand-icon">${initialIcon}</i>
             </div>
             <div class="tag-body" style="${initialStyle} padding:15px; border-top:1px solid rgba(255,255,255,0.1);">
+                <div class="hsc-run-issue-box">${groupIssueBoxHtml(_groupIssues[groupIssueKey(tagConfig.Name, tagConfig.Tag)])}</div>
                 <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
                     <button type="button" is="emby-button" class="btnCopySourceRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Copy this source to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em; margin-right:4px;">share</i><span>Copy</span></button>
                     <button type="button" is="emby-button" class="btnDuplicateRow raised" style="background:transparent; color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0; box-shadow:none;" title="Duplicate this source"><i class="md-icon" style="font-size:1em; margin-right:4px;">content_copy</i><span>Duplicate</span></button>
@@ -4559,7 +4618,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     // user chose a tab), updates the tab bar and renders that single log.
     function renderLogModal(view) {
         var content = view.querySelector('#logContent');
-        var tabs = view.querySelectorAll('#logTabs .log-tab');
+        var tabs = view.querySelectorAll('#logTabs .log-tab[data-log]');
         if (!content) return;
 
         var keys = ['sync', 'hsc', 'tl'];
@@ -4590,9 +4649,34 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }
         });
 
+        var issuesBtn = view.querySelector('#btnLogIssuesOnly');
+        if (issuesBtn) issuesBtn.classList.toggle('active', _logIssuesOnly);
+
         var entries = logs(selected).map(function (l) { return { src: selected, text: l }; });
         if (!entries.length) { content.textContent = '(no runs yet)'; return; }
+        if (_logIssuesOnly) {
+            entries = logIssueEntries(entries);
+            if (!entries.length) { content.textContent = '(no warnings or errors in this run)'; return; }
+        }
         renderLogLines(content, entries, running(selected));
+    }
+
+    // The log's ⚠ / ✖ lines, each run of them under the group (or phase) header it belongs to.
+    function logIssueEntries(entries) {
+        var out = [], head = null, shownHead = null;
+        entries.forEach(function (e) {
+            var raw = (e.text || '').replace(/^\[\d{2}:\d{2}:\d{2}\] ?/, '');
+            if (/^\[DEBUG\]/.test(raw)) return;
+            if (/^(»|Results$|Summary$|\[Cleanup\]$|\[\d+\/\d+\] )/.test(raw)) { head = e; return; }
+            if (raw.indexOf('✖') < 0 && raw.indexOf('⚠') < 0) return;
+            if (head && head !== shownHead) {
+                if (out.length) out.push({ src: e.src, text: '' });
+                out.push(head);
+                shownHead = head;
+            }
+            out.push(e);
+        });
+        return out;
     }
 
     // A sync changes tags, so the tabs that list tags (Top-Lists, Cleanup) load them again the
@@ -4656,6 +4740,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var label = view.querySelector('#lastRunStatusLabel'), dot = view.querySelector('#dotStatus'), content = view.querySelector('#logContent');
             var btnSave = view.querySelector('.btn-save'), btnRun = view.querySelector('#btnRunSync');
 
+            setGroupIssues(view, result.GroupIssues);
             if (!result.IsRunning) {
                 var runKey = (result.StartedUtc || '') + '|' + (result.LastRunStatus || '');
                 if (lastSyncRunKey !== null && runKey !== lastSyncRunKey) invalidateTagTabs(view);
@@ -5796,6 +5881,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var fSrcAI      = view.querySelector('#chkFilterSrcAI')?.checked;
         var fActive     = view.querySelector('#chkFilterActive')?.checked;
         var fInactive   = view.querySelector('#chkFilterInactive')?.checked;
+        var fIssues     = view.querySelector('#chkFilterIssues')?.checked;
 
         var anyFeature  = fTag || fColl || fSched || fHome;
         var anySrc      = fSrcExt || fSrcMI || fSrcColl || fSrcPlay || fSrcAI;
@@ -5805,7 +5891,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var btn = view.querySelector('#btnFilterDropdown');
         var lbl = view.querySelector('#filterDropdownLabel');
         if (btn && lbl) {
-            var activeCount = [fTag, fColl, fSched, fHome, fSrcExt, fSrcMI, fSrcColl, fSrcPlay, fSrcAI, fActive, fInactive].filter(Boolean).length;
+            var activeCount = [fTag, fColl, fSched, fHome, fSrcExt, fSrcMI, fSrcColl, fSrcPlay, fSrcAI, fActive, fInactive, fIssues].filter(Boolean).length;
             lbl.textContent = activeCount > 0 ? 'Filter (' + activeCount + ')' : 'Filter';
             btn.classList.toggle('active', activeCount > 0);
         }
@@ -5838,8 +5924,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 matchesStatus = (fActive && isActive) || (fInactive && !isActive);
             }
 
-            row.style.display = (matchesSearch && matchesFeature && matchesSrc && matchesStatus) ? 'block' : 'none';
+            var matchesIssues = !fIssues || !!_groupIssues[decodeURIComponent(row.dataset.groupKey || '')];
+
+            row.style.display = (matchesSearch && matchesFeature && matchesSrc && matchesStatus && matchesIssues) ? 'block' : 'none';
         });
+        var counter = view.querySelector('#btnIssueCounter');
+        if (counter) counter.classList.toggle('active', !!fIssues);
     }
 
     function checkForUpdates(view) {
@@ -5912,6 +6002,56 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
         if (!limit || found >= limit) return '';
         return `<span class="tag-indicator short" title="Last run found ${found} of ${limit}"><i class="md-icon" style="font-size:1.1em;">warning</i> ${found} of ${limit}</span>`;
+    }
+
+    // Warning sign before a group's name: its last run (full sync or Run Group) had warnings
+    // (orange) or failed (red). The card's body lists the messages. Keyed by the saved Name + Tag,
+    // like the server.
+    function groupIssueKey(name, tag) { return ((name || '').trim() + '\x1F' + (tag || '').trim()).toLowerCase(); }
+    function groupIssueFlagHtml(issue) {
+        if (!issue) return '';
+        var isError = issue.Level === 'error';
+        return `<i class="md-icon${isError ? ' error' : ''}" style="font-size:1.3em;" title="${isError ? 'Error last run' : 'Warning last run'}">warning</i>`;
+    }
+    function groupIssueBoxHtml(issue) {
+        if (!issue) return '';
+        var isError = issue.Level === 'error';
+        var when = issue.RunUtc ? new Date(issue.RunUtc) : null;
+        var whenText = when && !isNaN(when) ? ' · ' + when.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
+        return `<div class="${isError ? 'error' : ''}"><div class="hsc-run-issue-head"><i class="md-icon" style="font-size:1.2em;">warning</i>${isError ? 'Error' : 'Warning'} last run${whenText}</div>` +
+            '<ul>' + (issue.Messages || []).map(function (m) { return '<li>' + escapeHtml(m) + '</li>'; }).join('') + '</ul></div>';
+    }
+    function applyGroupIssue(row) {
+        var issue = _groupIssues[decodeURIComponent(row.dataset.groupKey || '')];
+        var flag = row.querySelector('.tag-info .hsc-run-issue'), box = row.querySelector('.tag-body .hsc-run-issue-box');
+        if (flag) flag.innerHTML = groupIssueFlagHtml(issue);
+        if (box) box.innerHTML = groupIssueBoxHtml(issue);
+    }
+    function setGroupIssues(view, list) {
+        var sig = JSON.stringify(list || []);
+        if (sig === _groupIssuesSig) return;
+        _groupIssuesSig = sig;
+        _groupIssues = {};
+        (list || []).forEach(function (i) { _groupIssues[groupIssueKey(i.Name, i.Tag)] = i; });
+        view.querySelectorAll('.tag-row').forEach(applyGroupIssue);
+        updateIssueCounter(view);
+        if (view.querySelector('#chkFilterIssues')?.checked) applyFilters(view);
+    }
+    // "⚠ 7 groups need attention" next to the filters (red when one of them failed); hidden when
+    // no group on the page has an issue.
+    function updateIssueCounter(view) {
+        var btn = view.querySelector('#btnIssueCounter');
+        if (!btn) return;
+        var n = 0, anyError = false;
+        view.querySelectorAll('#tagListContainer .tag-row').forEach(function (row) {
+            var issue = _groupIssues[decodeURIComponent(row.dataset.groupKey || '')];
+            if (!issue) return;
+            n++;
+            if (issue.Level === 'error') anyError = true;
+        });
+        btn.style.display = n ? '' : 'none';
+        btn.classList.toggle('error', anyError);
+        btn.innerHTML = '<i class="md-icon" style="font-size:1.1em;">warning</i>' + n + (n === 1 ? ' group needs' : ' groups need') + ' attention';
     }
 
     function groupConfigTags(tags) {
@@ -10553,6 +10693,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 view.querySelector('#btnCloseLogs').addEventListener('click', () => { _logTab = null; logOverlay.classList.remove('modal-visible'); });
                 logOverlay.addEventListener('click', e => { if (e.target === logOverlay) { _logTab = null; logOverlay.classList.remove('modal-visible'); } });
                 view.querySelectorAll('#logTabs .log-tab').forEach(function (tab) {
+                    if (tab.id === 'btnLogIssuesOnly') { tab.addEventListener('click', function () { _logIssuesOnly = !_logIssuesOnly; renderLogModal(view); }); return; }
                     tab.addEventListener('click', function () { _logTab = tab.getAttribute('data-log'); renderLogModal(view); });
                 });
 
@@ -10755,8 +10896,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <div class="filter-dropdown-label">Status</div>
                                 <label class="filter-chk-row"><input type="checkbox" id="chkFilterActive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:#52B54B;flex-shrink:0;"></span>Active</span></label>
                                 <label class="filter-chk-row"><input type="checkbox" id="chkFilterInactive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:rgba(128,128,128,0.5);flex-shrink:0;"></span>Inactive</span></label>
+                                <div class="filter-dropdown-divider"></div>
+                                <div class="filter-dropdown-label">Last run</div>
+                                <label class="filter-chk-row"><input type="checkbox" id="chkFilterIssues" /><span style="display:flex;align-items:center;gap:6px;"><i class="md-icon" style="font-size:1.1em;color:#ff9800;">warning</i>Warnings &amp; errors</span></label>
                             </div>
                         </div>
+
+                        <button type="button" id="btnIssueCounter" class="hsc-issue-counter" style="display:none;" title="Show only these groups"></button>
 
                     </div>`;
 
@@ -10784,8 +10930,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                     ['#chkFilterTag','#chkFilterCollection','#chkFilterSchedule','#chkFilterHomeScreen',
                      '#chkFilterSrcExternal','#chkFilterSrcMediaInfo','#chkFilterSrcCollection','#chkFilterSrcPlaylist',
-                     '#chkFilterSrcAI','#chkFilterActive','#chkFilterInactive'
+                     '#chkFilterSrcAI','#chkFilterActive','#chkFilterInactive','#chkFilterIssues'
                     ].forEach(id => view.querySelector(id).addEventListener('change', () => applyFilters(view)));
+
+                    // "⚠ 7 groups need attention": toggles the Last run filter.
+                    view.querySelector('#btnIssueCounter').addEventListener('click', function () {
+                        var chk = view.querySelector('#chkFilterIssues');
+                        chk.checked = !chk.checked;
+                        applyFilters(view);
+                    });
+                    updateIssueCounter(view);
 
                     var dropBtn   = view.querySelector('#btnFilterDropdown');
                     var dropPanel = view.querySelector('#filterDropdownPanel');
@@ -11368,7 +11522,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 }
                 ['#chkFilterTag','#chkFilterCollection','#chkFilterSchedule','#chkFilterHomeScreen',
                  '#chkFilterSrcExternal','#chkFilterSrcMediaInfo','#chkFilterSrcCollection','#chkFilterSrcPlaylist',
-                 '#chkFilterSrcAI','#chkFilterActive','#chkFilterInactive'
+                 '#chkFilterSrcAI','#chkFilterActive','#chkFilterInactive','#chkFilterIssues'
                 ].forEach(id => { var el = view.querySelector(id); if (el) el.checked = false; });
                 var lbl = view.querySelector('#filterDropdownLabel'); if (lbl) lbl.textContent = 'Filter';
                 var btn = view.querySelector('#btnFilterDropdown'); if (btn) btn.classList.remove('active');
