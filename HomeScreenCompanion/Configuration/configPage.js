@@ -277,28 +277,30 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         .hsc-run-issue i { color: var(--hsc-warning); }
         .hsc-run-issue i.error { color: var(--hsc-danger-strong); }
 
+        /* Last-run warnings / error of a group: callouts (semantic colour at 8%, border at 30%, text in ink) */
         .hsc-run-issue-box > div {
             margin-bottom: 12px;
-            padding: 8px 12px;
-            border-left: 3px solid #ff9800;
-            border-radius: 4px;
-            background: rgba(255,152,0,0.1);
-            font-size: 0.9em;
-            line-height: 1.45;
+            padding: 12px;
+            border: 1px solid rgba(230,193,90,0.3);
+            border-radius: 6px;
+            background: rgba(230,193,90,0.08);
+            font-size: 0.88em;
+            line-height: 1.5;
         }
         .hsc-run-issue-box > div.error {
-            border-left-color: #e53935;
-            background: rgba(229,57,53,0.1);
+            border-color: rgba(229,115,115,0.3);
+            background: rgba(229,115,115,0.08);
         }
         .hsc-run-issue-box .hsc-run-issue-head {
             display: flex;
             align-items: center;
             gap: 6px;
-            font-weight: bold;
-            color: #ff9800;
+            font-weight: 600;
+            color: var(--theme-text-primary);
             margin-bottom: 4px;
         }
-        .hsc-run-issue-box .error .hsc-run-issue-head { color: #e53935; }
+        .hsc-run-issue-box .hsc-run-issue-head .md-icon { color: var(--hsc-warning-text); }
+        .hsc-run-issue-box .error .hsc-run-issue-head .md-icon { color: var(--hsc-danger-text); }
 
         /* "N groups need attention": a status pill that also filters the list */
         .hsc-issue-counter {
@@ -356,16 +358,18 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             display: none !important;
         }
 
+        /* Dry run: a sticky warning callout (opaque, because the page scrolls under it) */
         .dry-run-warning {
-            background-color: #E67E22;
-            color: #000000;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
+            background: linear-gradient(rgba(230,193,90,0.16), rgba(230,193,90,0.16)), var(--theme-background-level1);
+            border: 1px solid rgba(230,193,90,0.45);
+            color: var(--theme-text-primary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
             text-align: center;
-            font-weight: bold;
-            font-size: 1.1em;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            font-weight: 600;
+            font-size: 0.95em;
+            box-shadow: var(--hsc-shadow-float);
             display: none;
             align-items: center;
             justify-content: center;
@@ -645,7 +649,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             opacity: 0.35;
         }
         .plugin-footer .footer-update-link {
-            color: #E67E22;
+            color: var(--hsc-warning-text);
             text-decoration: none;
             font-weight: bold;
         }
@@ -1031,7 +1035,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 + '</div>';
             if (res.Note) html += '<div style="margin-bottom:8px; font-size:0.85em; opacity:0.75;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">info</i>' + escapeHtml(res.Note) + '</div>';
             (res.Warnings || []).forEach(function (w) {
-                html += '<div style="margin-bottom:8px; font-size:0.85em; color:#e8a838;"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">warning</i>' + escapeHtml(w) + '</div>';
+                html += '<div style="margin-bottom:8px; font-size:0.85em; color:var(--hsc-warning-text);"><i class="md-icon" style="font-size:1em; vertical-align:-2px; margin-right:4px;">warning</i>' + escapeHtml(w) + '</div>';
             });
             html += '</div><div class="stm-list">';
             if (!items.length) {
@@ -1197,7 +1201,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <div class="pl-poster-upload" style="display:${tc.PlaylistPosterStyle ? 'none' : 'block'};">
                                     <div class="poster-preview-container" style="margin-bottom:8px; display:${tc.PlaylistPosterPath ? 'block' : 'none'};">
                                         <span class="poster-filename" style="font-size:0.85em; opacity:0.7;">${file(tc.PlaylistPosterPath)}</span>
-                                        <button type="button" class="btnRemovePoster" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>
+                                        <button type="button" class="btnRemovePoster" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>
                                     </div>
                                     <img class="poster-preview-img" src="" alt="" style="max-width:120px; max-height:180px; border-radius:4px; display:none; margin-bottom:8px;" />
                                     <input type="file" class="inputPosterFile" accept="image/*" style="display:none;" />
@@ -1218,7 +1222,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <div class="pl-bg-upload" style="display:${tc.PlaylistBackgroundStyle ? 'none' : 'block'};">
                                     <div class="bg-preview-container" style="margin-bottom:8px; display:${tc.PlaylistBackgroundPath ? 'block' : 'none'};">
                                         <span class="bg-filename" style="font-size:0.85em; opacity:0.7;">${file(tc.PlaylistBackgroundPath)}</span>
-                                        <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>
+                                        <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>
                                     </div>
                                     <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                                     <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
@@ -1297,7 +1301,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return '<div class="' + cls + '" style="display:' + (style ? 'none' : 'block') + ';">' +
             '<div class="bg-preview-container" style="margin-bottom:8px; display:' + (p ? 'block' : 'none') + ';">' +
                 '<span class="bg-filename" style="font-size:0.85em; opacity:0.7;">' + file + '</span>' +
-                '<button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>' +
+                '<button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>' +
             '</div>' +
             '<img class="bg-preview-img" src="" alt="" style="' + imgSize + ' border-radius:4px; display:none; margin-bottom:8px;" />' +
             '<input type="file" class="inputBgFile" accept="image/*" style="display:none;" />' +
@@ -2975,8 +2979,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             </select>
                         </div>
 
-                        <div class="ollama-experimental-warning" style="display:${(tagConfig.AiProvider || 'OpenAI') === 'Ollama' ? 'flex' : 'none'}; align-items:flex-start; gap:8px; background:rgba(232,168,56,0.1); border:1px solid rgba(232,168,56,0.35); border-radius:4px; padding:10px 12px; margin-bottom:15px; font-size:0.85em; line-height:1.5;">
-                            <i class="md-icon" style="font-size:1.1em; color:#e8a838; flex-shrink:0; margin-top:1px;">warning</i>
+                        <div class="ollama-experimental-warning" style="display:${(tagConfig.AiProvider || 'OpenAI') === 'Ollama' ? 'flex' : 'none'}; align-items:flex-start; gap:8px; background:rgba(230,193,90,0.1); border:1px solid rgba(230,193,90,0.35); border-radius:4px; padding:10px 12px; margin-bottom:15px; font-size:0.85em; line-height:1.5;">
+                            <i class="md-icon" style="font-size:1.1em; color:var(--hsc-warning-text); flex-shrink:0; margin-top:1px;">warning</i>
                             <span style="opacity:0.85;"><strong>Experimental:</strong> Ollama support is experimental. Local models may return inaccurate IMDB IDs — the plugin will fall back to title matching, but results <strong>WILL</strong> vary depending on the model used. Known limitations with local AI is the lack of new and updated information, and limited ability to research online. Cloud based models seems to be the best options for now. </span>
                         </div>
 
@@ -3104,7 +3108,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <span>Apply Tag</span>
                             </label>
                             <div class="fieldDescription">Automatically tag matched items in Emby.</div>
-                            <div class="nw-shared-warning fieldDescription" style="display:none; color:#e0a040; margin-top:6px;">${NEXT_WATCH_SHARED_WARNING}</div>
+                            <div class="nw-shared-warning fieldDescription" style="display:none; color:var(--hsc-warning-text); margin-top:6px;">${NEXT_WATCH_SHARED_WARNING}</div>
                         </div>
                         <div class="tag-settings" style="margin-left: 20px; padding-left: 15px; border-left: 2px solid var(--line-color); margin-top: 10px; display: ${tagConfig.EnableTag !== false ? 'block' : 'none'};">
                             <div class="inputContainer">
@@ -3144,7 +3148,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <div class="tag-bg-upload" style="display:${tagConfig.TagBackgroundStyle ? 'none' : 'block'};">
                                 <div class="bg-preview-container" style="margin-bottom:8px; display:${tagConfig.TagBackgroundPath ? 'block' : 'none'};">
                                     <span class="bg-filename" style="font-size:0.85em; opacity:0.7;">${tagConfig.TagBackgroundPath ? tagConfig.TagBackgroundPath.split(/[\\\\/]/).pop() : ''}</span>
-                                    <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>
+                                    <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>
                                 </div>
                                 <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                                 <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
@@ -3208,7 +3212,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <span>Create Collection</span>
                         </label>
                         <div class="fieldDescription">Automatically create and maintain an Emby Collection from these items.</div>
-                        <div class="nw-shared-warning fieldDescription" style="display:none; color:#e0a040; margin-top:6px;">${NEXT_WATCH_SHARED_WARNING}</div>
+                        <div class="nw-shared-warning fieldDescription" style="display:none; color:var(--hsc-warning-text); margin-top:6px;">${NEXT_WATCH_SHARED_WARNING}</div>
                     </div>
                     
                     <div class="collection-settings" style="margin-left: 20px; padding-left: 15px; border-left: 2px solid var(--line-color); margin-top: 10px; display: ${tagConfig.EnableCollection ? 'block' : 'none'};">
@@ -3256,7 +3260,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <div class="coll-poster-upload" style="display:${tagConfig.CollectionPosterStyle ? 'none' : 'block'};">
                             <div class="poster-preview-container" style="margin-bottom:8px; display:${collPosterPath ? 'block' : 'none'};">
                                 <span class="poster-filename" style="font-size:0.85em; opacity:0.7;">${collPosterPath ? collPosterPath.split(/[\\\\/]/).pop() : ''}</span>
-                                <button type="button" class="btnRemovePoster" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>
+                                <button type="button" class="btnRemovePoster" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>
                             </div>
                             <img class="poster-preview-img" src="" alt="" style="max-width:120px; max-height:180px; border-radius:4px; display:none; margin-bottom:8px;" />
                             <input type="file" class="inputPosterFile" accept="image/*" style="display:none;" />
@@ -3283,7 +3287,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <div class="coll-bg-upload" style="display:${tagConfig.CollectionBackgroundStyle ? 'none' : 'block'};">
                             <div class="bg-preview-container" style="margin-bottom:8px; display:${tagConfig.CollectionBackgroundPath ? 'block' : 'none'};">
                                 <span class="bg-filename" style="font-size:0.85em; opacity:0.7;">${tagConfig.CollectionBackgroundPath ? tagConfig.CollectionBackgroundPath.split(/[\\\\/]/).pop() : ''}</span>
-                                <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:#e55; cursor:pointer; vertical-align:middle;">✕ Remove</button>
+                                <button type="button" class="btnRemoveBg" style="margin-left:10px; font-size:0.8em; background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; vertical-align:middle;">✕ Remove</button>
                             </div>
                             <img class="bg-preview-img" src="" alt="" style="max-width:240px; max-height:135px; border-radius:4px; display:none; margin-bottom:8px;" />
                             <input type="file" class="inputBgFile" accept="image/*" style="display:none;" />
@@ -3331,8 +3335,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <span>Keep the list order — movies only (experimental)</span>
                             </label>
                         </div>
-                        <div class="ranked-only" style="display:flex; align-items:flex-start; gap:8px; background:rgba(232,168,56,0.1); border:1px solid rgba(232,168,56,0.35); border-radius:4px; padding:10px 12px; font-size:0.85em; line-height:1.5; margin-top:6px; margin-bottom:6px;">
-                            <i class="md-icon" style="font-size:1.1em; color:#e8a838; flex-shrink:0; margin-top:1px;">warning</i>
+                        <div class="ranked-only" style="display:flex; align-items:flex-start; gap:8px; background:rgba(230,193,90,0.1); border:1px solid rgba(230,193,90,0.35); border-radius:6px; padding:12px; font-size:0.85em; line-height:1.5; margin-top:6px; margin-bottom:6px;">
+                            <i class="md-icon" style="font-size:1.1em; color:var(--hsc-warning-text); flex-shrink:0; margin-top:1px;">warning</i>
                             <span><strong>Experimental:</strong> adds a hidden library "&lt;collection&gt; (ranked)" with .strm copies of the movies, merged with the real films as extra versions. Unticking removes them.</span>
                         </div>
                     </div>
@@ -3385,7 +3389,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <span>Add as home screen section</span>
                         </label>
                         <div class="fieldDescription">A home screen section will be managed for selected users each time sync runs.</div>
-                        <div class="hse-disabled-hint" style="font-size:0.9em; color:#e07070; margin-top:4px; display:${(tagConfig.EnableTag === false && !tagConfig.EnableCollection && !tagConfig.EnablePlaylist) ? 'block' : 'none'};">Requires <strong>Apply Tag</strong>, <strong>Create Collection</strong> or <strong>Create Playlist</strong> to be enabled.</div>
+                        <div class="hse-disabled-hint" style="font-size:0.9em; color:var(--hsc-danger-text); margin-top:4px; display:${(tagConfig.EnableTag === false && !tagConfig.EnableCollection && !tagConfig.EnablePlaylist) ? 'block' : 'none'};">Requires <strong>Apply Tag</strong>, <strong>Create Collection</strong> or <strong>Create Playlist</strong> to be enabled.</div>
                     </div>
                     <div class="hse-details" style="display:${enableHomeSection ? 'block' : 'none'}; margin-top:15px;">
                         <div style="margin-bottom:15px;">
@@ -5452,7 +5456,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 });
             })
             .catch(function(e) {
-                tab.querySelector('.hse-fields-inner').innerHTML = '<em style="color:#cc4444">Failed to load: ' + e.message + '</em>';
+                tab.querySelector('.hse-fields-inner').innerHTML = '<em style="color:var(--hsc-danger-text)">Failed to load: ' + e.message + '</em>';
                 tab.dataset.hseLoaded = '0'; // allow retry
             });
     }
@@ -6238,9 +6242,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '</div>',
             '<div class="advanced-body settings-panel-body" style="display:none; padding-top: 4px;">',
 
-            '<div style="display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; padding:8px 12px; border:1px solid rgba(255,152,0,0.5); border-radius:4px; background:rgba(255,152,0,0.08); font-size:0.85em; line-height:1.45;">',
-            '<i class="md-icon" style="color:#FF9800; font-size:1.2em;">warning</i>',
-            '<div><strong style="color:#FF9800;">Experimental.</strong> Safe to use — it never changes watched status, only the "last played" date of one episode. It has been tested, but needs more real-world use before it can be considered fully stable.</div>',
+            '<div style="display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; padding:8px 12px; border:1px solid rgba(230,193,90,0.5); border-radius:4px; background:rgba(230,193,90,0.08); font-size:0.85em; line-height:1.45;">',
+            '<i class="md-icon" style="color:var(--hsc-warning-text); font-size:1.2em;">warning</i>',
+            '<div><strong style="color:var(--hsc-warning-text);">Experimental.</strong> Safe to use — it never changes watched status, only the "last played" date of one episode. It has been tested, but needs more real-world use before it can be considered fully stable.</div>',
             '</div>',
 
             '<p style="font-size:0.9em; line-height:1.5; margin:0 0 24px;">',
@@ -6746,7 +6750,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             container._tcShowModal = function () { showSummaryModal(); };
 
             function showSummaryModal() {
-                var undoBtnStyle = 'cursor:pointer;border:none;background:transparent;color:#cc2222;border-radius:3px;padding:2px 6px;font-size:1.1em;line-height:1;margin-right:8px;flex-shrink:0;';
+                var undoBtnStyle = 'cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);border-radius:3px;padding:2px 6px;font-size:1.1em;line-height:1;margin-right:8px;flex-shrink:0;';
 
                 function buildRows(items, isTag) {
                     return items.map(function (item) {
@@ -6767,7 +6771,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                     '</label>';
                             }).join('');
                             warning =
-                                '<div style="color:#f0a000;margin-top:6px;font-size:0.88em;">' +
+                                '<div style="color:var(--hsc-warning-text);margin-top:6px;font-size:0.88em;">' +
                                 '<i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:4px;">warning</i>' +
                                 warningText + checkboxes + '</div>';
                         }
@@ -9368,7 +9372,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         modal.renderBox(
             '<h3 style="' + _backupTitleStyle + '">Paste ' + kind.label + '</h3>' +
             '<p style="' + _backupHintStyle + '">' + opts.hint + '</p>' +
-            (state.clipHint ? '<p class="paste-clip-hint" style="' + _backupHintStyle + 'color:#e0a030;">' + state.clipHint + '</p>' : '') +
+            (state.clipHint ? '<p class="paste-clip-hint" style="' + _backupHintStyle + 'color:var(--hsc-warning-text);">' + state.clipHint + '</p>' : '') +
             '<textarea class="txtPasteSource" rows="8" placeholder=\'{"' + kind.header + '":1, …}\' style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:4px;padding:8px;margin-bottom:8px;"></textarea>' +
             '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
@@ -10862,7 +10866,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 <label class="filter-chk-row"><input type="checkbox" id="chkFilterInactive" /><span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:rgba(128,128,128,0.5);flex-shrink:0;"></span>Inactive</span></label>
                                 <div class="filter-dropdown-divider"></div>
                                 <div class="filter-dropdown-label">Last run</div>
-                                <label class="filter-chk-row"><input type="checkbox" id="chkFilterIssues" /><span style="display:flex;align-items:center;gap:6px;"><i class="md-icon" style="font-size:1.1em;color:#ff9800;">warning</i>Warnings &amp; errors</span></label>
+                                <label class="filter-chk-row"><input type="checkbox" id="chkFilterIssues" /><span style="display:flex;align-items:center;gap:6px;"><i class="md-icon" style="font-size:1.1em;color:var(--hsc-warning-text);">warning</i>Warnings &amp; errors</span></label>
                             </div>
                         </div>
 
@@ -10972,7 +10976,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }
 
             if (!view.querySelector('.dry-run-warning')) {
-                view.insertAdjacentHTML('afterbegin', '<div class="dry-run-warning"><i class="md-icon" style="font-size:1.4em;"></i>DRY RUN MODE IS ACTIVE - NO CHANGES WILL BE SAVED</div>');
+                view.insertAdjacentHTML('afterbegin', '<div class="dry-run-warning"><i class="md-icon" style="font-size:1.4em;color:var(--hsc-warning-text);"></i>DRY RUN MODE IS ACTIVE - NO CHANGES WILL BE SAVED</div>');
             }
 
             var btnSave = view.querySelector('.btn-save');
@@ -11104,8 +11108,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     loadConfig();
                 });
             }
-            bar.style.background = serverChanged ? 'rgba(230,126,34,0.18)' : 'rgba(82,181,75,0.15)';
-            bar.style.borderColor = serverChanged ? '#E67E22' : '#52B54B';
+            bar.style.background = serverChanged ? 'rgba(230,193,90,0.18)' : 'rgba(82,181,75,0.15)';
+            bar.style.borderColor = serverChanged ? 'rgba(230,193,90,0.45)' : 'rgba(82,181,75,0.45)';
             bar.querySelector('.hsc-draft-text').textContent = serverChanged
                 ? 'Unsaved changes restored. Settings changed on the server while you were away — Save will not overwrite them; it offers to reload the current settings instead.'
                 : 'Unsaved changes restored.';
