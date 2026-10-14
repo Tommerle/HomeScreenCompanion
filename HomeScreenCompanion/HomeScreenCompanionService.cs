@@ -938,15 +938,17 @@ public class HomeScreenCompanionService : IService
                 var imagesDir = Path.Combine(dataPath, "collection_images");
                 Directory.CreateDirectory(imagesDir);
 
-                DeleteOldImage(request.OldFilePath, imagesDir);
+                var data = Convert.FromBase64String(request.Base64Data ?? "");
+                var ext = ImageExtension(data);
+                if (ext == null)
+                    return new UploadCollectionImageResponse { Success = false, Message = "The file is not an image (JPEG, PNG, WebP or GIF)." };
 
-                var ext = Path.GetExtension(request.FileName ?? "").ToLowerInvariant();
-                if (!new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" }.Contains(ext)) ext = ".jpg";
+                DeleteOldImage(request.OldFilePath, imagesDir);
 
                 var fileName = $"{Guid.NewGuid():N}{ext}";
                 var filePath = Path.Combine(imagesDir, fileName);
 
-                File.WriteAllBytes(filePath, Convert.FromBase64String(request.Base64Data));
+                File.WriteAllBytes(filePath, data);
 
                 return new UploadCollectionImageResponse { Success = true, FilePath = filePath };
             }
@@ -954,6 +956,27 @@ public class HomeScreenCompanionService : IService
             {
                 return new UploadCollectionImageResponse { Success = false, Message = ex.Message };
             }
+        }
+
+        // The file extension for uploaded / downloaded image bytes, or null when they are not an
+        // image Emby can show (checked by decoding the header, whatever the name says).
+        private static string? ImageExtension(byte[] data)
+        {
+            if (data == null || data.Length == 0) return null;
+            try
+            {
+                using var codec = SKCodec.Create(new SKMemoryStream(data));
+                if (codec == null) return null;
+                switch (codec.EncodedFormat)
+                {
+                    case SKEncodedImageFormat.Jpeg: return ".jpg";
+                    case SKEncodedImageFormat.Png: return ".png";
+                    case SKEncodedImageFormat.Webp: return ".webp";
+                    case SKEncodedImageFormat.Gif: return ".gif";
+                    default: return null;
+                }
+            }
+            catch { return null; }
         }
 
         public async Task<object> Post(FetchCollectionImageFromUrlRequest request)
@@ -969,19 +992,22 @@ public class HomeScreenCompanionService : IService
                 var imagesDir = Path.Combine(dataPath, "collection_images");
                 Directory.CreateDirectory(imagesDir);
 
-                DeleteOldImage(request.OldFilePath, imagesDir);
+                byte[] data;
+                using (var stream = await _httpClient.Get(new MediaBrowser.Common.Net.HttpRequestOptions { Url = request.Url, CancellationToken = CancellationToken.None }))
+                using (var ms = new MemoryStream())
+                {
+                    await stream.CopyToAsync(ms);
+                    data = ms.ToArray();
+                }
+                var ext = ImageExtension(data);
+                if (ext == null)
+                    return new UploadCollectionImageResponse { Success = false, Message = "The URL did not return an image (JPEG, PNG, WebP or GIF)." };
 
-                var ext = Path.GetExtension(new Uri(request.Url).AbsolutePath).ToLowerInvariant();
-                if (!new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" }.Contains(ext)) ext = ".jpg";
+                DeleteOldImage(request.OldFilePath, imagesDir);
 
                 var fileName = $"{Guid.NewGuid():N}{ext}";
                 var filePath = Path.Combine(imagesDir, fileName);
-
-                using (var stream = await _httpClient.Get(new MediaBrowser.Common.Net.HttpRequestOptions { Url = request.Url, CancellationToken = CancellationToken.None }))
-                using (var fs = File.Create(filePath))
-                {
-                    await stream.CopyToAsync(fs);
-                }
+                File.WriteAllBytes(filePath, data);
 
                 return new UploadCollectionImageResponse { Success = true, FilePath = filePath };
             }
@@ -2997,6 +3023,10 @@ public class HomeScreenCompanionService : IService
         {
             var sb = new System.Text.StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<movie>\n");
+            // The original's own title, locked: the list's library may fetch metadata in another
+            // language, and the copy would then show another name than the film it stands for.
+            if (!string.IsNullOrWhiteSpace(item.Name))
+                sb.Append("  <title>").Append(System.Security.SecurityElement.Escape(item.Name)).Append("</title>\n");
             sb.Append("  <sorttitle>").Append(sortPrefix).Append("</sorttitle>\n");
 
             var imdb = item.GetProviderId("Imdb");
@@ -3006,7 +3036,7 @@ public class HomeScreenCompanionService : IService
             if (!string.IsNullOrWhiteSpace(tmdb))
                 sb.Append("  <tmdbid>").Append(System.Security.SecurityElement.Escape(tmdb)).Append("</tmdbid>\n");
 
-            sb.Append("  <lockedfields>SortName|Images</lockedfields>\n</movie>");
+            sb.Append("  <lockedfields>Name|SortName|Images</lockedfields>\n</movie>");
             return sb.ToString();
         }
 
@@ -3106,10 +3136,24 @@ public class HomeScreenCompanionService : IService
             return (poster, thumb);
         }
 
+        // True when the item's poster and thumb already point at its ranked images in the folder.
+        internal static bool RankedImagesApplied(BaseItem li, string folderPath)
+        {
+            var baseName = Path.GetFileNameWithoutExtension(li.Path);
+            var images = li.ImageInfos ?? Array.Empty<ItemImageInfo>();
+            foreach (var (type, suffix) in new[] { (ImageType.Primary, ".jpg"), (ImageType.Thumb, "-thumb.jpg") })
+            {
+                var path = Path.Combine(folderPath, baseName + suffix);
+                if (File.Exists(path) && !images.Any(i => i.Type == type && string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase)))
+                    return false;
+            }
+            return true;
+        }
+
         // Points an already-indexed top-list .strm item at the ranked images on disk so the
-        // new badge shows up without waiting for a library scan. Both files are regenerated in
-        // place on every run, so DateModified must be refreshed too or Emby keeps serving the
-        // previously cached (stale-numbered) image.
+        // new badge shows up without waiting for a library scan. When the files were rewritten,
+        // DateModified must be refreshed too or Emby keeps serving the previously cached
+        // (stale-numbered) image.
         internal static bool ApplyRankedImages(BaseItem li, string folderPath)
         {
             var baseName = Path.GetFileNameWithoutExtension(li.Path);
@@ -3951,6 +3995,16 @@ public class HomeScreenCompanionService : IService
 
         // Accepts both the current format (BackupFile) and legacy files, which were a raw
         // PluginConfiguration dump created by the old client-side backup button.
+        // The fields that mark a legacy backup (a saved PluginConfiguration) as holding settings / API keys.
+        private static readonly string[] LegacySettingKeys =
+        {
+            "OpenAiModel", "GeminiModel", "ClaudeModel", "OllamaBaseUrl", "OllamaModel", "AiSystemPrompt", "ExtendedConsoleOutput",
+            "LogMissingItems", "DryRunMode", "PreserveTagsOnEmptyResult", "TopListMirrorCollections", "ShowCopyPasteButtons",
+            "ShowImportCollectionButton", "RankedCollectionsEnabled"
+        };
+        private static readonly string[] LegacyApiKeyKeys =
+            { "TraktClientId", "MdblistApiKey", "TmdbApiKey", "OpenAiApiKey", "GeminiApiKey", "ClaudeApiKey" };
+
         private BackupFile? ParseBackup(string json)
         {
             bool isCurrentFormat = System.Text.RegularExpressions.Regex.IsMatch(json, "\"BackupVersion\"\\s*:");
@@ -3967,6 +4021,14 @@ public class HomeScreenCompanionService : IService
             try { legacy = _jsonSerializer.DeserializeFromString<PluginConfiguration>(json); } catch { }
             if (legacy == null) return null;
             bool HasKey(string key) => System.Text.RegularExpressions.Regex.IsMatch(json, "\"" + key + "\"\\s*:");
+            // A legacy backup is a saved plugin configuration. Only the sections whose fields are in
+            // the file are offered: any other JSON (a copied source, another plugin's file) would
+            // otherwise "restore" the defaults over the current settings and wipe every API key.
+            // A copied source or top-list (Copy on a card) is not a backup either: its "Tags" would
+            // replace every group.
+            if (HasKey("hsc-source") || HasKey("hsc-toplist")) return null;
+            bool hasSettings = LegacySettingKeys.Any(HasKey), hasKeys = LegacyApiKeyKeys.Any(HasKey);
+            if (!hasSettings && !hasKeys && !HasKey("Tags") && !HasKey("SavedFilters")) return null;
             var result = new BackupFile { BackupVersion = 1 };
             result.Settings = new BackupSettings
             {
@@ -3985,7 +4047,7 @@ public class HomeScreenCompanionService : IService
                 ShowImportCollectionButton = legacy.ShowImportCollectionButton,
                 RankedCollectionsEnabled  = legacy.RankedCollectionsEnabled
             };
-            result.Sections.Add("Settings");
+            if (hasSettings) result.Sections.Add("Settings");
             result.ApiKeys = new BackupApiKeys
             {
                 TraktClientId = legacy.TraktClientId ?? "",
@@ -3995,7 +4057,7 @@ public class HomeScreenCompanionService : IService
                 GeminiApiKey  = legacy.GeminiApiKey ?? "",
                 ClaudeApiKey  = legacy.ClaudeApiKey ?? ""
             };
-            result.Sections.Add("ApiKeys");
+            if (hasKeys) result.Sections.Add("ApiKeys");
             if (HasKey("Tags")) { result.Tags = legacy.Tags ?? new List<TagConfig>(); result.Sections.Add("Tags"); }
             if (HasKey("SavedFilters")) { result.SavedFilters = legacy.SavedFilters ?? new List<SavedMediaInfoFilter>(); result.Sections.Add("SavedFilters"); }
             return result;

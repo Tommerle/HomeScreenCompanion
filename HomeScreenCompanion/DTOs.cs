@@ -229,6 +229,8 @@ namespace HomeScreenCompanion
     {
         public List<TmdbListItem> items { get; set; } = new List<TmdbListItem>();
         public List<TmdbListItem> results { get; set; } = new List<TmdbListItem>();
+        // A collection (api.themoviedb.org/3/collection/{id}) lists its films here.
+        public List<TmdbListItem> parts { get; set; } = new List<TmdbListItem>();
         public int total_pages { get; set; }
     }
 

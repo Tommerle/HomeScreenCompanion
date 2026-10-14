@@ -588,27 +588,30 @@ namespace HomeScreenCompanion
             return string.IsNullOrWhiteSpace(safe) ? "unknown" : safe;
         }
 
-        private static void WriteIfChanged(string path, string content)
+        // Both return true when they wrote the file (it was missing or different).
+        internal static bool WriteIfChanged(string path, string content)
         {
             try
             {
-                if (File.Exists(path) && File.ReadAllText(path) == content) return;
+                if (File.Exists(path) && File.ReadAllText(path) == content) return false;
             }
             catch { }
             File.WriteAllText(path, content);
+            return true;
         }
 
-        private static void CopyIfChanged(string source, string target)
+        internal static bool CopyIfChanged(string source, string target)
         {
-            if (!File.Exists(source)) return;
+            if (!File.Exists(source)) return false;
             try
             {
                 if (File.Exists(target) && new FileInfo(target).Length == new FileInfo(source).Length
                     && File.ReadAllBytes(target).SequenceEqual(File.ReadAllBytes(source)))
-                    return;
+                    return false;
             }
             catch { }
             File.Copy(source, target, overwrite: true);
+            return true;
         }
 
         private static void TryDelete(string path)

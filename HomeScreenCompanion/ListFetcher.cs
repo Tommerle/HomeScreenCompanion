@@ -52,6 +52,11 @@ namespace HomeScreenCompanion
         internal static bool IsFailure(string? lastError) =>
             !string.IsNullOrEmpty(lastError) && lastError != EmptyAnswer;
 
+        /// <summary>True when the list does not exist (HTTP 404 / 410): not a passing hiccup, so in a
+        /// group with other URLs it is left out instead of keeping the whole group as it was.</summary>
+        internal static bool IsGone(string? lastError) =>
+            !string.IsNullOrEmpty(lastError) && (lastError!.Contains("HTTP 404") || lastError.Contains("HTTP 410"));
+
         // A list read part-way (a later page failed) is not used: it would drop every title after
         // that page. It counts as a failed fetch, so "Preserve tags on empty result" keeps them.
         private List<ExternalItemDto> PageFailed(List<ExternalItemDto> all, int pageNumber, Exception ex, CancellationToken cancellationToken)
@@ -89,11 +94,31 @@ namespace HomeScreenCompanion
             {
                 all = await FetchTmdb(url, tmdbApiKey, fetchLimit, hits, cancellationToken);
             }
-            else
+            else if (url.IndexOf("trakt.tv", StringComparison.OrdinalIgnoreCase) >= 0
+                || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var other) || (other.Scheme != "http" && other.Scheme != "https"))
             {
+                // A trakt.tv URL, or a bare Trakt API path ("users/x/lists/y").
                 all = await FetchTrakt(url, traktClientId, fetchLimit, cancellationToken);
             }
+            else
+            {
+                LastError = "not a Trakt, MDBList or TMDb list URL";
+                return new List<ExternalItemDto>();
+            }
+            all = Distinct(all);
             return hits != null ? hits.Cut(all) : all;
+        }
+
+        // The same title twice in one list (TMDb's pages overlap when the list changes while it is
+        // read): only its first entry counts.
+        private static List<ExternalItemDto> Distinct(List<ExternalItemDto> all)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return all.Where(i =>
+            {
+                var key = !string.IsNullOrEmpty(i?.Imdb) ? "imdb:" + i!.Imdb : !string.IsNullOrEmpty(i?.Tmdb) ? "tmdb:" + i!.Tmdb : null;
+                return key == null || seen.Add(key);
+            }).ToList();
         }
 
         // Counts the distinct IMDb ids that count toward the limit, as the entries are read.
@@ -265,6 +290,7 @@ namespace HomeScreenCompanion
                     string mediaType = null;
                     if (uri.AbsolutePath.Contains("/movie/")) mediaType = "movie";
                     else if (uri.AbsolutePath.Contains("/tv/")) mediaType = "tv";
+                    else if (uri.AbsolutePath.Contains("/collection/")) mediaType = "movie";   // a collection's parts are films
                     return new TmdbApiTarget { FullUrl = url, MediaType = mediaType };
                 }
 
@@ -273,6 +299,14 @@ namespace HomeScreenCompanion
                 if (segments.Count >= 2 && segments[0] == "list")
                 {
                     return new TmdbApiTarget { ListId = segments[1] };
+                }
+
+                // A collection page (themoviedb.org/collection/10-star-wars-collection): its films, in TMDb's order.
+                if (segments.Count >= 2 && segments[0] == "collection")
+                {
+                    var id = new string(segments[1].TakeWhile(char.IsDigit).ToArray());
+                    if (id.Length > 0)
+                        return new TmdbApiTarget { FullUrl = $"https://api.themoviedb.org/3/collection/{id}", MediaType = "movie" };
                 }
 
                 if (segments.Count >= 1 && (segments[0] == "movie" || segments[0] == "tv"))
@@ -369,7 +403,9 @@ namespace HomeScreenCompanion
 
                 if (result == null) break;
 
-                var items = (result.items != null && result.items.Count > 0) ? result.items : result.results;
+                var items = (result.items != null && result.items.Count > 0) ? result.items
+                    : (result.results != null && result.results.Count > 0) ? result.results
+                    : result.parts;
                 if (items == null || items.Count == 0) break;
 
                 // A page's IMDb ids are looked up side by side (one request per title), then read in list order.

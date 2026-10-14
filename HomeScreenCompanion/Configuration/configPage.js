@@ -9792,9 +9792,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             info.pluginVersion = parsed.PluginVersion || '';
             return info;
         }
+        // A legacy backup is a saved plugin configuration: only the sections whose fields are in the
+        // file are offered (any other JSON would restore defaults and wipe the API keys). A copied
+        // source or top-list is not a backup.
         info.legacy = true;
-        info.sections.add('Settings');
-        info.sections.add('ApiKeys');
+        if (parsed['hsc-source'] !== undefined || parsed['hsc-toplist'] !== undefined) return info;
+        var has = function (keys) { return keys.some(function (k) { return Object.prototype.hasOwnProperty.call(parsed, k); }); };
+        if (has(['OpenAiModel', 'GeminiModel', 'ClaudeModel', 'OllamaBaseUrl', 'OllamaModel', 'AiSystemPrompt', 'ExtendedConsoleOutput',
+            'LogMissingItems', 'DryRunMode', 'PreserveTagsOnEmptyResult', 'TopListMirrorCollections', 'ShowCopyPasteButtons',
+            'ShowImportCollectionButton', 'RankedCollectionsEnabled'])) info.sections.add('Settings');
+        if (has(['TraktClientId', 'MdblistApiKey', 'TmdbApiKey', 'OpenAiApiKey', 'GeminiApiKey', 'ClaudeApiKey'])) info.sections.add('ApiKeys');
         if (Array.isArray(parsed.Tags)) info.sections.add('Tags');
         if (Array.isArray(parsed.SavedFilters)) info.sections.add('SavedFilters');
         return info;
@@ -9814,6 +9821,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             return;
         }
         var info = detectBackupSections(parsed);
+        if (info.sections.size === 0) {
+            window.Dashboard.alert('The selected file is not a Home Screen Companion backup.');
+            return;
+        }
 
         var fileInfo = info.legacy
             ? 'Legacy backup (created by an older plugin version)'
@@ -11285,6 +11296,19 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     if (existing && existing.PlaylistMappings && existing.PlaylistMappings.length > 0
                         && (!t.PlaylistMappings || t.PlaylistMappings.length === 0)) {
                         t.PlaylistMappings = existing.PlaylistMappings;
+                    }
+                    // The AI's last-run date is written by the runs, never by this page: keep it, so
+                    // "Refresh every … days" is not restarted by every Save. Only an AI source whose
+                    // question changed asks again on the next sync.
+                    var rawAi = t.SourceType === 'AI' ? (currentConfig.Tags || []).find(function (x) {
+                        return x.SourceType === 'AI' && (x.Name ? x.Name + '\x1F' + x.Tag : x.Tag) === key;
+                    }) : null;
+                    if (rawAi && rawAi.AiLastRunDate && !t.AiLastRunDate
+                        && (rawAi.AiProvider || 'OpenAI') === (t.AiProvider || 'OpenAI') && (rawAi.AiPrompt || '') === (t.AiPrompt || '')
+                        && (rawAi.Limit || 0) === (t.Limit || 0) && !!rawAi.AiIncludeRecentlyWatched === !!t.AiIncludeRecentlyWatched
+                        && (rawAi.AiRecentlyWatchedUserId || '') === (t.AiRecentlyWatchedUserId || '')
+                        && (rawAi.AiRecentlyWatchedCount || 20) === (t.AiRecentlyWatchedCount || 20)) {
+                        t.AiLastRunDate = rawAi.AiLastRunDate;
                     }
                 });
                 configObj.TopLists = currentConfig.TopLists || [];

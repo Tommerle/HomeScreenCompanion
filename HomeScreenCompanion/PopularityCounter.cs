@@ -209,7 +209,9 @@ namespace HomeScreenCompanion
 
         public void Complete(List<BaseItem> items, int scanned, Dictionary<Guid, int>? viewers, List<string>? warnings = null)
         {
-            Items = items.ToList();
+            // One row per title: the other versions of a film are the same title.
+            var key = PopularityCounter.FilmKeys(items);
+            Items = items.GroupBy(key, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
             Scanned = scanned;
             Viewers = viewers ?? new Dictionary<Guid, int>();
             Warnings = warnings?.ToList() ?? new List<string>();

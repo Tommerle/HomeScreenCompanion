@@ -393,18 +393,7 @@ namespace HomeScreenCompanion
                             var members = sourceKind.Equals("Playlist", StringComparison.OrdinalIgnoreCase)
                                 ? _libraryManager.GetItemList(new InternalItemsQuery { ListIds = new[] { folder.InternalId } })
                                 : _libraryManager.GetItemList(new InternalItemsQuery { CollectionIds = new[] { folder.InternalId }, IsVirtualItem = false });
-                            var ids = new HashSet<long>();
-                            foreach (var m in members)
-                            {
-                                ids.Add(m.InternalId);
-                                AddOtherVersions(ids, m, allItems, ref versionIdsByKey);
-                                if (m.GetType().Name.Contains("Series"))
-                                {
-                                    foreach (var ep in _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Parent = m, Recursive = true, IsVirtualItem = false }))
-                                        ids.Add(ep.InternalId);
-                                }
-                            }
-                            collectionMembershipCache[indivKey] = ids;
+                            collectionMembershipCache[indivKey] = MembershipIds(members, allItems, ref versionIdsByKey);
                         }
                     }
                 }
@@ -463,8 +452,7 @@ namespace HomeScreenCompanion
                         {
                             var _k = (_user.Id, _topItem.InternalId);
                             if (userDataCache.ContainsKey(_k)) continue;
-                            var _ud0 = _userDataManager?.GetUserData(_user, _topItem);
-                            userDataCache[_k] = _ud0 == null ? (false, (DateTimeOffset?)null, 0) : (_ud0.Played, _ud0.LastPlayedDate, _ud0.PlayCount);
+                            userDataCache[_k] = UserDataOf(_user, _topItem);
                         }
                     }
                 }
@@ -729,8 +717,15 @@ namespace HomeScreenCompanion
                             var items = await fetcher.FetchItems(tagConfig.Url, effectiveLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
                                 CountsTowardLimit(imdbLookup, blacklist, passesFilters));
                             fetchTimer.Stop();
-                            gs.ListCount = items.Count;
                             fetchError = fetcher.LastError;
+                            // Empty with "Preserve…" on: the URL's last good entries stand in for it (see LastGoodLists).
+                            if (items.Count > 0) { if (!dryRun) LastGoodLists.Save(tagConfig.Url, items, _jsonSerializer); }
+                            else if (config.PreserveTagsOnEmptyResult && LastGoodLists.Load(tagConfig.Url, _jsonSerializer) is var _lastGood && _lastGood != null)
+                            {
+                                items = _lastGood.Value.Items;
+                                (ListFetcher.IsFailure(fetchError) ? gs.Errors : gs.Warnings).Add(StandInMessage(tagConfig.Url, fetchError, _lastGood.Value.SavedUtc));
+                            }
+                            gs.ListCount = items.Count;
                             int _extBlacklisted = 0, _extNoImdb = 0;
 
                             if (items.Count > 0)
@@ -746,7 +741,7 @@ namespace HomeScreenCompanion
                                         continue;
                                     }
 
-                                    if (tagConfig.EnableTag && !tagConfig.OnlyCollection)
+                                    if (tagConfig.EnableTag && !tagConfig.OnlyCollection && !HasFilterConditions(tagConfig))
                                         TagCacheManager.Instance.AddToCache($"imdb_{extItem.Imdb}", tagName);
 
                                     if (imdbLookup.TryGetValue(extItem.Imdb, out var localItems))
@@ -1018,7 +1013,7 @@ namespace HomeScreenCompanion
                                         continue;
                                     }
 
-                                    if (tagConfig.EnableTag && !tagConfig.OnlyCollection)
+                                    if (tagConfig.EnableTag && !tagConfig.OnlyCollection && !HasFilterConditions(tagConfig))
                                         TagCacheManager.Instance.AddToCache($"imdb_{imdbId}", tagName);
 
                                     if (imdbLookup.TryGetValue(imdbId, out var localItems))
@@ -1096,7 +1091,9 @@ namespace HomeScreenCompanion
 
                         var allOutputIds = new HashSet<Guid>(tagOutputItems.Select(i => i.Id));
                         foreach (var id in collectionOutputItems.Select(i => i.Id)) allOutputIds.Add(id);
-                        if (!IsNextWatch(tagConfig)) gs.MatchCount = allOutputIds.Count;
+                        // List sources count titles ("54 in list, 50 in your library"), not Emby items: a film
+                        // with two versions, or a show tagged with its seasons, is one title.
+                        if (!IsNextWatch(tagConfig)) gs.MatchCount = tagConfig.SourceType == "MediaInfo" ? allOutputIds.Count : TitleCount(matchedLocalItems);
                         matchCount += allOutputIds.Count;
                         if (!dryRun && !gs.BoxSetHse) RecordLastRun(new[] { (tagConfig, TitleCount(matchedLocalItems)) }, gs);
 
@@ -1132,7 +1129,15 @@ namespace HomeScreenCompanion
                             && config.Tags.Count(t => string.Equals(GroupKey(t), GroupKey(tagConfig), StringComparison.OrdinalIgnoreCase)) > 1
                             ? (tagConfig.Url ?? "").Trim() + ": " : "";
                         var emptyList = ListFetcher.IsFailure(fetchError) ? gs.Errors : gs.Warnings;
-                        if (isRemoteSource && gs.ListCount == 0 && config.PreserveTagsOnEmptyResult)
+                        // One URL of several that does not exist (404) is left out: keeping the whole group
+                        // as it was would stop it from ever losing a title (see LastGoodLists for URLs that
+                        // were read before).
+                        bool goneInGroup = emptySrc.Length > 0 && ListFetcher.IsGone(fetchError);
+                        if (isRemoteSource && gs.ListCount == 0 && goneInGroup)
+                        {
+                            emptyList.Add($"{emptySrc}the list does not exist{Why(fetchError)} — it was left out and the group's other lists were used. Remove the URL from the source or fix it.");
+                        }
+                        else if (isRemoteSource && gs.ListCount == 0 && config.PreserveTagsOnEmptyResult)
                         {
                             emptyList.Add(emptySrc + (tagConfig.SourceType == "AI"
                                 ? $"The AI returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the prompt and the API key in Settings."
@@ -1147,7 +1152,7 @@ namespace HomeScreenCompanion
                             progress.Report(currentProgress);
                             continue;
                         }
-                        if (isRemoteSource && gs.ListCount == 0 && emptySrc.Length > 0)
+                        else if (isRemoteSource && gs.ListCount == 0 && emptySrc.Length > 0)
                         {
                             // Same wording as Run Group: the group's other URLs still supply its items,
                             // unless they all come back empty (FlushFetchLines then swaps in the second text).
@@ -1173,12 +1178,13 @@ namespace HomeScreenCompanion
                                 desiredTagsMap[localItem.Id].Add(tagName);
 
                                 // The real-time tag cache is keyed by IMDb id, so only list sources belong in
-                                // it (External is cached from the list itself above). MediaInfo and local
-                                // collection/playlist results are per item: caching them would re-tag every
-                                // other item with the same IMDb id (other versions, top-list copies) on its
-                                // next update, straight after this sync removed the tag.
+                                // it (cached from the list itself above, unless the source has filter
+                                // conditions: then only the titles that passed them, i.e. these). MediaInfo
+                                // and local collection/playlist results are per item: caching them would
+                                // re-tag every other item with the same IMDb id (other versions, top-list
+                                // copies) on its next update, straight after this sync removed the tag.
                                 var imdb = localItem.GetProviderId("Imdb");
-                                bool listSource = string.IsNullOrEmpty(tagConfig.SourceType) || tagConfig.SourceType == "AI";
+                                bool listSource = IsListSource(tagConfig);
                                 if (!string.IsNullOrEmpty(imdb) && listSource)
                                     TagCacheManager.Instance.AddToCache($"imdb_{imdb}", tagName);
                             }
@@ -1274,6 +1280,7 @@ namespace HomeScreenCompanion
                     foreach (var kvp in rankIdsByTag)
                         WriteRankFile(kvp.Key, kvp.Value);
                     TagCacheManager.Instance.Save();
+                    LastGoodLists.Prune(config.Tags.Where(t => string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External").Select(t => t.Url ?? ""));
                 }
 
                 // Collect episodes that currently carry managed tags so they can be cleaned up
@@ -1715,8 +1722,10 @@ namespace HomeScreenCompanion
                 // Emit per-group blocks
                 _log.Blank();
                 _log.Info("Results");
+                _resultsShown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var gs in displayStatsList)
                     WriteGroupBlock(gs, dryRun, logMissing);
+                _resultsShown = null;
                 // Dry runs skip writes, so they would clear real failures; inactive groups count as gone.
                 if (!dryRun) RecordGroupIssues(statsList, config.Tags.Where(t => t.Active).Select(GroupKey));
 
@@ -1988,7 +1997,7 @@ namespace HomeScreenCompanion
             var startTime = DateTime.Now;
             _log = _preview != null ? new RunLog(new List<string>(), null, "", false) : new RunLog(ExecutionLog, _logger, "", debug, Progress);
             if (_preview == null && tagConfig.SourceType == "AI" && tagConfig.AiRefreshIntervalDays > 0 &&
-                IsScheduleActive(tagConfig.ActiveIntervals) &&
+                tagConfig.Active && IsScheduleActive(tagConfig.ActiveIntervals) &&
                 tagConfig.AiLastRunDate > DateTime.MinValue &&
                 (DateTime.UtcNow - tagConfig.AiLastRunDate).TotalDays < tagConfig.AiRefreshIntervalDays)
             {
@@ -2038,7 +2047,7 @@ namespace HomeScreenCompanion
             };
             var groupTimer = System.Diagnostics.Stopwatch.StartNew();
 
-            if (_preview == null && !IsScheduleActive(tagConfig.ActiveIntervals))
+            if (_preview == null && (!tagConfig.Active || !IsScheduleActive(tagConfig.ActiveIntervals)))
                 return OffScheduleSingleRun(config, tagConfig, gs, startTime, dryRun, logMissing, debug, cancellationToken);
 
             var _topListsFolder = Path.Combine(Plugin.Instance.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
@@ -2169,18 +2178,7 @@ namespace HomeScreenCompanion
                         var members = sourceKind.Equals("Playlist", StringComparison.OrdinalIgnoreCase)
                             ? _libraryManager.GetItemList(new InternalItemsQuery { ListIds = new[] { folder.InternalId } })
                             : _libraryManager.GetItemList(new InternalItemsQuery { CollectionIds = new[] { folder.InternalId }, IsVirtualItem = false });
-                        var ids = new HashSet<long>();
-                        foreach (var m in members)
-                        {
-                            ids.Add(m.InternalId);
-                            AddOtherVersions(ids, m, allItems, ref versionIdsByKey);
-                            if (m.GetType().Name.Contains("Series"))
-                            {
-                                foreach (var ep in _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Parent = m, Recursive = true, IsVirtualItem = false }))
-                                    ids.Add(ep.InternalId);
-                            }
-                        }
-                        collectionMembershipCache[indivKey] = ids;
+                        collectionMembershipCache[indivKey] = MembershipIds(members, allItems, ref versionIdsByKey);
                     }
                 }
 
@@ -2198,8 +2196,7 @@ namespace HomeScreenCompanion
                         {
                             var _k = (_user.Id, _topItem.InternalId);
                             if (userDataCache.ContainsKey(_k)) continue;
-                            var _ud0 = _userDataManager?.GetUserData(_user, _topItem);
-                            userDataCache[_k] = _ud0 == null ? (false, (DateTimeOffset?)null, 0) : (_ud0.Played, _ud0.LastPlayedDate, _ud0.PlayCount);
+                            userDataCache[_k] = UserDataOf(_user, _topItem);
                         }
                     }
                 }
@@ -2323,6 +2320,7 @@ namespace HomeScreenCompanion
             // Saved without a URL / local source yet: nothing is changed (see Execute).
             if (groupEntries.All(HasNoSourceYet))
             {
+                if (_preview != null) return (false, "Nothing to preview yet: " + NoSourceYetReason(tagConfig) + ".");
                 gs.Skipped = true;
                 gs.SkipReason = NoSourceYetReason(tagConfig);
                 gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
@@ -2346,7 +2344,21 @@ namespace HomeScreenCompanion
                         var items = await fetcher.FetchItems(src.Url, srcLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
                             CountsTowardLimit(imdbLookup, blacklist, passesFilters));
                         fetchTimer.Stop();
+                        // Empty with "Preserve…" on: the URL's last good entries stand in for it (see LastGoodLists).
+                        if (items.Count > 0) { if (_preview == null && !dryRun) LastGoodLists.Save(src.Url, items, _jsonSerializer); }
+                        else if (_preview == null && config.PreserveTagsOnEmptyResult && LastGoodLists.Load(src.Url, _jsonSerializer) is var _lastGood && _lastGood != null)
+                        {
+                            items = _lastGood.Value.Items;
+                            (ListFetcher.IsFailure(fetcher.LastError) ? gs.Errors : gs.Warnings).Add(StandInMessage(src.Url, fetcher.LastError, _lastGood.Value.SavedUtc));
+                        }
                         _listCount += items.Count;
+                        // One URL of several that does not exist (404): left out, as in the full sync.
+                        if (items.Count == 0 && groupEntries.Count > 1 && ListFetcher.IsGone(fetcher.LastError))
+                        {
+                            if (_preview == null)
+                                gs.Errors.Add($"{src.Url.Trim()}: the list does not exist{Why(fetcher.LastError)} — it was left out and the group's other lists were used. Remove the URL from the source or fix it.");
+                            continue;
+                        }
                         if (items.Count == 0) _emptySources.Add(src.Url.Trim() + (fetcher.LastError != null ? $" ({fetcher.LastError})" : ""));
                         if (items.Count == 0 && ListFetcher.IsFailure(fetcher.LastError)) _failedSources.Add(_emptySources[_emptySources.Count - 1]);
                         int _srcMatched = 0, _srcBlacklisted = 0, _srcMissingBefore = gs.MissingItems.Count;
@@ -2354,7 +2366,7 @@ namespace HomeScreenCompanion
                         {
                             if (string.IsNullOrEmpty(extItem.Imdb)) continue;
                             if (blacklist.Contains(extItem.Imdb)) { _srcBlacklisted++; _log.Debug($"    Blacklisted: {extItem.Name} ({extItem.Imdb})"); continue; }
-                            if (_preview == null && tagConfig.EnableTag && !tagConfig.OnlyCollection)
+                            if (_preview == null && tagConfig.EnableTag && !tagConfig.OnlyCollection && !HasFilterConditions(tagConfig))
                                 TagCacheManager.Instance.AddToCache($"imdb_{extItem.Imdb}", tagName);
                             if (imdbLookup.TryGetValue(extItem.Imdb, out var localItems))
                             {
@@ -2568,7 +2580,7 @@ namespace HomeScreenCompanion
                         {
                             var imdbId = aiItem.imdb_id.Trim();
                             if (blacklist.Contains(imdbId)) { _aiBlacklisted++; _log.Debug($"    Blacklisted: {_aiLabel} ({imdbId})"); continue; }
-                            if (_preview == null && tagConfig.EnableTag && !tagConfig.OnlyCollection)
+                            if (_preview == null && tagConfig.EnableTag && !tagConfig.OnlyCollection && !HasFilterConditions(tagConfig))
                                 TagCacheManager.Instance.AddToCache($"imdb_{imdbId}", tagName);
                             if (imdbLookup.TryGetValue(imdbId, out var localItems))
                             {
@@ -2624,7 +2636,11 @@ namespace HomeScreenCompanion
                 return (false, $"Error: {ex.Message}");
             }
 
-            if (_preview == null && _emptySources.Count > 0 && config.PreserveTagsOnEmptyResult)
+            // Some of the group's URLs came back empty (and had no last good list to stand in), the
+            // others gave titles: like the full sync, those are used and nothing the group has now is
+            // removed (the empty URL's titles are not known).
+            bool _keepExisting = _preview == null && _emptySources.Count > 0 && config.PreserveTagsOnEmptyResult && _listCount > 0;
+            if (_preview == null && _emptySources.Count > 0 && config.PreserveTagsOnEmptyResult && !_keepExisting)
             {
                 gs.ListCount = _listCount;
                 (_failedSources.Count > 0 ? gs.Errors : gs.Warnings).Add((tagConfig.SourceType == "AI" ? "The AI returned 0 items" : $"{(_emptySources.Count == 1 ? "A list" : $"{_emptySources.Count} lists")} returned 0 items")
@@ -2654,8 +2670,28 @@ namespace HomeScreenCompanion
             // Preview of a list source: the matches in list order plus what is not in the library.
             if (_preview != null)
             {
+                // Say why a list or the AI came back empty (a wrong key, an unreachable server …).
+                foreach (var _empty in _emptySources)
+                    gs.Warnings.Add(tagConfig.SourceType == "AI" ? $"The AI returned 0 items: {_empty}" : $"The list returned 0 items: {_empty}");
                 _preview.Complete(matchedLocalItems, _listCount, null, gs.Warnings);
                 return (true, "");
+            }
+
+            // Keep what the group has now (see _keepExisting): its tagged titles and collection members
+            // join the list, after it (top-list and ranked copies are not the group's own titles).
+            if (_keepExisting)
+            {
+                var _keptTlFolder = Path.Combine(Plugin.Instance!.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
+                bool Own(BaseItem i) => IsTaggableTopLevelItem(i) && !string.IsNullOrEmpty(i.Path)
+                    && !i.Path.StartsWith(_keptTlFolder, StringComparison.OrdinalIgnoreCase) && !RankedCollections.IsRankedPath(i.Path);
+                var _kept = new List<BaseItem>();
+                if (tagConfig.EnableTag && !tagConfig.OnlyCollection)
+                    _kept.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { Tags = new[] { tagName }, IncludeItemTypes = new[] { "Movie", "Series" }, Recursive = true, IsVirtualItem = false }));
+                if (tagConfig.EnableCollection
+                    && _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault() is BaseItem _keptColl)
+                    _kept.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { CollectionIds = new[] { _keptColl.InternalId }, Recursive = true, IsVirtualItem = false }));
+                foreach (var i in _kept.Where(Own))
+                    if (!matchedLocalItems.Contains(i)) matchedLocalItems.Add(i);
             }
 
             // For non-MediaInfo sources, apply output level selection (expand down from Series/Movie)
@@ -2688,11 +2724,13 @@ namespace HomeScreenCompanion
             else
                 // Some of the group's URLs came back empty, the others were used (same as the full sync).
                 foreach (var _empty in _emptySources)
-                    (_failedSources.Contains(_empty) ? gs.Errors : gs.Warnings).Add($"{_empty}: the list returned 0 items — the group's other lists were used");
+                    (_failedSources.Contains(_empty) ? gs.Errors : gs.Warnings).Add(_keepExisting
+                        ? $"{_empty}: the list returned 0 items — the group's other lists were used and its current titles were kept (\"Preserve tags and collections on empty result\" is on)"
+                        : $"{_empty}: the list returned 0 items — the group's other lists were used");
             {
                 var _outIds = new HashSet<Guid>(tagOutputItems.Select(i => i.Id));
                 foreach (var _id in collectionOutputItems.Select(i => i.Id)) _outIds.Add(_id);
-                if (!IsNextWatch(tagConfig)) gs.MatchCount = _outIds.Count;
+                if (!IsNextWatch(tagConfig)) gs.MatchCount = tagConfig.SourceType == "MediaInfo" ? _outIds.Count : TitleCount(matchedLocalItems);
             }
             // Several URLs / local sources: each has its own Limit and count.
             if (_preview == null && !dryRun && !gs.BoxSetHse)
@@ -2726,6 +2764,11 @@ namespace HomeScreenCompanion
             var _dbgTagRemoved = debug ? new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase) : null;
             var matchedIds = new HashSet<Guid>(tagOutputItems.Select(i => i.Id));
             var _isBoxSetHse = IsBoxSetHomeSectionEntry(tagConfig); // computed once, not per-item
+            // A list source with filter conditions caches only the titles that passed them (see
+            // HasFilterConditions) — before the tags are written, as the full run does.
+            if (!dryRun && tagConfig.EnableTag && !tagConfig.OnlyCollection && !_isBoxSetHse && IsListSource(tagConfig) && HasFilterConditions(tagConfig))
+                foreach (var _imdb in tagOutputItems.Select(i => i.GetProviderId("Imdb")).Where(id => !string.IsNullOrEmpty(id)))
+                    TagCacheManager.Instance.AddToCache($"imdb_{_imdb}", tagName);
             int updateCount = 0;
             foreach (var item in allItems)
             {
@@ -3141,7 +3184,8 @@ namespace HomeScreenCompanion
             else if (!dryRun)
                 RemoveDeletedGroupLeftovers(cancellationToken);
             CleanupDisabledPlaylists(config, dryRun);
-            SyncTopListFolders(config, dryRun);
+            // Only this group's own top-list (other lists are not fed by this tag).
+            SyncTopListFolders(config, dryRun, tagName);
 
             WriteSingleRunFooter(gs, startTime, dryRun, logMissing);
 
@@ -3168,13 +3212,15 @@ namespace HomeScreenCompanion
         private (bool Success, string Message) OffScheduleSingleRun(PluginConfiguration config, TagConfig tagConfig, GroupRunStats gs,
             DateTime startTime, bool dryRun, bool logMissing, bool debug, CancellationToken cancellationToken)
         {
+            // Switched off (Active unticked) ends up the same as out of schedule, as in a full run.
+            string why = tagConfig.Active ? "not in schedule" : "switched off";
             string tagName = tagConfig.Tag.Trim();
             string cName = string.IsNullOrWhiteSpace(tagConfig.CollectionName) ? tagName : tagConfig.CollectionName.Trim();
             var others = config.Tags.Where(t => t.Active && IsScheduleActive(t.ActiveIntervals)
                 && !string.Equals(GroupKey(t), GroupKey(tagConfig), StringComparison.OrdinalIgnoreCase)).ToList();
 
             gs.Skipped = true;
-            gs.SkipReason = "not in schedule";
+            gs.SkipReason = why;
             _log.Blank();
             _log.Info("» Fetching sources");
             WriteFetchLine(gs);
@@ -3204,7 +3250,7 @@ namespace HomeScreenCompanion
                     tagsRemoved++;
                 }
                 _log.Info(tagsRemoved == 0 ? "    No tag changes needed"
-                    : dryRun ? $"    Would remove {tagsRemoved} tags" : $"    -{tagsRemoved} removed (not in schedule)");
+                    : dryRun ? $"    Would remove {tagsRemoved} tags" : $"    -{tagsRemoved} removed ({why})");
             }
             // A collection that carried the tag itself (home row of collections) loses it too.
             tagsRemoved += CleanupBoxSetTags(config, dryRun, cancellationToken);
@@ -3217,17 +3263,17 @@ namespace HomeScreenCompanion
                 var coll = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault();
                 if (coll == null || TagAnchor.IsAnchor(coll, _jsonSerializer)) _log.Skip($"Collection \"{cName}\" does not exist");
                 else if (RecordImportedCollections(config).Contains(cName))
-                    _log.Skip($"Collection \"{cName}\" kept (imported collection; HSC no longer changes it while the group is not in schedule)");
+                    _log.Skip($"Collection \"{cName}\" kept (imported collection; HSC no longer changes it while the group is {why})");
                 else if (others.Any(t => t.EnableCollection && string.Equals(
                     string.IsNullOrWhiteSpace(t.CollectionName) ? t.Tag?.Trim() : t.CollectionName.Trim(), cName, StringComparison.OrdinalIgnoreCase)))
                     _log.Skip($"Collection \"{cName}\" kept — another group in schedule uses it");
-                else if (dryRun) _log.Skip($"Collection \"{cName}\" would be removed (not in schedule)");
+                else if (dryRun) _log.Skip($"Collection \"{cName}\" would be removed ({why})");
                 else
                 {
                     try
                     {
                         _libraryManager.DeleteItem(coll, new DeleteOptions { DeleteFileLocation = false });
-                        _log.Skip($"Collection \"{cName}\" removed (not in schedule)");
+                        _log.Skip($"Collection \"{cName}\" removed ({why})");
                     }
                     catch (Exception ex) { _log.Warn($"Collection \"{cName}\" could not be removed: {ex.Message}"); }
                 }
@@ -3253,18 +3299,23 @@ namespace HomeScreenCompanion
             gs.ElapsedMs = (long)(DateTime.Now - startTime).TotalMilliseconds;
             WriteSingleRunFooter(gs, startTime, dryRun, logMissing);
             if (_preview == null) LastRunStatus = $"Skipped ({DateTime.Now:HH:mm})";
-            return (true, tagsRemoved > 0 ? $"Not in schedule — {tagsRemoved}↓ tags" : "Not in schedule — skipped");
+            var whyCap = char.ToUpper(why[0]) + why.Substring(1);
+            return (true, tagsRemoved > 0 ? $"{whyCap} — {tagsRemoved}↓ tags" : $"{whyCap} — skipped");
         }
 
         // Identifies the UI group a flat TagConfig belongs to. The config page stores one flat entry
         // per URL / local source with the same Name + Tag, so several entries can share one key.
         // An External source without a URL, or a local collection / playlist source without one picked.
+        // A MediaInfo source without a single rule would match (and tag) the whole library: it is
+        // skipped like a source without a URL until it has rules.
         internal static bool HasNoSourceYet(TagConfig t) =>
             (string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External") ? string.IsNullOrWhiteSpace(t.Url)
+            : t.SourceType == "MediaInfo" ? !HasFilterConditions(t)
             : (t.SourceType == "LocalCollection" || t.SourceType == "LocalPlaylist") && string.IsNullOrWhiteSpace(t.LocalSourceId);
 
         private static string NoSourceYetReason(TagConfig t) =>
             (string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External") ? "no URL yet"
+            : t.SourceType == "MediaInfo" ? "no filter rules yet"
             : t.SourceType == "LocalPlaylist" ? "no playlist picked yet" : "no collection picked yet";
 
         private static string GroupKey(TagConfig t) => GroupIssues.Key(t.Name, t.Tag);
@@ -3532,8 +3583,68 @@ namespace HomeScreenCompanion
         private DateTimeOffset? Played(User user, BaseItem item, DateTimeOffset? lastPlayed)
             => _playHistory == null ? lastPlayed : _playHistory.Effective(user.InternalId, item.InternalId, lastPlayed);
 
+        // The members of a collection or playlist for the Collection: / Playlist: rules: each title
+        // with its other versions, a show with all its episodes (one query for every show — one per
+        // show made a big collection take minutes), and an episode in a playlist with its show (as
+        // for a Local playlist source).
+        private HashSet<long> MembershipIds(IEnumerable<BaseItem> members, List<BaseItem> allItems, ref Dictionary<string, List<long>>? versionIdsByKey)
+        {
+            var ids = new HashSet<long>();
+            var seriesIds = new List<long>();
+            foreach (var m in members)
+            {
+                ids.Add(m.InternalId);
+                AddOtherVersions(ids, m, allItems, ref versionIdsByKey);
+                if (m is MediaBrowser.Controller.Entities.TV.Series) seriesIds.Add(m.InternalId);
+                else if (m is MediaBrowser.Controller.Entities.TV.Episode ep && ep.Series is BaseItem show) ids.Add(show.InternalId);
+            }
+            if (seriesIds.Count > 0)
+                foreach (var ep in _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { "Episode" },
+                    AncestorIds = seriesIds.ToArray(),
+                    Recursive = true,
+                    IsVirtualItem = false
+                }))
+                    ids.Add(ep.InternalId);
+            return ids;
+        }
+
+        // A user's played state of one title for the filter rules (IsPlayed, PlayCount, LastPlayed,
+        // WatchedByCount). Emby keeps no played flag on a Series — it works it out from the episodes
+        // (every episode watched = played), as its own apps show it — so a show asks Emby for that.
+        private (bool Played, DateTimeOffset? LastPlayedDate, int PlayCount) UserDataOf(User user, BaseItem item)
+        {
+            var ud = _userDataManager?.GetUserData(user, item);
+            bool played = item is MediaBrowser.Controller.Entities.TV.Series ? SeriesPlayed(user, item) : ud?.Played ?? false;
+            return (played, ud?.LastPlayedDate, ud?.PlayCount ?? 0);
+        }
+
+        // The shows a user has watched to the end, one query per user and run (see UserDataOf).
+        private readonly Dictionary<Guid, HashSet<long>> _playedSeries = new Dictionary<Guid, HashSet<long>>();
+        private bool SeriesPlayed(User user, BaseItem series)
+        {
+            HashSet<long> set;
+            lock (_playedSeries)
+            {
+                if (!_playedSeries.TryGetValue(user.Id, out set!))
+                {
+                    set = new HashSet<long>(_libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        User = user,
+                        IncludeItemTypes = new[] { "Series" },
+                        Recursive = true,
+                        IsPlayed = true
+                    }).Select(i => i.InternalId));
+                    _playedSeries[user.Id] = set;
+                }
+            }
+            return set.Contains(series.InternalId);
+        }
+
         private void StartPopularity(List<BaseItem> scope)
         {
+            lock (_playedSeries) _playedSeries.Clear();
             _popularity = new PopularityCounter(_libraryManager, _userManager, _userDataManager);
             _popularityScope = scope;
             _viewersByDays.Clear();
@@ -3935,7 +4046,9 @@ namespace HomeScreenCompanion
             Dictionary<string, List<BaseItem>>? perUser = null)
         {
             // Playlist sync — one individual playlist per user in PlaylistUserIds
-            if (tagConfig.EnablePlaylist && !dryRun)
+            if (tagConfig.EnablePlaylist && !dryRun && !StillWanted(tagConfig))
+                _log.Skip($"Playlist \"{(string.IsNullOrWhiteSpace(tagConfig.PlaylistName) ? tagConfig.Name : tagConfig.PlaylistName)}\": not synced — the group was deleted or switched off while this run was busy");
+            else if (tagConfig.EnablePlaylist && !dryRun)
             {
                 string _plLogName = string.IsNullOrWhiteSpace(tagConfig.PlaylistName) ? tagConfig.Name : tagConfig.PlaylistName;
                 _log.Section($"Playlist \"{_plLogName}\"");
@@ -4306,6 +4419,15 @@ namespace HomeScreenCompanion
                     continue;
                 }
 
+                // Deleted or switched off on the settings page while this run was busy (it works on
+                // the settings it started with): no row is made or updated for it. The next run
+                // removes what is left, from the saved settings.
+                if (!StillWanted(tc))
+                {
+                    _log.Skip($"{_hsDisplayName}: home section not synced — the group was deleted or switched off while this run was busy");
+                    continue;
+                }
+
                 Dictionary<string, string> settingsDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 try
                 {
@@ -4449,8 +4571,12 @@ namespace HomeScreenCompanion
                         ContentSection? ownedSection = null;
                         if (tracked != null && !string.IsNullOrEmpty(tracked.SectionId) && !tracked.SectionId.StartsWith("hsc__"))
                             ownedSection = allCurrentSections.FirstOrDefault(s => s.Id == tracked.SectionId);
+                        // The title fallback never takes a row another group or top-list owns: two sources
+                        // with the same Custom Title for one user would otherwise share (and keep
+                        // overwriting) one row.
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _hsFallbackName) && !string.IsNullOrEmpty(_hsFallbackName))
-                            ownedSection = allCurrentSections.FirstOrDefault(s => SameTitle(s.CustomName, _hsFallbackName));
+                            ownedSection = allCurrentSections.FirstOrDefault(s => SameTitle(s.CustomName, _hsFallbackName)
+                                && !SectionOwnedElsewhere(config, hsKey, userId, s.Id));
 
                         if (ownedSection != null)
                         {
@@ -4534,6 +4660,26 @@ namespace HomeScreenCompanion
 
             if (configChanged)
                 Plugin.Instance.SaveConfiguration();
+        }
+
+        // Is the group still in the saved settings, switched on? A run works on the settings object it
+        // started with; a Save on the settings page meanwhile replaces Plugin.Instance.Configuration.
+        private static bool StillWanted(TagConfig tc)
+        {
+            var live = Plugin.Instance?.Configuration;
+            if (live?.Tags == null || live.Tags.Contains(tc)) return true;
+            var key = GroupKey(tc);
+            return live.Tags.Any(t => t.Active && string.Equals(GroupKey(t), key, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // A user's home row that another group (not groupKey) or a top-list tracks as its own.
+        private static bool SectionOwnedElsewhere(PluginConfiguration config, string groupKey, string userId, string? sectionId)
+        {
+            if (string.IsNullOrEmpty(sectionId)) return false;
+            bool Tracks(List<HomeSectionTracking>? tracked) =>
+                tracked?.Any(t => t.SectionId == sectionId && string.Equals(t.UserId, userId, StringComparison.OrdinalIgnoreCase)) == true;
+            return (config.Tags ?? new List<TagConfig>()).Any(o => !string.Equals(GroupKey(o), groupKey, StringComparison.OrdinalIgnoreCase) && Tracks(o.HomeSectionTracked))
+                || (config.TopLists ?? new List<TopListHomeSection>()).Any(tl => Tracks(tl.HomeSectionTracked));
         }
 
         // Where a home row was when it was removed (its group made inactive, or a collection /
@@ -4758,8 +4904,14 @@ namespace HomeScreenCompanion
                 if (string.IsNullOrWhiteSpace(cn)) cn = defaultTitle ?? "";
                 if (!string.IsNullOrEmpty(cn))
                 {
+                    // Never a row another group or top-list tracks (same title, different source).
+                    var cfg = Plugin.Instance?.Configuration;
+                    var trackedIds = new HashSet<string>(
+                        (cfg?.Tags ?? new List<TagConfig>()).SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>())
+                            .Concat((cfg?.TopLists ?? new List<TopListHomeSection>()).SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>()))
+                            .Select(t => t.SectionId).Where(id => !string.IsNullOrEmpty(id)));
                     var fallbackIds = allSections
-                        .Where(s => SameTitle(s.CustomName, cn) && !string.IsNullOrEmpty(s.Id))
+                        .Where(s => SameTitle(s.CustomName, cn) && !string.IsNullOrEmpty(s.Id) && !trackedIds.Contains(s.Id))
                         .Select(s => s.Id).ToArray();
                     if (fallbackIds.Length > 0)
                     {
@@ -5265,6 +5417,21 @@ namespace HomeScreenCompanion
             return result;
         }
 
+        // External and AI sources: their titles go into the real-time tag cache (keyed by IMDb id).
+        internal static bool IsListSource(TagConfig t) =>
+            string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External" || t.SourceType == "AI";
+
+        // A source with filter conditions must not cache every list entry: an entry that failed a
+        // filter would get the tag back from the real-time tagger the moment the sync takes it off
+        // (the sync's own UpdateItem raises ItemUpdated). Such a source caches only the titles that
+        // passed its filters.
+        internal static bool HasFilterConditions(TagConfig t) =>
+            t.MediaInfoFilters?.Any(f => f?.Criteria?.Count > 0) == true || t.MediaInfoConditions?.Count > 0;
+
+        // A URL that came back empty and was replaced by its last good entries (LastGoodLists).
+        private static string StandInMessage(string url, string? error, DateTime savedUtc) =>
+            $"{(url ?? "").Trim()}: the list returned 0 items{Why(error)} — its titles from the last good read ({savedUtc.ToLocalTime():yyyy-MM-dd}) were used instead (\"Preserve tags and collections on empty result\" is on). Check the list URL and the API key in Settings.";
+
         // " (HTTP 403 Forbidden)" — the reason a source came back empty, for its warning.
         private static string Why(string? error) => string.IsNullOrEmpty(error) ? "" : $" ({error})";
         private static string Why(List<string> sources) => sources.Count == 0 ? "" : $" ({string.Join(", ", sources)})";
@@ -5746,9 +5913,9 @@ namespace HomeScreenCompanion
                         Func<User, bool> checkPlayed = u => {
                             var k = (u.Id, item.InternalId);
                             if (userDataCache != null && userDataCache.TryGetValue(k, out var cd)) return cd.Played == wantWatched;
-                            var ud2 = _userDataManager?.GetUserData(u, item);
-                            if (userDataCache != null) userDataCache[k] = ud2 == null ? (false, null, 0) : (ud2.Played, ud2.LastPlayedDate, ud2.PlayCount);
-                            return ud2 != null && ud2.Played == wantWatched;
+                            var ud2 = UserDataOf(u, item);
+                            if (userDataCache != null) userDataCache[k] = ud2;
+                            return ud2.Played == wantWatched;
                         };
                         return matchAll ? allUsers.All(checkPlayed) : allUsers.Any(checkPlayed);
                     }
@@ -5765,8 +5932,8 @@ namespace HomeScreenCompanion
                             {
                                 var k = (u.Id, item.InternalId);
                                 if (userDataCache != null && userDataCache.TryGetValue(k, out var cd)) { lpDate = cd.LastPlayedDate; }
-                                else { var ud2 = _userDataManager?.GetUserData(u, item); lpDate = ud2?.LastPlayedDate;
-                                       if (userDataCache != null) userDataCache[k] = ud2 == null ? (false, (DateTimeOffset?)null, 0) : (ud2.Played, ud2.LastPlayedDate, ud2.PlayCount); }
+                                else { var ud2 = UserDataOf(u, item); lpDate = ud2.LastPlayedDate;
+                                       if (userDataCache != null) userDataCache[k] = ud2; }
                                 lpDate = Played(u, item, lpDate);
                             }
                             if (lpDate == null) return false;
@@ -5782,8 +5949,8 @@ namespace HomeScreenCompanion
                             var k = (u.Id, item.InternalId);
                             int playCount;
                             if (userDataCache != null && userDataCache.TryGetValue(k, out var cd)) { playCount = cd.PlayCount; }
-                            else { var ud2 = _userDataManager?.GetUserData(u, item); playCount = ud2?.PlayCount ?? 0;
-                                   if (userDataCache != null) userDataCache[k] = ud2 == null ? (false, (DateTimeOffset?)null, 0) : (ud2.Played, ud2.LastPlayedDate, ud2.PlayCount); }
+                            else { var ud2 = UserDataOf(u, item); playCount = ud2.PlayCount;
+                                   if (userDataCache != null) userDataCache[k] = ud2; }
                             return ApplyNumericOp(playCount, op4, countU);
                         };
                         return matchAll ? allUsers.All(checkPc) : allUsers.Any(checkPc);
@@ -5800,9 +5967,7 @@ namespace HomeScreenCompanion
                 {
                     var user4 = _userManager.GetUserById(guid4);
                     if (user4 == null) return false;
-                    var ud = _userDataManager?.GetUserData(user4, item);
-                    if (ud == null) return false;
-                    udResult = (ud.Played, ud.LastPlayedDate, ud.PlayCount);
+                    udResult = UserDataOf(user4, item);
                     if (userDataCache != null) userDataCache[udKey] = udResult;
                 }
                 if (prop4 == "IsPlayed")
@@ -6127,12 +6292,9 @@ namespace HomeScreenCompanion
                     played = cd.Played;
                 else
                 {
-                    var ud = _userDataManager?.GetUserData(u, item);
-                    played = ud?.Played ?? false;
-                    if (userDataCache != null)
-                        userDataCache[k] = ud == null
-                            ? (false, (DateTimeOffset?)null, 0)
-                            : (ud.Played, ud.LastPlayedDate, ud.PlayCount);
+                    var ud = UserDataOf(u, item);
+                    played = ud.Played;
+                    if (userDataCache != null) userDataCache[k] = ud;
                 }
                 if (played) count++;
             }
@@ -6388,6 +6550,11 @@ namespace HomeScreenCompanion
             return $"{gs.ListCount} in list, {gs.MatchCount} in your library";
         }
 
+        // A group with several URLs has one block per URL; its tag and collection lines are the
+        // group's and are shown once (full run only; null = show them).
+        private HashSet<string>? _resultsShown;
+        private bool FirstShown(string key) => _resultsShown == null || _resultsShown.Add(key);
+
         /// <summary>The per-group block under "Results" — identical for full and single runs.</summary>
         private void WriteGroupBlock(GroupRunStats gs, bool dryRun, bool logMissing)
         {
@@ -6425,14 +6592,14 @@ namespace HomeScreenCompanion
             // A list that came back empty has its own warning / error below.
             if (gs.LimitShort != null && !(isRemote && gs.ListCount == 0)) _log.Warn($"Found {gs.LimitShort} (Max items)");
 
-            if (gs.EnableTag && !gs.BoxSetHse)
+            if (gs.EnableTag && !gs.BoxSetHse && FirstShown("tag:" + gs.TagName))
             {
                 if (dryRun) _log.Skip($"Tag \"{gs.TagName}\": would add {gs.TagsAdded}, remove {gs.TagsRemoved} (dry run)");
                 else if (gs.TagsAdded == 0 && gs.TagsRemoved == 0) _log.Ok($"Tag \"{gs.TagName}\": up to date");
                 else _log.Ok($"Tag \"{gs.TagName}\": +{gs.TagsAdded} added, -{gs.TagsRemoved} removed");
             }
 
-            if (gs.EnableCollection)
+            if (gs.EnableCollection && FirstShown("coll:" + gs.CollectionName))
             {
                 if (dryRun) _log.Skip($"Collection \"{gs.CollectionName}\": not changed (dry run)");
                 else if (gs.CollectionCreated) _log.Ok($"Collection \"{gs.CollectionName}\": created with {RunLog.Plural(gs.CollectionItemsAdded, "item")}");
@@ -7121,6 +7288,8 @@ namespace HomeScreenCompanion
             }
 
             if (dryRun) return;
+            if (onlyTag != null && !(config.TopLists ?? new List<TopListHomeSection>()).Any(t => string.Equals(t.TagName, onlyTag, StringComparison.OrdinalIgnoreCase)))
+                return;
 
             // Build lookup of original (non-strm) movies keyed by IMDb ID so we can link
             // each top-list STRM item to its source as an Emby alternate version.
@@ -7169,10 +7338,6 @@ namespace HomeScreenCompanion
                 var sanitized = SanitizeTopListFolderName(tl.TagName);
                 var folderPath = Path.Combine(topListsPath, sanitized);
                 Directory.CreateDirectory(folderPath);
-
-                foreach (var f in Directory.GetFiles(folderPath, "*.strm")) File.Delete(f);
-                foreach (var f in Directory.GetFiles(folderPath, "*.nfo")) File.Delete(f);
-                foreach (var f in Directory.GetFiles(folderPath, "*.jpg")) File.Delete(f);
 
                 var badgeStyle = "neutral";
                 int effectiveMaxItems = tl.MaxItems;
@@ -7242,45 +7407,94 @@ namespace HomeScreenCompanion
                 int count = 0;
                 var rankExtras = TopListHistory.Update(tl.TagName, selected.Select(s => s.Item).ToList(), badgeStyle,
                     _jsonSerializer, _libraryManager, _userManager, _userDataManager, m => _log.Warn(m));
+                // Only files that changed are written (and the ones no longer in the list removed): the
+                // folder is a watched library, so rewriting every file made Emby refresh every title of
+                // the list on each sync.
+                var changedBases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var wantedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var tempDir = Path.Combine(Path.GetTempPath(), "hsc_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tempDir);
+                var stageDir = Path.Combine(tempDir, "stage");
+                Directory.CreateDirectory(stageDir);
+                // What each title's badged images were drawn from (source images, rank, look, extras):
+                // unchanged → not drawn again. Remote source images (TMDb) come back as different bytes
+                // on every download, so comparing the drawn files alone still rewrote them each sync.
+                var renderFile = Path.Combine(dataPath, "toplist_render", sanitized + ".json");
+                Dictionary<string, string> renderSigs;
+                try { renderSigs = File.Exists(renderFile) ? _jsonSerializer.DeserializeFromFile<Dictionary<string, string>>(renderFile) ?? new Dictionary<string, string>() : new Dictionary<string, string>(); }
+                catch { renderSigs = new Dictionary<string, string>(); }
+                var newSigs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 try
                 {
                     foreach (var entry in selected)
                     {
                         count++;
                         var sortPrefix = count.ToString().PadLeft(digits, '0');
-                        File.WriteAllText(Path.Combine(folderPath, entry.BaseName + ".nfo"),
+                        bool changed = ShowTopList.WriteIfChanged(Path.Combine(folderPath, entry.BaseName + ".nfo"),
                             HomeScreenCompanionService.BuildTopListNfo(entry.Item, sortPrefix));
-                        HomeScreenCompanionService.WriteRankedImages(
-                            entry.Item, count, Path.Combine(folderPath, entry.BaseName), badgeStyle, tempDir,
-                            _httpClient, _providerManager, _libraryManager, _fileSystem, m => _log.Warn(m),
-                            rankExtras.TryGetValue(entry.Item.Id, out var rx) ? rx : null);
+                        var rx = rankExtras.TryGetValue(entry.Item.Id, out var _rx) ? _rx : null;
+                        var sig = RenderSignature(entry.Item, count, badgeStyle, rx);
+                        newSigs[entry.BaseName] = sig;
+                        bool drawn = renderSigs.TryGetValue(entry.BaseName, out var oldSig) && oldSig == sig
+                            && File.Exists(Path.Combine(folderPath, entry.BaseName + ".jpg"));
+                        if (!drawn)
+                        {
+                            // Drawn aside first, copied in only when different.
+                            var stageBase = Path.Combine(stageDir, entry.BaseName);
+                            HomeScreenCompanionService.WriteRankedImages(
+                                entry.Item, count, stageBase, badgeStyle, tempDir,
+                                _httpClient, _providerManager, _libraryManager, _fileSystem, m => _log.Warn(m), rx);
+                            foreach (var suffix in new[] { ".jpg", "-thumb.jpg" })
+                                if (ShowTopList.CopyIfChanged(stageBase + suffix, Path.Combine(folderPath, entry.BaseName + suffix))) changed = true;
+                        }
+                        foreach (var suffix in new[] { ".jpg", "-thumb.jpg" })
+                            wantedFiles.Add(entry.BaseName + suffix);
                         // .strm last: the folder is a watched library, and Emby creates the item the
                         // moment it sees the .strm — the nfo and badged images must already be there.
-                        File.WriteAllText(Path.Combine(folderPath, entry.BaseName + ".strm"), entry.FilePath);
+                        if (ShowTopList.WriteIfChanged(Path.Combine(folderPath, entry.BaseName + ".strm"), entry.FilePath)) changed = true;
+                        wantedFiles.Add(entry.BaseName + ".nfo");
+                        wantedFiles.Add(entry.BaseName + ".strm");
+                        if (changed) changedBases.Add(entry.BaseName);
                     }
                 }
                 finally
                 {
                     try { Directory.Delete(tempDir, true); } catch { }
                 }
-
-                // Notify the file system monitor so Emby is aware of the changes
                 try
                 {
-                    _libraryMonitor?.ReportFileSystemChanged(folderPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(renderFile)!);
+                    _jsonSerializer.SerializeToFile(newSigs, renderFile);
                 }
                 catch { }
+                int removedFiles = 0;
+                foreach (var f in Directory.GetFiles(folderPath))
+                {
+                    var ext = Path.GetExtension(f);
+                    if (!ext.Equals(".strm", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".nfo", StringComparison.OrdinalIgnoreCase)
+                        && !ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (wantedFiles.Contains(Path.GetFileName(f))) continue;
+                    try { File.Delete(f); removedFiles++; } catch { }
+                }
+
+                // Notify the file system monitor so Emby is aware of the changes
+                if (changedBases.Count > 0 || removedFiles > 0)
+                {
+                    try { _libraryMonitor?.ReportFileSystemChanged(folderPath); }
+                    catch { }
+                }
 
                 // For items already indexed in the library: update SortName and poster directly
                 // so changes are visible immediately without waiting for a full library scan.
                 try
                 {
                     var sortPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var originalNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     for (int si = 0; si < selected.Count; si++)
-                        sortPaths[Path.Combine(folderPath, selected[si].BaseName + ".strm")]
-                            = (si + 1).ToString().PadLeft(digits, '0');
+                    {
+                        var _strm = Path.Combine(folderPath, selected[si].BaseName + ".strm");
+                        sortPaths[_strm] = (si + 1).ToString().PadLeft(digits, '0');
+                        originalNames[_strm] = selected[si].Item.Name ?? "";
+                    }
 
                     var libItems = _libraryManager.GetItemList(new InternalItemsQuery
                     {
@@ -7295,9 +7509,16 @@ namespace HomeScreenCompanion
                     {
                         var strmPath = li.Path;
                         if (string.IsNullOrEmpty(strmPath)) continue;
+                        // Unchanged files and rank: the item is left alone (no update, no refresh).
+                        bool rankChanged = sortPaths.TryGetValue(strmPath, out var newSort) && !string.Equals(li.SortName, newSort, StringComparison.Ordinal);
+                        // The copy shows the original's title (see BuildTopListNfo), whatever language its library fetched.
+                        bool nameChanged = originalNames.TryGetValue(strmPath, out var origName) && origName.Length > 0 && !string.Equals(li.Name, origName, StringComparison.Ordinal);
+                        if (nameChanged) li.Name = origName;
+                        if (!rankChanged && !nameChanged && !changedBases.Contains(Path.GetFileNameWithoutExtension(strmPath))
+                            && HomeScreenCompanionService.RankedImagesApplied(li, folderPath)) continue;
 
                         // Update SortName
-                        if (sortPaths.TryGetValue(strmPath, out var newSort))
+                        if (newSort != null)
                         {
                             var prop = li.GetType().GetProperty("SortName");
                             if (prop?.CanWrite == true) prop.SetValue(li, newSort);
@@ -7380,6 +7601,16 @@ namespace HomeScreenCompanion
                     _log.Warn($"Top-list '{tl.TagName}': shows could not be synced — {ex.Message}");
                 }
             }
+        }
+
+        // What a top-list title's badged images are drawn from: its source images (path and date),
+        // its rank, the list's look and the extras (movement, weeks, plays).
+        private static string RenderSignature(BaseItem item, int rank, string look, RankExtras? extras)
+        {
+            var images = item.ImageInfos ?? Array.Empty<ItemImageInfo>();
+            string Src(ImageType t) => images.FirstOrDefault(i => i.Type == t) is ItemImageInfo ii ? ii.Path + "@" + ii.DateModified.Ticks : "";
+            return string.Join("|", Src(ImageType.Primary), Src(ImageType.Thumb), Src(ImageType.Backdrop), rank, look,
+                extras == null ? "" : $"{extras.Move}/{extras.Weeks}/{extras.Plays}/{extras.Show}");
         }
 
         private static string SanitizeTopListFolderName(string name)

@@ -1924,6 +1924,7 @@
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>Filter by video quality, audio format, genre, actors, ratings, watch status and more — see <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-6').scrollIntoView({behavior:'smooth'});return false;">MediaInfo Filters</a>, including <em>Popular on this server</em>.</li>
                             <li><strong>Max items</strong> (0 = all) caps the list. <em>Preview</em> (next to it) lists what matches right now.</li>
+                            <li>A MediaInfo source without any rule is skipped (it would match the whole library) until it has one.</li>
                             <li>With the rule <em>Media Type: Episode</em> the filters check single episodes; the Tag tab then decides whether the episode, its season or its show gets the tag.</li>
                         </ul></div>
                 </div>
@@ -2254,7 +2255,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">repeat</i>
-                    <div><strong>Recurring</strong> — Active on specific days every week, month, or year. You can stack multiple intervals on the same source — for example "every Friday" and "every Saturday".</div>
+                    <div><strong>Recurring</strong> — Active between the same two dates every year, e.g. 1 December to 26 December; a window may cross New Year (27 December to 3 January). For days of the week use <strong>Week Days</strong> (for example Friday and Saturday). You can stack multiple rules on the same source.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">event</i>
@@ -2359,7 +2360,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">copy_all</i>
-                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. Every row is copied, in the same order — including top-list and source rows, whatever that row's own target users are. The only exception is a per-user playlist row (such as <em>Your Next Watch</em>): it is copied in the same place but shows each user's own playlist, and users without one from that source don't get the row. Old copies pointing at someone else's playlist are re-pointed or removed. This runs separately from the tag and collection sync.
+                    <div><strong>Copy &amp; Sync</strong> — Copies the complete home screen layout from one user to one or more other users. Handy when you want all profiles to look the same. Every row is copied, in the same order — including source rows, whatever that row's own target users are. Two exceptions: a <strong>top-list row</strong> only goes to that list's own target users (a top-list has its own library, and only its users are given access to it) — add the users to the top-list in the Top-Lists tab to give them the row; and a per-user playlist row (such as <em>Your Next Watch</em>) is copied in the same place but shows each user's own playlist, and users without one from that source don't get the row. Old copies pointing at someone else's playlist are re-pointed or removed, and old copies of a top-list row for users who are not its target users are removed. This runs separately from the tag and collection sync.
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>Tick <em>Enable Home Screen sync</em>, pick the <strong>Source User</strong> whose layout is the model, and tick the users to copy to. Set the source user's home screen up in Emby first, then run it.</li>
                             <li>The target users' own rows are <strong>replaced</strong>, so changes they made themselves are lost on the next run.</li>
@@ -2508,7 +2509,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">shield</i>
-                    <div><strong>Preserve tags and collections on empty result</strong> <span style="opacity:0.6;">(Tags &amp; Collections)</span> — If an External or AI source returns zero items — for example because the website was temporarily unreachable — the plugin keeps the existing tags and collection members as they are instead of removing everything. This prevents an accidental wipe-out caused by a network hiccup.</div>
+                    <div><strong>Preserve tags and collections on empty result</strong> <span style="opacity:0.6;">(Tags &amp; Collections)</span> — If an External or AI source returns zero items — for example because the website was temporarily unreachable — the plugin keeps the existing tags and collection members as they are instead of removing everything. This prevents an accidental wipe-out caused by a network hiccup. In a source with several URLs only the empty URL is held: it uses the titles it gave on its last good read, and the source's other URLs are synced as usual (titles that left them are removed). A URL that no longer exists (HTTP 404) is left out of such a source, with an error in the log — remove or fix it.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">done_all</i>

@@ -213,11 +213,12 @@ namespace HomeScreenCompanion
                         }
 
                         int copiedHere = 0;
+                        var notCopied = new List<string>();   // rows this user does not get (said in the log)
                         foreach (var section in sourceSections.Sections)
                         {
                             var copy = CopySection(section);
-                            // Only per-user HSC playlist rows are personalised; every other row
-                            // (top lists, tag/collection/items rows) is shared and copied to all targets.
+                            // Per-user HSC playlist rows are personalised and top-list rows go only to the
+                            // list's own users; every other row (tag/collection/items rows) is copied to all targets.
                             var row = managed.PlaylistRow(section);
                             if (row != null)
                             {
@@ -226,6 +227,7 @@ namespace HomeScreenCompanion
                                 if (own == null)
                                 {
                                     _log.Debug($"  {targetName}: – '{section.CustomName ?? section.Name}' skipped (no own playlist from that source)");
+                                    notCopied.Add($"'{section.CustomName ?? section.Name}' (no own playlist from that source)");
                                     continue;
                                 }
                                 copy.ParentId = own;
@@ -234,6 +236,7 @@ namespace HomeScreenCompanion
                             if (topList != null && !managed.IsTopListUser(topList, targetKey))
                             {
                                 _log.Debug($"  {targetName}: – '{section.CustomName ?? section.Name}' skipped (top-list for other users)");
+                                notCopied.Add($"'{section.CustomName ?? section.Name}' (top-list: not one of its users)");
                                 continue;
                             }
                             _log.Debug($"  {targetName}: + [{section.SectionType}] \"{section.CustomName ?? section.Name}\"");
@@ -267,7 +270,8 @@ namespace HomeScreenCompanion
                             topListsChanged = true;
                         }
 
-                        _log.Ok($"{targetName}: {RunLog.Plural(copiedHere, "section")} copied");
+                        _log.Ok($"{targetName}: {RunLog.Plural(copiedHere, "section")} copied"
+                            + (notCopied.Count > 0 ? $"  ·  not copied: {string.Join(", ", notCopied)}" : ""));
                     }
                     catch (Exception ex)
                     {
