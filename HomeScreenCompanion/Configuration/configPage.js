@@ -1184,7 +1184,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var file = function (p) { return p ? esc(p.split(/[\\/]/).pop()) : ''; };
         var gen = isGenArtStyle(tc.PlaylistPosterStyle) || isGenArtStyle(tc.PlaylistBackgroundStyle);
         var orRow = '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; opacity:0.45;"><div style="flex:1; height:1px; background:currentColor;"></div><span style="font-size:0.75em;">or</span><div style="flex:1; height:1px; background:currentColor;"></div></div>';
-        var btnStyle = '';
         return `
                         <div class="pl-look" style="margin-top:18px;">
                             <p style="margin:0 0 4px 0; font-size:0.95em; font-weight:bold;">Playlist look</p>
@@ -2307,7 +2306,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var prop = parsed.prop || 'Resolution';
         var notActive = parsed.not;
         var notBg = notActive ? 'rgba(229,115,115,0.15)' : 'transparent';
-        var notColor = notActive ? 'var(--hsc-danger-text)' : '';
+        var notColor = notActive ? 'var(--hsc-danger-text)' : 'var(--theme-text-secondary)';
         var notBorder = notActive ? '1px solid rgba(229,115,115,0.5)' : '1px solid var(--hsc-hairline-strong)';
         return '<div class="mi-rule" style="margin-bottom:6px;">' +
             '<div style="display:flex; gap:6px; align-items:center;">' +
@@ -2338,7 +2337,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         ' background:' + (groupOp === 'AND' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
                         ' color:' + (groupOp === 'AND' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                         ' title="Both filter groups must match">AND</button>' +
-                                                '<button type="button" class="btnGroupOpChoice" data-value="OR"' +
+                        '<button type="button" class="btnGroupOpChoice" data-value="OR"' +
                         ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
                         ' background:' + (groupOp === 'OR' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
                         ' color:' + (groupOp === 'OR' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
@@ -2365,7 +2364,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             ' background:' + (op === 'AND' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
                             ' color:' + (op === 'AND' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
                             ' title="All rules in this group must match">ALL</button>' +
-                                                        '<button type="button" class="btnGroupInnerOpChoice" data-value="OR"' +
+                            '<button type="button" class="btnGroupInnerOpChoice" data-value="OR"' +
                             ' style="border:none; border-radius:6px; padding:4px 14px; font-family:inherit; font-size:0.82em; font-weight:600; cursor:pointer; letter-spacing:0.3px;' +
                             ' background:' + (op === 'OR' ? 'var(--theme-background-level3)' : 'transparent') + ';' +
                             ' color:' + (op === 'OR' ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)') + ';"' +
@@ -2944,7 +2943,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <span style="font-size:0.75em; opacity:0.5;">— Find lists: <a href="https://trakt.tv/discover" target="_blank" style="color:inherit; text-decoration:underline;">Trakt</a> &middot; <a href="https://mdblist.com/toplists/" target="_blank" style="color:inherit; text-decoration:underline;">MDBList</a> &middot; <a href="https://www.themoviedb.org/" target="_blank" style="color:inherit; text-decoration:underline;">TMDb</a> &middot; <a href="https://developer.themoviedb.org/reference/getting-started" target="_blank" style="color:inherit; text-decoration:underline;">TMDb API</a></span>
                         </div>
                         <div class="url-list-container">${urls.map(u => getUrlRowHtml(u.url, u.limit)).join('')}</div>
-                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddUrl hsc-btn-dashed"><i class="md-icon" style="margin-right:5px;">add</i>Add another URL</button></div>
+                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddUrl hsc-btn-dashed" style="width:100%;"><i class="md-icon" style="margin-right:5px;">add</i>Add another URL</button></div>
                     </div>
 
                     <div class="source-local-container" style="display: ${(sourceType === 'LocalCollection' || sourceType === 'LocalPlaylist') ? 'block' : 'none'};">
@@ -2953,7 +2952,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <button type="button" is="emby-button" class="raised button-submit btnMiPreview hsc-btn-secondary hsc-btn-sm" style="margin-left:auto;" title="Preview Source"><span>Preview</span></button>
                         </div>
                         <div class="local-list-container">${localSources.map(ls => getLocalRowHtml(sourceType, ls.id, ls.limit)).join('')}</div>
-                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddLocal hsc-btn-dashed"><i class="md-icon" style="margin-right:5px;">add</i>Add another</button></div>
+                        <div style="margin-top:10px;"><button is="emby-button" type="button" class="raised btnAddLocal hsc-btn-dashed" style="width:100%;"><i class="md-icon" style="margin-right:5px;">add</i>Add another</button></div>
                     </div>
 
                     <div class="source-manual-container" data-manual-ids="${encodeURIComponent(JSON.stringify(tagConfig.ManualItemIds || []))}" style="display: ${sourceType === 'Manual' ? 'block' : 'none'};">
@@ -3918,7 +3917,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 active = !active;
                 btn.dataset.not = active ? '1' : '0';
                 btn.style.background = active ? 'rgba(229,115,115,0.15)' : 'transparent';
-                btn.style.color = active ? 'var(--hsc-danger-text)' : '';
+                btn.style.color = active ? 'var(--hsc-danger-text)' : 'var(--theme-text-secondary)';
                 btn.style.border = active ? '1px solid rgba(229,115,115,0.5)' : '1px solid var(--hsc-hairline-strong)';
                 setTimeout(checkFormState, 0);
             }
@@ -6388,7 +6387,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
             function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-            var btnStyle = 'cursor:pointer;border:none;border-radius:6px;padding:4px 12px;font-size:0.82em;font-weight:500;';
 
             function renderSection(title, items, isTagSection, headerExtra) {
                 var sectionId = isTagSection ? 'tcTagSection' : 'tcCollSection';
@@ -7346,7 +7344,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var sel = selectedVal || 'neutral';
         var esc = function (v) { return String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
         var cardBase = 'cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;border:2px solid transparent;transition:border-color 0.15s;';
-        var cardActive = cardBase + 'border-color:var(--hsc-primary-text);';
+        var cardActive = cardBase + 'border-color:var(--hsc-primary);';
         var cardInactive = cardBase + 'border-color:var(--line-color,rgba(255,255,255,0.12));';
         var tileSel = sel === 'top10';
         // Same Customise chip as the art pickers, under the tiles (Top 10 tile only).
@@ -8554,7 +8552,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var deleteHtml = '<button type="button" is="emby-button" class="raised btnTlDelete hsc-btn-danger" data-name="' + escAttr(tagName) + '"><i class="md-icon" style="margin-right:5px;">delete</i>Delete top-list</button>';
         // Copy (same look and place as on a source card): the saved list, to paste on another server.
         var copyBarHtml = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
-            '<button type="button" is="emby-button" class="btnCopyTopList raised" style="background:transparent;color:var(--theme-text-secondary);font-size:0.82em;padding:0 10px;min-width:0;box-shadow:none;" title="Copy this top-list to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em;margin-right:4px;">share</i><span>Copy</span></button>' +
+            '<button type="button" is="emby-button" class="btnCopyTopList raised hsc-btn-ghost hsc-btn-sm" title="Copy this top-list to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em;margin-right:4px;">share</i><span>Copy</span></button>' +
             '</div>';
 
         body.innerHTML = '<div style="padding:8px 0;opacity:0.6;font-size:0.9em;">Loading… <span class="tc-dot-loader"><span></span><span></span><span></span></span></div>';
@@ -9955,7 +9953,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
             function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-            var btnStyle = 'cursor:pointer;border:none;border-radius:6px;padding:4px 12px;font-size:0.82em;font-weight:500;';
 
             var searchInputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:5px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:400px;max-width:100%;';
 
@@ -11105,7 +11102,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     loadConfig();
                 });
             }
-            bar.style.background = serverChanged ? 'rgba(230,193,90,0.18)' : 'rgba(82,181,75,0.15)';
+            bar.style.background = serverChanged ? 'rgba(230,193,90,0.08)' : 'rgba(82,181,75,0.08)';
             bar.style.borderColor = serverChanged ? 'rgba(230,193,90,0.45)' : 'rgba(82,181,75,0.45)';
             bar.querySelector('.hsc-draft-text').textContent = serverChanged
                 ? 'Unsaved changes restored. Settings changed on the server while you were away — Save will not overwrite them; it offers to reload the current settings instead.'

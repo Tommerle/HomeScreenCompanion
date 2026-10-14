@@ -126,6 +126,9 @@
             font-size: 0.8em;
             font-weight: 500;
             line-height: 1.4;
+            min-width: 64px;
+            text-align: center;
+            box-sizing: border-box;
             background: rgba(82,181,75,0.15);
         }
         .tag-row.inactive .lblActiveStatus { background: rgba(154,164,176,0.15); }
@@ -253,7 +256,6 @@
         }
         .hsc-btn-danger:hover { background: rgba(229,115,115,0.08) !important; border-color: var(--hsc-danger) !important; }
         .hsc-btn-dashed {
-            width: 100%;
             background: transparent !important;
             border: 1px dashed var(--hsc-hairline-strong) !important;
             color: var(--theme-text-secondary) !important;
@@ -842,8 +844,6 @@
             border-bottom: 1px solid var(--hsc-hairline);
             padding: 0;
             background: transparent;
-            overflow-x: auto;
-            scrollbar-width: none;
         }
         .page-tab-nav { margin-bottom: 24px; }
         .hsc-sub-tab-nav { margin-bottom: 24px; }
@@ -979,6 +979,7 @@
         /* Cleanup lists */
         .tc-manage-row td { border-bottom: 1px solid var(--hsc-hairline) !important; }
         .tc-manage-row:hover td { background: var(--hsc-tint-1); }
+        .tc-manage-row td:nth-child(2), #lastRunStatusLabel, .log-tab-time, .tag-indicator.short, .hsc-issue-counter { font-variant-numeric: tabular-nums; }
         .btnTcMark, .btnTcUndo, .btnTcRefresh, .btnTlRefresh {
             cursor: pointer;
             border-radius: 6px !important;
