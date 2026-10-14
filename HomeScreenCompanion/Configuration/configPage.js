@@ -4010,7 +4010,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             if (e.target.closest('.btnRemoveGroup')) {
                 confirmDeleteGroup(row, function () {
+                    var rowView = row.closest('#HomeScreenCompanionConfigPage') || activeView();
                     row.remove();
+                    if (rowView) updateIssueCounter(rowView);
                     setTimeout(checkFormState, 0);
                 });
             }
@@ -4469,7 +4471,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             else if (raw.indexOf('⚠') >= 0) cls = 'log-warn';
             else if (raw.indexOf('✔') >= 0) cls = 'log-ok';
             else if (/^\s{1,3}– /.test(raw)) cls = 'log-skip';
-            else if (/^(»|Results$|Summary$|\[Cleanup\]$|\[\d+\/\d+\] |Home Screen (Companion|Sync) )/.test(raw)) cls = 'log-head';
+            else if (isLogHeader(raw)) cls = 'log-head';
 
             var line = document.createElement('div');
             line.className = 'log-line' + (cls ? ' ' + cls : '');
@@ -4661,14 +4663,25 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         renderLogLines(content, entries, running(selected));
     }
 
+    // A group, phase or run header line of the log (timestamp already removed).
+    function isLogHeader(raw) {
+        return /^(»|Results$|Summary$|\[Cleanup\]$|\[\d+\/\d+\] |Home Screen (Companion|Sync) )/.test(raw);
+    }
+
     // The log's ⚠ / ✖ lines, each run of them under the group (or phase) header it belongs to.
+    // Detail lines (indented deeper) right after an issue line are kept with it.
     function logIssueEntries(entries) {
-        var out = [], head = null, shownHead = null;
+        var out = [], head = null, shownHead = null, inIssue = false;
         entries.forEach(function (e) {
             var raw = (e.text || '').replace(/^\[\d{2}:\d{2}:\d{2}\] ?/, '');
             if (/^\[DEBUG\]/.test(raw)) return;
-            if (/^(»|Results$|Summary$|\[Cleanup\]$|\[\d+\/\d+\] )/.test(raw)) { head = e; return; }
-            if (raw.indexOf('✖') < 0 && raw.indexOf('⚠') < 0) return;
+            if (isLogHeader(raw)) { head = e; inIssue = false; return; }
+            if (raw.indexOf('✖') < 0 && raw.indexOf('⚠') < 0) {
+                if (inIssue && /^\s{6,}\S/.test(raw)) out.push(e);
+                else inIssue = false;
+                return;
+            }
+            inIssue = true;
             if (head && head !== shownHead) {
                 if (out.length) out.push({ src: e.src, text: '' });
                 out.push(head);
@@ -5928,6 +5941,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             row.style.display = (matchesSearch && matchesFeature && matchesSrc && matchesStatus && matchesIssues) ? 'block' : 'none';
         });
+        // Recount here too: rows are rendered, added and reloaded after the issues arrive.
+        updateIssueCounter(view);
         var counter = view.querySelector('#btnIssueCounter');
         if (counter) counter.classList.toggle('active', !!fIssues);
     }

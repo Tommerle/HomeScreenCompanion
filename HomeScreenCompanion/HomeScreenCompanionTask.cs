@@ -540,6 +540,35 @@ namespace HomeScreenCompanion
                     .Concat(config.Tags.Where(t => !t.OverrideWhenActive))
                     .ToList();
 
+                // A group with several URLs is stored as one flat entry per URL. Its fetch lines wait
+                // until its last entry is done: only then is it known whether every URL came back
+                // empty, and the "other lists were used" messages become "being cleared".
+                var fetchEntriesLeft = orderedTags.Where(t => t.Active && !string.IsNullOrWhiteSpace(t.Tag))
+                    .GroupBy(GroupKey, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+                var heldFetchLines = new Dictionary<string, List<GroupRunStats>>(StringComparer.OrdinalIgnoreCase);
+                var groupsWithItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var clearedIfAllEmpty = new Dictionary<string, List<(List<string> Messages, int Index, string Text)>>(StringComparer.OrdinalIgnoreCase);
+                void FlushFetchLines(string key)
+                {
+                    if (!groupsWithItems.Contains(key) && clearedIfAllEmpty.TryGetValue(key, out var notes))
+                        foreach (var (messages, index, text) in notes) messages[index] = text;
+                    clearedIfAllEmpty.Remove(key);
+                    if (heldFetchLines.TryGetValue(key, out var held))
+                        foreach (var g in held) WriteFetchLine(g);
+                    heldFetchLines.Remove(key);
+                }
+                void FetchLineDone(GroupRunStats g, TagConfig source)
+                {
+                    var key = GroupKey(source);
+                    if (!g.Skipped && g.ListCount > 0) groupsWithItems.Add(key);
+                    if (!heldFetchLines.TryGetValue(key, out var held)) heldFetchLines[key] = held = new List<GroupRunStats>();
+                    held.Add(g);
+                    int left = fetchEntriesLeft.TryGetValue(key, out var n) ? n - 1 : 0;
+                    fetchEntriesLeft[key] = left;
+                    if (left <= 0) FlushFetchLines(key);
+                }
+
                 foreach (var tagConfig in orderedTags)
                 {
                     if (string.IsNullOrWhiteSpace(tagConfig.Tag)) continue;
@@ -586,7 +615,7 @@ namespace HomeScreenCompanion
                         gs.Skipped = true;
                         gs.SkipReason = "not in schedule";
                         statsList.Add(gs);
-                        WriteFetchLine(gs);
+                        FetchLineDone(gs, tagConfig);
                         continue;
                     }
 
@@ -607,7 +636,7 @@ namespace HomeScreenCompanion
                         }
                         playlistGroupsToSkip.Add(GroupKey(tagConfig));
                         statsList.Add(gs);
-                        WriteFetchLine(gs);
+                        FetchLineDone(gs, tagConfig);
                         continue;
                     }
 
@@ -621,7 +650,7 @@ namespace HomeScreenCompanion
                         gs.Skipped = true;
                         gs.SkipReason = "overridden by a priority group with the same tag";
                         statsList.Add(gs);
-                        WriteFetchLine(gs);
+                        FetchLineDone(gs, tagConfig);
                         continue;
                     }
                     if (tagConfig.OverrideWhenActive &&
@@ -631,7 +660,7 @@ namespace HomeScreenCompanion
                         gs.Skipped = true;
                         gs.SkipReason = "another priority group higher in the list is active for the same tag";
                         statsList.Add(gs);
-                        WriteFetchLine(gs);
+                        FetchLineDone(gs, tagConfig);
                         continue;
                     }
                     if (tagConfig.EnableCollection)
@@ -652,7 +681,7 @@ namespace HomeScreenCompanion
                         gs.Skipped = true;
                         gs.SkipReason = NoSourceYetReason(tagConfig);
                         statsList.Add(gs);
-                        WriteFetchLine(gs);
+                        FetchLineDone(gs, tagConfig);
                         currentProgress += step;
                         progress.Report(currentProgress);
                         continue;
@@ -1113,15 +1142,25 @@ namespace HomeScreenCompanion
                             playlistGroupsToSkip.Add(GroupKey(tagConfig));
                             gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
                             statsList.Add(gs);
-                            WriteFetchLine(gs);
+                            FetchLineDone(gs, tagConfig);
                             currentProgress += step;
                             progress.Report(currentProgress);
                             continue;
                         }
-                        if (isRemoteSource && gs.ListCount == 0)
-                            emptyList.Add(emptySrc + (tagConfig.SourceType == "AI"
+                        if (isRemoteSource && gs.ListCount == 0 && emptySrc.Length > 0)
+                        {
+                            // Same wording as Run Group: the group's other URLs still supply its items,
+                            // unless they all come back empty (FlushFetchLines then swaps in the second text).
+                            emptyList.Add($"{emptySrc}the list returned 0 items{Why(fetchError)} — the group's other lists were used");
+                            var groupKey = GroupKey(tagConfig);
+                            if (!clearedIfAllEmpty.TryGetValue(groupKey, out var notes)) clearedIfAllEmpty[groupKey] = notes = new List<(List<string>, int, string)>();
+                            notes.Add((emptyList, emptyList.Count - 1,
+                                $"{emptySrc}the list returned 0 items{Why(fetchError)} — the group's tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings). Check the list URLs and the API key."));
+                        }
+                        else if (isRemoteSource && gs.ListCount == 0)
+                            emptyList.Add(tagConfig.SourceType == "AI"
                                 ? $"The AI returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings)"
-                                : $"The list returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings). Check the list URL and the API key."));
+                                : $"The list returned 0 items{Why(fetchError)} — its tags, collection and playlist are being cleared (\"Preserve tags and collections on empty result\" is off in Settings). Check the list URL and the API key.");
 
                         if (tagConfig.EnableTag && !tagConfig.OnlyCollection && !IsBoxSetHomeSectionEntry(tagConfig))
                         {
@@ -1192,10 +1231,11 @@ namespace HomeScreenCompanion
 
                     gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
                     statsList.Add(gs);
-                    WriteFetchLine(gs);
+                    FetchLineDone(gs, tagConfig);
                     currentProgress += step;
                     progress.Report(currentProgress);
                 }
+                foreach (var key in heldFetchLines.Keys.ToList()) FlushFetchLines(key);
                 _log.Debug($"Fetch phase done in {RunLog.Elapsed(phaseTimer.Elapsed)}");
 
                 // Playlist sync — once per group, with the union of all its sources.
@@ -1677,7 +1717,8 @@ namespace HomeScreenCompanion
                 _log.Info("Results");
                 foreach (var gs in displayStatsList)
                     WriteGroupBlock(gs, dryRun, logMissing);
-                RecordGroupIssues(statsList, config.Tags.Select(t => GroupIssues.Key(t.Name, t.Tag)).ToList());
+                // Dry runs skip writes, so they would clear real failures; inactive groups count as gone.
+                if (!dryRun) RecordGroupIssues(statsList, config.Tags.Where(t => t.Active).Select(GroupKey));
 
                 // Log cleanup of tags from deleted/disabled groups (tags that had removals but
                 // no matching entry in displayStatsList to attribute them to).
@@ -3226,8 +3267,7 @@ namespace HomeScreenCompanion
             (string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External") ? "no URL yet"
             : t.SourceType == "LocalPlaylist" ? "no playlist picked yet" : "no collection picked yet";
 
-        private static string GroupKey(TagConfig t) =>
-            (t.Name ?? "").Trim() + "\x1F" + (t.Tag ?? "").Trim();
+        private static string GroupKey(TagConfig t) => GroupIssues.Key(t.Name, t.Tag);
 
         // Fallback id a home row is found by when its real section id is not known.
         private static string SectionMarker(TagConfig tc) =>
@@ -6449,7 +6489,7 @@ namespace HomeScreenCompanion
             _log.Blank();
             _log.Info("Results");
             WriteGroupBlock(gs, dryRun, logMissing);
-            if (_preview == null) RecordGroupIssues(new[] { gs });
+            if (_preview == null && !dryRun) RecordGroupIssues(new[] { gs });
 
             int failed = gs.ErrorMessage != null || gs.Errors.Count > 0 ? 1 : 0;
             int warned = failed == 0 && gs.Warnings.Count > 0 ? 1 : 0;
@@ -6474,7 +6514,7 @@ namespace HomeScreenCompanion
 
         // Stores each group's warnings / error for the flag on its card (see GroupIssues). A group
         // stored as several flat sources has one stats entry per source; skipped ones are left out.
-        private static void RecordGroupIssues(IEnumerable<GroupRunStats> stats, ICollection<string>? liveKeys = null)
+        private static void RecordGroupIssues(IEnumerable<GroupRunStats> stats, IEnumerable<string>? liveKeys = null)
         {
             var results = stats
                 .Where(g => !g.Skipped && g.TagName != null)

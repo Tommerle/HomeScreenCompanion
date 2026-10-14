@@ -57,18 +57,22 @@ namespace HomeScreenCompanion
         /// ran cleanly); groups not in it keep their entry. <paramref name="liveKeys"/>, when given,
         /// drops entries of groups that no longer exist.
         /// </summary>
-        internal static void Record(IEnumerable<(string Name, string Tag, GroupIssue? Issue)> results, ICollection<string>? liveKeys = null)
+        internal static void Record(IEnumerable<(string Name, string Tag, GroupIssue? Issue)> results, IEnumerable<string>? liveKeys = null)
         {
             lock (_lock)
             {
                 foreach (var (name, tag, issue) in results)
                 {
                     var key = Key(name, tag);
-                    if (issue == null) _byKey.Remove(key);
-                    else { issue.Name = (name ?? "").Trim(); issue.Tag = (tag ?? "").Trim(); _byKey[key] = issue; }
+                    // Remove first so a renamed group's entry takes the new casing of its key.
+                    _byKey.Remove(key);
+                    if (issue != null) { issue.Name = (name ?? "").Trim(); issue.Tag = (tag ?? "").Trim(); _byKey[key] = issue; }
                 }
                 if (liveKeys != null)
-                    foreach (var key in _byKey.Keys.Where(k => !liveKeys.Contains(k)).ToList()) _byKey.Remove(key);
+                {
+                    var live = new HashSet<string>(liveKeys, StringComparer.OrdinalIgnoreCase);
+                    foreach (var key in _byKey.Keys.Where(k => !live.Contains(k)).ToList()) _byKey.Remove(key);
+                }
                 Save();
             }
         }

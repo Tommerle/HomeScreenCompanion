@@ -44,8 +44,6 @@ namespace HomeScreenCompanion
             return msg.Length > 200 ? msg.Substring(0, 200) + "…" : msg;
         }
 
-        // A list read part-way (a later page failed) is not used: it would drop every title after
-        // that page. It counts as a failed fetch, so "Preserve tags on empty result" keeps them.
         // LastError of an AI that answered without titles: an empty result, not a failure.
         internal const string EmptyAnswer = "the answer held no titles";
 
@@ -54,6 +52,8 @@ namespace HomeScreenCompanion
         internal static bool IsFailure(string? lastError) =>
             !string.IsNullOrEmpty(lastError) && lastError != EmptyAnswer;
 
+        // A list read part-way (a later page failed) is not used: it would drop every title after
+        // that page. It counts as a failed fetch, so "Preserve tags on empty result" keeps them.
         private List<ExternalItemDto> PageFailed(List<ExternalItemDto> all, int pageNumber, Exception ex, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
