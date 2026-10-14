@@ -40,12 +40,14 @@ namespace HomeScreenCompanion
     ///                                                 plays bl (stacked, plays under weeks).
     ///   embygap   true | false                        Top 10 tile: an extra in tr sits left of Emby's own
     ///                                                 count / ✓ chip. Missing = on for show lists only.
+    ///   medals    true | false                        colour presets only (the one option they keep): ranks
+    ///                                                 1-3 get a gold / silver / bronze circle ({"medals":true}).
     /// </summary>
     internal sealed class BadgeOptions
     {
         public string? Font, Num, NumColour, OutColour, Outline, Size, Shape, Colour, Medal, Pos, TilePos, TileBg, TileBgColour, Special, LogoLabel, LogoSize;
         public string? LogoPos, MovePos, WeeksPos, PlaysPos;
-        public bool? Shadow, Move, MoveEq, Weeks, Plays, Logo, EmbyGap;
+        public bool? Shadow, Move, MoveEq, Weeks, Plays, Logo, EmbyGap, Medals;
 
         public static readonly BadgeOptions None = new BadgeOptions();
 
@@ -103,6 +105,7 @@ namespace HomeScreenCompanion
                     case "weekspos": if (s != null && Spots.Contains(s)) o.WeeksPos = s; break;
                     case "playspos": if (s != null && Spots.Contains(s)) o.PlaysPos = s; break;
                     case "embygap": o.EmbyGap = b; break;
+                    case "medals": o.Medals = b; break;
                 }
             }
             return o;
@@ -139,7 +142,9 @@ namespace HomeScreenCompanion
         {
             style = string.IsNullOrWhiteSpace(style) ? "neutral" : style!.Trim();
             // Only the Top 10 tile is customised; options saved for a number badge (4.2.0.32-.36) are ignored.
-            if (!IsTile(style)) return style;
+            // A colour preset keeps one option: Top 3 medal colours.
+            if (!IsTile(style))
+                return !IsNone(style) && BadgeOptions.Parse(options).Medals == true ? style + "|" + MedalsJson : style;
             return string.IsNullOrWhiteSpace(options) || options!.Trim() == "{}" ? style : style + "|" + options.Trim();
         }
 
@@ -160,6 +165,8 @@ namespace HomeScreenCompanion
 
         public static string StyleOf(string? look) => Split(look).Style;
         public static bool IsTile(string? style) => string.Equals(style, "top10", StringComparison.OrdinalIgnoreCase);
+        public static bool IsNone(string? style) => string.Equals(style, "none", StringComparison.OrdinalIgnoreCase);
+        public const string MedalsJson = "{\"medals\":true}";
         public static bool WantsHistory(string? look) => IsTile(StyleOf(look)) && BadgeOptions.Parse(Split(look).Options).AnyExtras;
         public static bool WantsPlays(string? look) => IsTile(StyleOf(look)) && BadgeOptions.Parse(Split(look).Options).Plays == true;
     }
@@ -272,11 +279,12 @@ namespace HomeScreenCompanion
                 return;
             }
 
-            // The colour presets (and No number): the original drawing; number-badge options are not used.
+            // The colour presets (and No number): the original drawing; of the options only Top 3 medal colours is used.
+            bool medals = o.Medals == true;
             if (poster != null)
-                Try("poster badge", () => CreateRankedPoster(poster, rank, outputBase + ".jpg", style));
+                Try("poster badge", () => CreateRankedPoster(poster, rank, outputBase + ".jpg", style, medals));
             if (thumb != null)
-                Try("thumb badge", () => CreateRankedPoster(thumb, rank, outputBase + "-thumb.jpg", style));
+                Try("thumb badge", () => CreateRankedPoster(thumb, rank, outputBase + "-thumb.jpg", style, medals));
         }
 
         // Ranks past 10 on a Top 10 list get a circle badge; it keeps the tile's number look.
@@ -287,7 +295,8 @@ namespace HomeScreenCompanion
         };
 
         // ── the original circle badge (unchanged) ────────────────────────────────────────
-        internal static void CreateRankedPoster(string sourcePath, int rank, string outputPath, string badgeStyle = "neutral")
+        // medals: ranks 1-3 get a gold / silver / bronze circle (the Customise popup's flat medals) instead of the preset colour.
+        internal static void CreateRankedPoster(string sourcePath, int rank, string outputPath, string badgeStyle = "neutral", bool medals = false)
         {
             // "none" means no rank badge at all: the source image is copied as-is so the rest of
             // the pipeline (ApplyRankedImages, DateModified refresh) still finds a file on disk.
@@ -312,8 +321,9 @@ namespace HomeScreenCompanion
             float cx = margin + radius;
             float cy = margin + radius;
 
-            SKColor bgColor = PresetColour(badgeStyle);
-            SKColor textColor = SKColors.White;
+            bool medal = medals && rank >= 1 && rank <= 3;
+            SKColor bgColor = medal ? MedalFlat(rank) : PresetColour(badgeStyle);
+            SKColor textColor = medal && rank != 3 ? MedalText(rank) : SKColors.White;
 
             using var bgPaint = new SKPaint { Color = bgColor, IsAntialias = true };
             canvas.DrawCircle(cx, cy, radius, bgPaint);

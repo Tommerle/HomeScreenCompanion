@@ -7390,8 +7390,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     }
 
     // ── Top-list badge: Badge Style ──────────────────────────────────────────────────
-    // The six colour presets, No number and the Top 10 tile (the original picker). Customise is for
-    // the Top 10 tile only: its options live in BadgeOptions (JSON, '' = the standard tile).
+    // The six colour presets, the Top 10 tile and No number (the original picker). Customise is for
+    // the Top 10 tile only: its options live in BadgeOptions (JSON, '' = the standard tile). A colour
+    // preset can tick Top 3 medal colours (BadgeOptions {"medals":true}).
     var BADGE_PRESETS = [
         { val: 'neutral',    label: 'Neutral',    bg: 'rgba(0,0,0,0.82)' },
         { val: 'slate-grey', label: 'Slate grey', bg: 'rgba(65,65,75,0.88)' },
@@ -7407,9 +7408,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         { val: 'ocean-blue', label: 'Ocean blue', bg: 'rgba(46,134,193,0.82)',   textColor: '#fff' },
         { val: 'soft-red',   label: 'Soft red',   bg: 'rgba(201,69,69,0.82)',    textColor: '#fff' },
         { val: 'violet',     label: 'Violet',     bg: 'rgba(123,82,181,0.82)',   textColor: '#fff' },
-        { val: 'none',       label: 'No number',  bg: 'transparent',             textColor: '#fff', noNumber: true },
-        { val: 'top10',      label: 'Top 10 tile', bg: '#141414',                textColor: '#141414', tile: true }
+        { val: 'top10',      label: 'Top 10 tile', bg: '#141414',                textColor: '#141414', tile: true },
+        { val: 'none',       label: 'No number',  bg: 'transparent',             textColor: '#fff', noNumber: true }
     ];
+    // The colour presets' one option (BadgeOptions {"medals":true}): ranks 1-3 in gold / silver / bronze.
+    var BADGE_MEDALS_JSON = '{"medals":true}';
+    function isBadgePreset(val) { return !!val && val !== 'top10' && val !== 'none'; }
 
     var _badgePickerSeq = 0;
     // contentKind 'shows' / 'movies': the list's titles (the previews draw Emby's count / ✓ chip for them).
@@ -7427,6 +7431,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var radioName = 'tlBadgeStyle_' + (++_badgePickerSeq);
         // Options saved for a number badge (4.2.0.32-.36) are not used: the badge draws in its preset colour.
         var optKind = tileSel ? 'top10' : 'badge';
+        var medalsOn = isBadgePreset(sel) && /"medals"\s*:\s*true/.test(optionsJson || '');
+        var medalDot = function (c) { return '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c + ';"></span>'; };
         return '<div class="tl-badge-picker" data-content="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-bottom:16px;">' +
             '<span style="font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:8px;">Badge Style</span>' +
             '<input type="hidden" class="tl-badge-preset" value="neutral">' +
@@ -7443,6 +7449,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '</label>';
             }).join('') +
             '</div>' +
+            '<div class="tl-badge-medal-row checkboxContainer" style="margin:8px 0 0;' + (isBadgePreset(sel) ? '' : 'display:none;') + '"><label>' +
+                '<input is="emby-checkbox" type="checkbox" class="tl-badge-medals"' + (medalsOn ? ' checked' : '') + ' />' +
+                '<span style="display:inline-flex;align-items:center;gap:6px;">Top 3 medal colours ' +
+                    '<span style="display:inline-flex;gap:3px;">' + medalDot('#d4af37') + medalDot('#b8bcc6') + medalDot('#b87333') + '</span></span></label></div>' +
             '<div class="tl-badge-custom-row" style="display:flex;align-items:center;gap:8px;margin-top:8px;">' + custBtn +
                 '<span class="tl-badge-custom-note fieldDescription" style="margin:0;' + (tileSel && optionsJson ? '' : 'display:none;') + '">Customised</span>' +
             '</div>' +
@@ -7627,6 +7637,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var checked = picker.querySelector('input[name^="tlBadgeStyle"]:checked');
                 var tile = !!checked && checked.value === 'top10';
                 setCustomiseEnabled(btn, tile, BADGE_NOTHING_TIP);
+                var medalRow = picker.querySelector('.tl-badge-medal-row');
+                if (medalRow) medalRow.style.display = checked && isBadgePreset(checked.value) ? '' : 'none';
                 var note = picker.querySelector('.tl-badge-custom-note'), optsIn = picker.querySelector('.tl-badge-opts');
                 if (note && optsIn) note.style.display = tile && optsIn.value && optsIn.dataset.optkind === 'top10' ? '' : 'none';
             }
@@ -7647,9 +7659,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         return checked ? checked.value : 'neutral';
     }
 
-    // Options only for the Top 10 tile (the ones it was customised with).
+    // Options for the Top 10 tile (the ones it was customised with), or a colour preset's Top 3 medal colours.
     function readBadgeOptions(container) {
         var checked = container.querySelector('input[name^="tlBadgeStyle"]:checked');
+        if (checked && isBadgePreset(checked.value)) {
+            var medals = container.querySelector('.tl-badge-medals');
+            return medals && medals.checked ? BADGE_MEDALS_JSON : '';
+        }
         if (!checked || checked.value !== 'top10') return '';
         var input = container.querySelector('.tl-badge-opts');
         if (!input || input.dataset.optkind !== 'top10') return '';
