@@ -506,7 +506,7 @@
         .artc-custom.artc-on { border-color:#52B54B; box-shadow:0 0 0 1px #52B54B inset; }
         .artc-segbtn.artc-on { background:#52B54B; color:#fff; }
         .artc-fonts { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px; }
-        .artc-fontgroup { grid-column:1 / -1; font-size:0.72em; text-transform:uppercase; letter-spacing:1px; opacity:0.7; margin-top:6px; }
+        .artc-fontgroup { grid-column:1 / -1; font-size:0.75em; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; opacity:0.7; margin-top:6px; }
         .artc-fontgroup:first-child { margin-top:0; }
         .artc-font { position:relative; cursor:pointer; background:#26262b; border:2px solid rgba(128,128,128,0.35); border-radius:5px; padding:4px 6px; min-height:40px; color:#fff; display:flex; align-items:center; justify-content:center; }
         .artc-font img { width:100%; height:auto; display:block; }
@@ -818,14 +818,33 @@
             margin-bottom: 20px;
         }
 
-        .hsc-section-title {
+        .hsc-section-title, .hsc-title {
             font-size: 1.05em;
-            font-weight: bold;
-            color: #52B54B;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 0 0 16px 0;
+            font-weight: 600;
+            line-height: 1.3;
+            letter-spacing: -0.1px;
+            color: var(--theme-text-primary);
+            text-transform: none;
         }
+        .hsc-section-title { margin: 0 0 8px 0; }
+        .hsc-section-title + .textMuted, .hsc-section-title + p { margin-top: 0; }
+        /* Small group label above a list (DESIGN.md eyebrow) */
+        .hsc-eyebrow {
+            font-size: 0.75em;
+            font-weight: 600;
+            line-height: 1.3;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: var(--theme-text-secondary);
+        }
+        /* Field label (DESIGN.md label) */
+        .hsc-label {
+            font-size: 0.88em;
+            font-weight: 500;
+            line-height: 1.3;
+            color: var(--theme-text-secondary);
+        }
+        .hsc-panel-icon { margin-right: 10px; color: var(--theme-text-secondary); }
 
         .hsc-user-list {
             display: flex;
@@ -1278,13 +1297,13 @@
 
                 <div class="advanced-section settings-panel" style="margin-bottom: 15px;">
                     <div class="advanced-header settings-panel-toggle">
-                        <i class="md-icon" style="margin-right: 10px; color: #52B54B;">link</i>
-                        <span style="font-size: 1.05em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #52B54B;">External list settings</span>
+                        <i class="md-icon hsc-panel-icon">link</i>
+                        <span class="hsc-title">External list settings</span>
                         <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s;">expand_more</i>
                     </div>
                     <div class="advanced-body settings-panel-body" style="display:none; padding-top: 4px;">
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-bottom: 8px;">Providers</div>
+                        <div class="hsc-eyebrow" style="margin-bottom: 8px;">Providers</div>
 
                         <!-- Trakt -->
                         <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
@@ -1351,13 +1370,13 @@
 
                 <div class="advanced-section settings-panel" style="margin-bottom: 25px;">
                     <div class="advanced-header settings-panel-toggle">
-                        <i class="md-icon" style="margin-right: 10px; color: #52B54B;">auto_awesome</i>
-                        <span style="font-size: 1.05em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #52B54B;">AI Settings</span>
+                        <i class="md-icon hsc-panel-icon">auto_awesome</i>
+                        <span class="hsc-title">AI Settings</span>
                         <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s;">expand_more</i>
                     </div>
                     <div class="advanced-body settings-panel-body" style="display:none; padding-top: 4px;">
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-bottom: 8px;">Providers</div>
+                        <div class="hsc-eyebrow" style="margin-bottom: 8px;">Providers</div>
 
                         <!-- Google Gemini -->
                         <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
@@ -1460,7 +1479,7 @@
                             </div>
                         </div>
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 18px; margin-bottom: 8px;">Advanced AI Settings</div>
+                        <div class="hsc-eyebrow" style="margin-top: 18px; margin-bottom: 8px;">Advanced AI Settings</div>
 
                         <!-- Edit system prompt -->
                         <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
@@ -1489,12 +1508,12 @@
 
                 <div class="advanced-section settings-panel" style="margin-bottom: 25px;">
                     <div class="advanced-header settings-panel-toggle">
-                        <i class="md-icon" style="margin-right: 10px; color: #52B54B;">settings</i>
-                        <span style="font-size: 1.05em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #52B54B;">Advanced Settings</span>
+                        <i class="md-icon hsc-panel-icon">settings</i>
+                        <span class="hsc-title">Advanced Settings</span>
                         <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s;">expand_more</i>
                     </div>
                     <div class="advanced-body settings-panel-body" style="display:none;">
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 4px; margin-bottom: 8px;">Logging &amp; Troubleshooting</div>
+                        <div class="hsc-eyebrow" style="margin-top: 4px; margin-bottom: 8px;">Logging &amp; Troubleshooting</div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
@@ -1512,7 +1531,7 @@
                             <div class="fieldDescription">Simulate process without modifying database.</div>
                         </div>
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 24px; margin-bottom: 8px;">Tags &amp; Collections</div>
+                        <div class="hsc-eyebrow" style="margin-top: 24px; margin-bottom: 8px;">Tags &amp; Collections</div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
@@ -1538,7 +1557,7 @@
                             <div class="fieldDescription">Lists, per group, the titles from your External and AI lists that are not in your library — handy for finding what to add next.</div>
                         </div>
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 24px; margin-bottom: 8px;">Top-lists</div>
+                        <div class="hsc-eyebrow" style="margin-top: 24px; margin-bottom: 8px;">Top-lists</div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
@@ -1549,7 +1568,7 @@
                         </div>
 
 
-                        <div style="font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.45; margin-top: 24px; margin-bottom: 8px;">Features</div>
+                        <div class="hsc-eyebrow" style="margin-top: 24px; margin-bottom: 8px;">Features</div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
@@ -1591,7 +1610,7 @@
 
                 <hr style="border-color: var(--line-color); margin: 25px 0;" />
 
-                <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.05em; color: #52B54B; text-transform: uppercase; letter-spacing: 1px;">Backup & Restore</h3>
+                <h3 class="hsc-title" style="margin-top: 0; margin-bottom: 8px;">Backup & Restore</h3>
                 <p class="textMuted" style="font-size:0.9em; margin-bottom:15px;">Export selected parts of your configuration (settings, API keys, tag &amp; collection groups, saved filters, top lists, home screen sync) to a JSON file, or restore them from a backup. Generated data such as tags, collections, playlists, top-list files and images is not included &ndash; the plugin recreates it on the next sync run.</p>
                 <div style="display:flex; gap:10px;">
                     <button is="emby-button" type="button" id="btnBackupConfig" class="raised btn-neutral">
@@ -1826,7 +1845,7 @@
 
                 <!-- NAV MENU -->
                 <nav style="background:rgba(128,128,128,0.06);border:1px solid var(--line-color);border-radius:6px;padding:10px 16px;margin-bottom:20px;">
-                    <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin-bottom:8px;">Contents</div>
+                    <div class="hsc-eyebrow" style="margin-bottom:8px;">Contents</div>
                     <ol style="margin:0;padding:0 0 0 18px;column-count:2;column-gap:28px;">
                         <li><a href="javascript:void(0)" class="help-nav-link hsc-open-quickstart">Quick Start</a></li>
                         <li><a href="javascript:void(0)" class="help-nav-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2').scrollIntoView({behavior:'smooth'});return false;">Source Types</a></li>
@@ -1881,7 +1900,7 @@
                         Personal recommendations, worked out on your server (no AI, no internet): every ticked user gets their own playlist of unwatched titles most like what they have been watching, refreshed on every sync. See <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-2b').scrollIntoView({behavior:'smooth'});return false;"><em>Your Next Watch</em> below</a> for how it picks and how to set it up.
                     </div>
                 </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about the source types</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">More about the source types</div>
                 <div id="help-more-external" class="help-feature-row">
                     <i class="md-icon help-feat-icon">public</i>
                     <div><strong>External</strong> — paste a list URL from <strong>Trakt</strong>, <strong>MDBList</strong> or <strong>TMDb</strong>. The plugin downloads the list and tags every matching title it finds in your library.
@@ -2093,7 +2112,7 @@
                         Show this source as a home screen row for the users you tick — a collection, a tag row or each user's own playlist — updated on every sync. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-hometab').scrollIntoView({behavior:'smooth'});return false;">More about the Home Screen tab below</a>.
                     </div>
                 </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about the source tabs</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">More about the source tabs</div>
                 <div id="help-more-tagtab" class="help-feature-row">
                     <i class="md-icon help-feat-icon">label</i>
                     <div><strong>Tag tab</strong> — tick <em>Apply Tag</em> to tag the matched items.
@@ -2208,7 +2227,7 @@
                         The collection opens in the order of the list instead of Emby's own order, using hidden ranked copies of the films. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ranked').scrollIntoView({behavior:'smooth'});return false;">More about keeping the list order below</a>.
                     </div>
                 </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about keeping the list order</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">More about keeping the list order</div>
                 <div id="help-more-ranked" class="help-feature-row">
                     <i class="md-icon help-feat-icon">format_list_numbered</i>
                     <div><strong>Keep the list order — movies only (experimental)</strong> — shown when <em>Ranked collections</em> is switched on under <em>Advanced Settings</em> in the Settings tab (and saved). The collection then opens in the order of the list instead of Emby's own order.
@@ -2411,7 +2430,7 @@
                         Tick <em>Badge the real posters too</em> to put a red TOP 10 square on each listed title's own poster everywhere in Emby. <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-realposters').scrollIntoView({behavior:'smooth'});return false;">More about real posters below</a>.
                     </div>
                 </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">More about real posters</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">More about real posters</div>
                 <div id="help-more-realposters" class="help-feature-row">
                     <i class="md-icon help-feat-icon">verified</i>
                     <div><strong>Real posters</strong> — under <em>Badge Style</em>, tick <em>Badge the real posters too</em> to put a red TOP 10 square on each listed title's own poster everywhere in Emby: libraries, search, the item page, other rows and every app (for a show list, the series poster; for a movie, all its versions).
@@ -2457,7 +2476,7 @@
                     <span>Settings &amp; Utilities</span>
                 </div>
                 <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">The <strong>Settings</strong> tab has four panels: <em>External list settings</em>, <em>AI Settings</em>, <em>Advanced Settings</em> and <em>Backup &amp; Restore</em>. Click <strong>Save Settings</strong> after a change.</div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">External list settings</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">External list settings</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">key</i>
                     <div><strong>Trakt Client ID</strong> — Required for External sources using Trakt lists. Create a new app at <a href="https://trakt.tv/oauth/applications" target="_blank" class="help-link">trakt.tv/oauth/applications</a> (Redirect URI = <code>http://localhost</code>), then copy the <em>Client ID</em>.</div>
@@ -2470,7 +2489,7 @@
                     <i class="md-icon help-feat-icon">movie</i>
                     <div><strong>TMDb API Read Access Token</strong> — Needed for every TMDb source: your own lists (public or private) and TMDb API endpoints (e.g. popular movies, top-rated, now-playing). Get your token at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="help-link">themoviedb.org/settings/api</a> — scroll to <em>API Read Access Token</em> and copy the long token (not the short API Key).</div>
                 </div>
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:14px 0 8px;">AI Settings</div>
+                <div class="hsc-eyebrow" style="margin:14px 0 8px;">AI Settings</div>
                 <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Fill in only the AI you use in your <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-more-ai').scrollIntoView({behavior:'smooth'});return false;">AI sources</a>. Each has a <strong>Model</strong> field (which model to ask) with a link to that provider's current models. A cloud AI is paid per call; a cheaper, fast model is usually enough for lists.</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_awesome</i>
@@ -2497,7 +2516,7 @@
                     <div><strong>API key visibility</strong> — All API key fields are hidden by default for security. Tick the <em>Show</em> checkbox next to a field to reveal the value. The checkbox resets to hidden every time you open the settings page.</div>
                 </div>
 
-                <div id="help-sec-8b" style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Advanced Settings</div>
+                <div id="help-sec-8b" class="hsc-eyebrow" style="margin:18px 0 8px;">Advanced Settings</div>
                 <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Optional settings in four groups under <em>Advanced Settings</em> in the <strong>Settings</strong> tab. Tick one and click <strong>Save Settings</strong>.</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">bug_report</i>
@@ -2540,7 +2559,7 @@
                     <div><strong>Hide HSC libraries</strong> <span style="opacity:0.6;">(Features)</span> — On by default. Keeps the libraries HSC creates — those of top-lists and of ranked collections — out of every user's sidebar, "My Media" tiles and "Latest" rows; only their top-list rows and collections show them. TV show top-list libraries are always kept out of Latest, Continue Watching and Next Up, whatever this setting is.</div>
                 </div>
 
-                <div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--theme-text-secondary);margin:18px 0 8px;">Running, logs and tools</div>
+                <div class="hsc-eyebrow" style="margin:18px 0 8px;">Running, logs and tools</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">play_circle</i>
                     <div><strong>Run button</strong> — Manually trigger a sync at any time. Three options: <em>Full sync</em> (everything), <em>Sync home screen only</em> (just the home screen rows, no tag changes), and <em>Sync tags and collections only</em> (tags and collections, skips home screen). While a sync, Run Group, Home Screen Sync or top-list sync is busy, <em>Last run</em> at the top of the page shows the step it is on and how long it has been running, e.g. <em>Running · Playlists — Top 10: 34/88 users · 1m 12s</em>. Runs never overlap: a sync, Run Group, Home Screen Sync or top-list sync started while another is busy waits for it to finish (shown as <em>… waiting for … to finish</em>) and then runs.</div>

@@ -525,11 +525,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         .control-label {
-            font-size: 0.85em;
-            opacity: 0.5;
-            text-transform: uppercase;
-            font-weight: bold;
-            letter-spacing: 0.5px;
+            font-size: 0.88em;
+            font-weight: 500;
+            color: var(--theme-text-secondary);
         }
 
         .search-input-wrapper {
@@ -657,9 +655,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         .filter-dropdown-label {
             font-size: 0.75em;
-            opacity: 0.5;
+            font-weight: 600;
+            opacity: 0.7;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.6px;
             margin-bottom: 6px;
         }
 
@@ -1798,7 +1797,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }).join('');
         }
         function heading(text) {
-            return '<div style="font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.6;margin:14px 0 2px;">' + text + '</div>';
+            return '<div class="hsc-eyebrow" style="margin:14px 0 2px;">' + text + '</div>';
         }
         var body = o.removed.length
             ? heading('Will also be removed') + list(o.removed, '#cc3333')
@@ -2397,7 +2396,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<div class="mi-group-connector" style="display:flex; align-items:center; gap:10px; margin:-12px -12px 14px; padding:8px 14px; background:rgba(0,0,0,0.12);">' +
                 '<div style="flex:1; height:1px; background:rgba(128,128,128,0.25);"></div>' +
                 '<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">' +
-                    '<span style="font-size:0.7em; text-transform:uppercase; letter-spacing:1px; opacity:0.45;">Connect groups with</span>' +
+                    '<span class="hsc-eyebrow">Connect groups with</span>' +
                     '<div style="display:flex; border-radius:14px; overflow:hidden; border:1px solid rgba(128,128,128,0.4);">' +
                         '<button type="button" class="btnGroupOpChoice" data-value="AND"' +
                         ' style="border:none; padding:4px 16px; font-size:0.82em; font-weight:bold; cursor:pointer; letter-spacing:0.5px;' +
@@ -2424,7 +2423,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             connectorHtml +
             '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
                 '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
-                    '<span style="font-size:0.8em; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; opacity:0.6;">Match rules:</span>' +
+                    '<span class="hsc-label">Match rules:</span>' +
                     '<div style="display:flex; flex-direction:column; gap:3px;">' +
                         '<div style="display:flex; border-radius:14px; overflow:hidden; border:1px solid rgba(128,128,128,0.4);">' +
                             '<button type="button" class="btnGroupInnerOpChoice" data-value="AND"' +
@@ -3142,7 +3141,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                     <div style="font-size:0.8em; color:var(--theme-text-secondary); margin-bottom:10px;">Select a preset to replace the current filters:</div>
                                     ${MI_PRESETS.map(function(cat, ci) {
                                         return '<div style="margin-bottom:10px;">' +
-                                            '<div style="font-size:0.72em; text-transform:uppercase; letter-spacing:1px; color:var(--theme-text-secondary); margin-bottom:5px;">' + cat.label + '</div>' +
+                                            '<div class="hsc-eyebrow" style="margin-bottom:5px;">' + cat.label + '</div>' +
                                             '<div style="display:flex; flex-wrap:wrap; gap:6px;">' +
                                             cat.presets.map(function(p, pi) {
                                                 return '<button type="button" class="btnApplyMiPreset" data-preset="' + ci + ',' + pi + '"' +
@@ -6305,7 +6304,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         container.innerHTML = [
             '<div class="advanced-section settings-panel" style="margin-bottom: 15px;">',
             '<div class="advanced-header settings-panel-toggle">',
-            '<span style="font-size: 1.05em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #52B54B;">Continue Watching</span>',
+            '<span class="hsc-title">Continue Watching</span>',
             '<i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s;">expand_more</i>',
             '</div>',
             '<div class="advanced-body settings-panel-body" style="display:none; padding-top: 4px;">',
@@ -6346,7 +6345,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '</div>',
 
             '<div style="margin-top:16px; padding:10px 14px; border:1px solid rgba(128,128,128,0.2); border-radius:4px;">',
-            '<div style="font-size:0.75em; font-weight:700; text-transform:uppercase; letter-spacing:1.4px; opacity:0.6; margin-bottom:6px;">Good to know</div>',
+            '<div class="hsc-eyebrow" style="margin-bottom:6px;">Good to know</div>',
             '<ul style="font-size:0.85em; line-height:1.5; margin:0; padding-left:18px; opacity:0.85;">',
             '<li>The <strong>"last played" date</strong> of your last watched episode is set to now. Watched status and play count are unchanged, but anything showing or sorting by last played (e.g. watch history, tag rules using <em>Last played</em>) will see the new date.</li>',
             '<li><strong>Replacing an unwatched episode</strong> (e.g. a quality upgrade) makes it look newly added and can bump the series again.</li>',
@@ -6487,7 +6486,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 return '<div id="' + sectionId + '" style="flex:1 1 300px;min-width:0;">' +
                     '<div style="display:flex;align-items:center;gap:30px;margin-bottom:12px;">' + 
-                    '<h3 style="margin:0;font-size:1em;text-transform:uppercase;letter-spacing:1px;color:#52B54B;">' + escHtml(title) + '</h3>' +
+                    '<h3 class="hsc-title" style="margin:0;">' + escHtml(title) + '</h3>' +
                     (headerExtra || '') +
                     '<button type="button" class="btnTcRefresh" style="' + btnStyle + 'background:transparent;color:var(--theme-text-secondary);border:1px solid var(--line-color);margin-left:auto;"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
                     '</div>' +
@@ -6718,7 +6717,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var labels = getTypeLabels(row.dataset.types);
                     if (!labels) { tcTooltip.style.display = 'none'; return; }
                     tcTooltip.innerHTML =
-                        '<div style="font-weight:600;opacity:0.55;font-size:0.85em;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Found in</div>' +
+                        '<div class="hsc-eyebrow" style="margin-bottom:5px;color:inherit;opacity:0.7;">Found in</div>' +
                         labels.map(function (l) {
                             return '<div style="display:flex;align-items:center;gap:6px;">' +
                                 '<i class="md-icon" style="font-size:0.95em;opacity:0.7;">label</i>' +
@@ -7430,7 +7429,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var medalsOn = isBadgePreset(sel) && /"medals"\s*:\s*true/.test(optionsJson || '');
         var medalDot = function (c) { return '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + c + ';"></span>'; };
         return '<div class="tl-badge-picker" data-content="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-bottom:16px;">' +
-            '<span style="font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:8px;">Badge Style</span>' +
+            '<span class=\"hsc-label\" style=\"display:block;margin-bottom:8px;color:inherit;opacity:0.75;\">Badge Style</span>' +
             '<input type="hidden" class="tl-badge-preset" value="neutral">' +
             '<input type="hidden" class="tl-badge-opts" data-optkind="' + optKind + '" value="' + esc(optionsJson || '') + '">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
@@ -7486,7 +7485,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
         var lbl = 'font-size:0.82em;opacity:0.75;min-width:56px;';
         return '<div class="tl-rp" data-kind="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-top:14px;">' +
-            '<span style="font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:4px;">Real posters</span>' +
+            '<span class=\"hsc-label\" style=\"display:block;margin-bottom:4px;color:inherit;opacity:0.75;\">Real posters</span>' +
             '<div class="checkboxContainer" style="margin-bottom:6px;"><label>' +
                 '<input is="emby-checkbox" type="checkbox" class="tl-rp-on"' + (rp.on ? ' checked' : '') + ' />' +
                 '<span>Badge the real posters too</span></label></div>' +
@@ -8114,7 +8113,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
         var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
-        var labelStyle = 'font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:5px;';
+        var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:16px;';
 
         var modal = document.createElement('div');
@@ -8276,9 +8275,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var isEdit = !!existingData;
         var preset = existingData || (options && options.prefill) || null;
         var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
-        var labelStyle = 'font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:5px;';
+        var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:14px;';
-        var colHeaderStyle = 'font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#52B54B;padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid rgba(82,181,75,0.3);';
+        var colHeaderStyle = 'font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;opacity:0.7;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--plugin-popup-border, var(--hsc-hairline));';
 
         var modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
@@ -8617,7 +8616,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
         var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
-        var labelStyle = 'font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:5px;';
+        var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:14px;';
 
         // Run Group: same button as on a source card (look, size, place next to Remove).
@@ -8659,7 +8658,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var presetCustomName = data.CustomName   || editJson.customName   || '';
                 var presetMovies     = data.Movies       || [];
 
-                var colHeaderStyle = 'font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#52B54B;padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid rgba(82,181,75,0.3);';
+                var colHeaderStyle = 'font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;opacity:0.7;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--plugin-popup-border, var(--hsc-hairline));';
 
                 var usersHtml = buildUserMultiSelectHtml(users, presetUserIds, 'chkMtlUser');
 
@@ -9280,7 +9279,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
     function sourceNoticesHtml(notices) {
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         if (!notices || notices.length === 0) return '';
-        return '<span style="font-size:0.78em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#e0a030;display:block;margin-bottom:4px;">Notices</span>' +
+        return '<span class="hsc-eyebrow" style="display:block;margin-bottom:4px;color:var(--hsc-warning-text);">Notices</span>' +
             '<ul class="source-notices" style="margin:0 0 14px;padding-left:20px;font-size:0.9em;line-height:1.5;opacity:0.85;">' +
             notices.map(function (n) { return '<li>' + escHtml(n) + '</li>'; }).join('') + '</ul>';
     }
@@ -9897,11 +9896,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<i class="md-icon" style="font-size:2.5em;color:#52B54B;display:block;margin-bottom:8px;">check_circle</i>' +
             '<p style="margin:0;font-size:1.05em;font-weight:500;">Backup restored</p>' +
             '</div>' +
-            '<span style="font-size:0.78em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:4px;">Applied</span>' +
+            '<span class="hsc-eyebrow" style="display:block;margin-bottom:4px;color:inherit;opacity:0.7;">Applied</span>' +
             '<ul style="' + listStyle + '">' + (result.Applied || []).map(function (a) { return '<li>' + escHtml(a) + '</li>'; }).join('') + '</ul>';
 
         if ((result.Warnings || []).length > 0) {
-            html += '<span style="font-size:0.78em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#e0a030;display:block;margin-bottom:4px;">Warnings</span>' +
+            html += '<span class="hsc-eyebrow" style="display:block;margin-bottom:4px;color:var(--hsc-warning-text);">Warnings</span>' +
                 '<ul style="' + listStyle + 'opacity:0.85;">' + result.Warnings.map(function (w) { return '<li>' + escHtml(w) + '</li>'; }).join('') + '</ul>';
         }
 
@@ -10062,7 +10061,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 if (items.length === 0) {
                     return '<div id="tlRowsList"><p style="color:var(--theme-text-secondary);font-size:0.9em;font-style:italic;padding:20px 0;">No top-lists created yet. Click <strong>+ Create New</strong> to get started. <a href="javascript:void(0)" class="help-link hsc-open-quickstart">Quick Start</a></p></div>';
                 }
-                var labelStyle = 'font-size:0.78em;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;opacity:0.65;display:block;margin-bottom:2px;';
+                var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:2px;';
                 var rows = items.map(function (item) {
                     var isManual = item.isManual;
                     var typeBadge = isManual
@@ -10892,7 +10891,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var controlRowHtml = `
                     <div class="control-row" style="flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; justify-content: flex-start !important; padding: 10px 15px !important; gap: 0 !important;">
 
-                        <span class="control-label" style="opacity:0.7; margin-right: 10px; flex-shrink: 0;">Sort:</span>
+                        <span class="control-label" style="margin-right: 10px; flex-shrink: 0;">Sort:</span>
 
                         <select is="emby-select" id="cbSortTags" style="color:inherit; background:rgba(128,128,128,0.08); border:1px solid var(--line-color); padding:5px; border-radius:4px; font-size:0.9em; cursor:pointer; width: 80px; margin-right: 0px;">
                             <option value="Manual" ${savedSort === 'Manual' ? 'selected' : ''}>Manual</option>
@@ -10903,7 +10902,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                         <div style="width: 1px; height: 25px; background: var(--line-color); margin-right: 10px;"></div>
 
-                        <span class="control-label" style="opacity:0.7; margin-right: 10px; flex-shrink: 0;"> | Filters:</span>
+                        <span class="control-label" style="margin-right: 10px; flex-shrink: 0;"> | Filters:</span>
 
                         <div class="search-input-wrapper" style="width: 200px !important; margin-right: 10px; flex-shrink: 0;">
                             <i class="md-icon search-icon">search</i>
