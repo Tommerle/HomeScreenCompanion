@@ -199,7 +199,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             padding: 8px 12px;
             cursor: pointer;
             font-size: 0.9em;
-            transition: all 0.2s;
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
             text-transform: uppercase;
             font-weight: bold;
             flex-grow: 1;
@@ -430,7 +430,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             border-radius: 6px;
             border: 1px solid var(--line-color);
             border-left: 5px solid #52B54B;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
             box-shadow: 0 2px 6px rgba(0,0,0,0.12);
             overflow: hidden;
         }

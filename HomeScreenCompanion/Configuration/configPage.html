@@ -3,6 +3,72 @@
      data-controller="__plugin/HomeScreenCompanionJS">
 
     <style>
+        /* Design tokens (DESIGN.md). Popups are moved to <body>, so the tokens live on :root.
+           data-plugin-theme is set by applyPluginTheme() in configPage.js. */
+        :root {
+            --hsc-primary: #52B54B;
+            --hsc-primary-hover: #5fc458;
+            --hsc-primary-pressed: #3a8c34;
+            --hsc-primary-text: #52B54B;
+            --hsc-activity: #00a4dc;
+            --hsc-activity-hover: #22b4e6;
+            --hsc-activity-text: #00a4dc;
+            --hsc-warning: #e6c15a;
+            --hsc-warning-text: #e6c15a;
+            --hsc-danger: #e57373;
+            --hsc-danger-text: #e57373;
+            --hsc-danger-strong: #cc3333;
+            --hsc-neutral: #9aa4b0;
+            --hsc-tint-1: rgba(128,128,128,0.04);
+            --hsc-tint-2: rgba(128,128,128,0.08);
+            --hsc-tint-3: rgba(128,128,128,0.15);
+            --hsc-hairline: var(--line-color, rgba(128,128,128,0.2));
+            --hsc-hairline-strong: rgba(128,128,128,0.3);
+            --hsc-focus: rgba(82,181,75,0.5);
+            --hsc-shadow-float: 0 4px 16px rgba(0,0,0,0.35);
+            --hsc-shadow-modal: 0 24px 48px rgba(0,0,0,0.45);
+            /* Category icon colours (type chips: the chip is neutral, only its icon is coloured) */
+            --hsc-cat-tag: #9aa4b0;
+            --hsc-cat-collection: #9b7fd4;
+            --hsc-cat-playlist: #3cbfa0;
+            --hsc-cat-toplist: #d4b45a;
+            --hsc-cat-imported: #e09550;
+            --hsc-cat-movies: #b8a28c;
+            --hsc-cat-shows: #a29dbb;
+        }
+        html[data-plugin-theme="light"] {
+            --hsc-primary-text: #3a8c34;
+            --hsc-activity-text: #007ba8;
+            --hsc-warning-text: #9a7a12;
+            --hsc-danger-text: #cc3333;
+            --hsc-shadow-float: 0 4px 16px rgba(0,0,0,0.18);
+            --hsc-shadow-modal: 0 24px 48px rgba(0,0,0,0.25);
+            --hsc-cat-tag: #6b7580;
+            --hsc-cat-collection: #6f45b5;
+            --hsc-cat-playlist: #1f8c74;
+            --hsc-cat-toplist: #8f7224;
+            --hsc-cat-imported: #b0661c;
+            --hsc-cat-movies: #806a55;
+            --hsc-cat-shows: #6b668a;
+        }
+
+        /* Keyboard focus on our own (non-Emby) controls */
+        #HomeScreenCompanionConfigPage button:not([is]):focus-visible,
+        .modal-backdrop button:not([is]):focus-visible,
+        #HomeScreenCompanionConfigPage [tabindex]:focus-visible {
+            outline: 2px solid var(--hsc-focus);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #HomeScreenCompanionConfigPage *, #HomeScreenCompanionConfigPage *::before, #HomeScreenCompanionConfigPage *::after,
+            .modal-backdrop, .modal-backdrop * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
         /* API keys are plain text fields shown masked: a type="password" field makes the browser
            offer to save a password every time the settings are saved. "Show" unmasks them. */
         .api-key-field:not(.api-key-shown) { -webkit-text-security: disc; text-security: disc; }
@@ -12,7 +78,7 @@
             border-radius: 6px;
             border: 1px solid var(--line-color);
             border-left: 5px solid #52B54B;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
             box-shadow: 0 2px 6px rgba(0,0,0,0.12);
             overflow: hidden;
         }
@@ -183,7 +249,7 @@
             gap: 6px;
             font-size: 0.85em !important;
             border: 1px solid rgba(128,128,128,0.4) !important;
-            transition: all 0.2s;
+            transition: border-color 0.2s, background-color 0.2s, color 0.2s;
         }
 
             .btn-log-trigger:hover {
@@ -256,9 +322,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            background: rgba(0,0,0,0.6);
             z-index: 99999;
             display: flex;
             justify-content: center;
@@ -567,6 +631,7 @@
             border-radius: 6px;
             background: rgba(128,128,128,0.06);
         }
+        .help-search:focus-within { border-color: var(--hsc-primary); }
         .help-search .md-icon { opacity: 0.6; font-size: 1.2em; }
         .help-search input {
             flex: 1;
@@ -656,14 +721,13 @@
             color: var(--theme-text-secondary) !important;
             font-size: 0.9em;
             font-weight: 500;
-            transition: all 0.2s ease;
+            transition: color 0.2s ease, opacity 0.2s ease;
             opacity: 0.8;
         }
 
             .simple-link:hover {
                 color: var(--theme-text-primary) !important;
                 opacity: 1;
-                transform: scale(1.05);
             }
 
             .simple-link img {

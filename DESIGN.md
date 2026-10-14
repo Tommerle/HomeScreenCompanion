@@ -47,6 +47,15 @@ colors:
   popup-hover: "var(--plugin-popup-hover)"
   popup-badge: "var(--plugin-popup-badge)"
 
+  # Category icon colours (type chips: neutral chip, coloured icon only). Light-theme value after the slash.
+  cat-tag: "#9aa4b0 / #6b7580"
+  cat-collection: "#9b7fd4 / #6f45b5"
+  cat-playlist: "#3cbfa0 / #1f8c74"
+  cat-toplist: "#d4b45a / #8f7224"
+  cat-imported: "#e09550 / #b0661c"
+  cat-movies: "#b8a28c / #806a55"
+  cat-shows: "#a29dbb / #6b668a"
+
   # Log viewer (always dark, independent of theme)
   log-bg: "#1a1a1a"
   log-ink: "#d0d0d0"
@@ -224,6 +233,7 @@ Cards and rows have **no** drop shadow.
 
 ### Lists
 - **List row**: 8px × 12px, 6px radius, `tint-2` on hover. Rows are separated by spacing, or by a hairline in dense tables.
+- **Type chip** (Tag, Collection, Playlist, Top-list, Home section, Schedule, Imported, Movies/Shows on a row header): neutral — hairline border, `ink-muted` text, 4px radius, `caption` size. Only the icon carries its `cat-*` colour (Home section uses `primary`, Schedule uses `activity`), so types can be told apart at a glance without colouring the chip.
 - **Filter chip**: a pill with a hairline border; when selected it gets the `tint-3` fill and `ink` text. An icon may carry semantic colour; the chip itself never does.
 - **Empty state**: centred, `ink-muted`, one line of text plus one secondary button. No illustrations.
 
