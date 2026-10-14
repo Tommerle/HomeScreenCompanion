@@ -1,6 +1,9 @@
 # 🎬 Home Screen Companion for Emby
 
-<img width="747" height="420" alt="HSCv2" src="https://github.com/user-attachments/assets/c5c99ee4-f90b-4aad-9a74-70eaf4f64836" />
+
+
+https://github.com/user-attachments/assets/74f6d998-6b59-42b6-b335-261ca6cc6645
+
 
 
 
