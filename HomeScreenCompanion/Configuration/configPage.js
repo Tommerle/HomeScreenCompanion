@@ -413,7 +413,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         .drag-handle {
             cursor: grab;
-            margin-right: 15px;
+            margin-right: 12px;
             color: var(--theme-text-secondary);
             display: flex;
             align-items: center;
@@ -423,34 +423,18 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             cursor: grabbing;
         }
 
-        .tag-row {
-            position: relative;
-            background: var(--theme-background-level2);
-            margin-bottom: 15px;
-            border-radius: 6px;
-            border: 1px solid var(--line-color);
-            border-left: 5px solid #52B54B;
-            transition: border-color 0.2s ease, background-color 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-            overflow: hidden;
-        }
-
-        .tag-row.inactive {
-            border-left-color: rgba(128,128,128,0.5);
-        }
-
         .tag-row.dragging {
             opacity: 0.4 !important;
-            border: 2px dashed #999 !important;
+            border: 1px dashed var(--hsc-hairline-strong) !important;
             background: var(--theme-background-level1) !important;
         }
 
         .sort-placeholder {
             height: 40px;
             background-color: transparent;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            border: 2px dashed var(--line-color);
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border: 1px dashed var(--hsc-hairline-strong);
             transition: height 0.2s;
         }
 
@@ -463,18 +447,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         @keyframes moveHighlight {
-            0% {
-                border-top: 1px solid #00a4dc;
-                border-right: 1px solid #00a4dc;
-                border-bottom: 1px solid #00a4dc;
-                box-shadow: 0 0 15px rgba(0,164,220,0.5);
-            }
-            100% {
-                border-top: 1px solid var(--line-color);
-                border-right: 1px solid var(--line-color);
-                border-bottom: 1px solid var(--line-color);
-                box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-            }
+            0% { border-color: var(--hsc-activity); }
+            100% { border-color: var(--hsc-hairline); }
         }
 
         @keyframes tcDotBounce {
@@ -487,18 +461,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         .tc-dot-loader span:nth-child(3) { animation-delay:0.4s; }
 
         @keyframes addHighlight {
-            0% {
-                border-top: 1px solid #52B54B;
-                border-right: 1px solid #52B54B;
-                border-bottom: 1px solid #52B54B;
-                box-shadow: 0 0 15px rgba(82,181,75,0.5);
-            }
-            100% {
-                border-top: 1px solid var(--line-color);
-                border-right: 1px solid var(--line-color);
-                border-bottom: 1px solid var(--line-color);
-                box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-            }
+            0% { border-color: var(--hsc-primary); }
+            100% { border-color: var(--hsc-hairline); }
         }
 
         .control-row {
@@ -2902,7 +2866,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var filterGroupsHtml = mediaFilters.map((f, i) => getMediaInfoFilterGroupHtml(f, i, i === 0)).join('');
 
         var activeText = tagConfig.Active !== false ? "Active" : "Disabled";
-        var activeColor = tagConfig.Active !== false ? "#52B54B" : "var(--theme-text-secondary)";
+        var activeColor = tagConfig.Active !== false ? "var(--hsc-primary-text)" : "var(--hsc-neutral)";
 
         var sourceBadgeHtml = getSourceBadgeHtml(sourceType);
         var indicatorsHtml = '';
@@ -2941,13 +2905,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         var html = `
         <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-group-key="${encodeURIComponent(groupIssueKey(tagConfig.Name, tagConfig.Tag))}" data-dirty="false">
-            <div class="tag-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px; cursor:pointer;">
-                <div style="display:flex; align-items:center;">
-                    <div class="header-actions" style="margin-right:15px; display:flex; align-items:center;" onclick="event.stopPropagation()">
+            <div class="tag-header">
+                <div style="display:flex; align-items:center; min-width:0;">
+                    <div class="header-actions" style="margin-right:12px; display:flex; align-items:center;" onclick="event.stopPropagation()">
                         <div class="drag-handle">
                             <i class="md-icon">reorder</i>
                         </div>
-                        <span class="lblActiveStatus" style="margin-right:8px; font-size:0.9em; font-weight:bold; color:${activeColor}; min-width:60px; text-align:right;">${activeText}</span>
+                        <span class="lblActiveStatus" style="color:${activeColor};">${activeText}</span>
                         <label class="checkboxContainer" style="margin:0;">
                             <input type="checkbox" is="emby-checkbox" class="chkTagActive" ${isChecked} />
                             <span></span>
@@ -2956,13 +2920,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <div class="tag-info" style="display:flex; align-items:center;">
                         <span class="source-badge">${sourceBadgeHtml}</span>
                         <span class="hsc-run-issue">${groupIssueFlagHtml(_groupIssues[groupIssueKey(tagConfig.Name, tagConfig.Tag)])}</span>
-                        <span class="tag-title" style="font-weight:bold; font-size:1.1em;">${labelName || tagName || 'New'}</span>
+                        <span class="tag-title">${labelName || tagName || 'New'}</span>
                         <span class="badge-container" style="display:flex; align-items:center;">${indicatorsHtml}</span>
                     </div>
                 </div>
                 <i class="md-icon expand-icon">${initialIcon}</i>
             </div>
-            <div class="tag-body" style="${initialStyle} padding:15px; border-top:1px solid rgba(255,255,255,0.1);">
+            <div class="tag-body" style="${initialStyle}">
                 <div class="hsc-run-issue-box">${groupIssueBoxHtml(_groupIssues[groupIssueKey(tagConfig.Name, tagConfig.Tag)])}</div>
                 <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
                     <button type="button" is="emby-button" class="btnCopySourceRow raised hsc-btn-ghost hsc-btn-sm" title="Copy this source to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em; margin-right:4px;">share</i><span>Copy</span></button>
@@ -3744,7 +3708,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
         chk.addEventListener('change', function () {
             lblStatus.textContent = this.checked ? "Active" : "Disabled";
-            lblStatus.style.color = this.checked ? "#52B54B" : "var(--theme-text-secondary)";
+            lblStatus.style.color = this.checked ? "var(--hsc-primary-text)" : "var(--hsc-neutral)";
             if (this.checked) row.classList.remove('inactive');
             else row.classList.add('inactive');
             updateRunGroupBtn();
@@ -6467,7 +6431,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         var count = item.ItemCount != null ? item.ItemCount : 0;
                         var managed = isTagSection ? managedTagMap[name.toLowerCase()] : managedCollMap[name.toLowerCase()];
                         var badge = managed && managed.length > 0
-                            ? '<span style="font-size:0.75em;background:#52B54B22;color:#52B54B;border:1px solid #52B54B55;border-radius:4px;padding:1px 6px;margin-left:8px;white-space:nowrap;">Managed by HSC Plugin</span>'
+                            ? '<span class="hsc-managed-pill">Managed by HSC Plugin</span>'
                             : '';
                         var typesVal = isTagSection ? (item.ItemTypes || []).map(function (t) { return t.toLowerCase(); }).join(',') : '';
                         return '<tr class="tc-manage-row" data-rowname="' + escAttr(name.toLowerCase()) + '" data-managed="' + (managed && managed.length > 0 ? '1' : '0') + '" data-count="' + count + '" data-types="' + escAttr(typesVal) + '">' +
@@ -6479,7 +6443,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             '</td>' +
                             '<td style="padding:9px 4px 9px 16px;border-bottom:1px solid var(--line-color);white-space:nowrap;color:var(--theme-text-secondary);font-size:0.88em;">' + count + ' items</td>' +
                             '<td style="padding:9px 4px 9px 8px;border-bottom:1px solid var(--line-color);white-space:nowrap;">' +
-                            '<button type="button" class="btnTcMark" style="' + btnStyle + 'background:#cc3333;color:#fff;" data-id="' + escAttr(id) + '" data-name="' + escAttr(name) + '" data-count="' + count + '" data-type="' + (isTagSection ? 'tag' : 'coll') + '">Remove</button>' +
+                            '<button type="button" class="btnTcMark" data-id="' + escAttr(id) + '" data-name="' + escAttr(name) + '" data-count="' + count + '" data-type="' + (isTagSection ? 'tag' : 'coll') + '">Remove</button>' +
                             '</td>' +
                             '</tr>';
                     }).join('');
@@ -6488,7 +6452,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<div style="display:flex;align-items:center;gap:30px;margin-bottom:12px;">' + 
                     '<h3 class="hsc-title" style="margin:0;">' + escHtml(title) + '</h3>' +
                     (headerExtra || '') +
-                    '<button type="button" class="btnTcRefresh" style="' + btnStyle + 'background:transparent;color:var(--theme-text-secondary);border:1px solid var(--line-color);margin-left:auto;"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
+                    '<button type="button" class="btnTcRefresh" style="background:transparent;color:var(--theme-text-secondary);border:1px solid var(--hsc-hairline-strong);margin-left:auto;"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
                     '</div>' +
                     '<table class="tc-manage-list" style="width:100%;border-collapse:collapse;"><tbody>' + rows + '</tbody></table>' +
                     '</div>';
@@ -6780,7 +6744,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         btn.textContent = 'Undo';
                         btn.classList.remove('btnTcMark');
                         btn.classList.add('btnTcUndo');
-                        btn.style.background = '#555';
                     }
                     updateSaveButton();
                     return;
@@ -6800,7 +6763,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         btn.textContent = 'Remove';
                         btn.classList.remove('btnTcUndo');
                         btn.classList.add('btnTcMark');
-                        btn.style.background = '#cc3333';
                     }
                     updateSaveButton();
                     return;
@@ -6987,7 +6949,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                                 var chk = sourceRow.querySelector('.chkTagActive');
                                 var lbl = sourceRow.querySelector('.lblActiveStatus');
                                 if (chk) chk.checked = false;
-                                if (lbl) { lbl.textContent = 'Disabled'; lbl.style.color = 'var(--theme-text-secondary)'; }
+                                if (lbl) { lbl.textContent = 'Disabled'; lbl.style.color = 'var(--hsc-neutral)'; }
                                 sourceRow.classList.add('inactive');
                                 var runBtn = sourceRow.querySelector('.btnRunEntry');
                                 if (runBtn) { runBtn.disabled = true; runBtn.style.opacity = '0.4'; }
@@ -10090,15 +10052,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         maxItems:    String(item.maxItems || '0')
                     }));
                     return '<div class="tag-row" data-tlname="' + escAttr(item.tagName.toLowerCase()) + '" data-ismanual="' + (isManual ? '1' : '0') + '" data-isshows="' + (isShows ? '1' : '0') + '" data-count="' + item.count + '" data-editjson="' + editJson + '">' +
-                        '<div class="tl-row-header tag-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px;cursor:pointer;">' +
+                        '<div class="tl-row-header tag-header">' +
                         '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">' +
                         contentBadge + typeBadge +
-                        '<span class="tag-title" style="font-weight:bold;font-size:1.1em;">' + escHtml(item.displayName) + '</span>' +
+                        '<span class="tag-title">' + escHtml(item.displayName) + '</span>' +
                         '<span class="tag-indicator source" style="margin-left:8px;">' + item.count + (isShows ? ' shows' : ' movies') + '</span>' +
                         '</div>' +
                         '<i class="md-icon expand-icon" style="flex-shrink:0;margin-left:12px;">expand_more</i>' +
                         '</div>' +
-                        '<div class="tag-body" style="display:none;padding:15px;border-top:1px solid rgba(255,255,255,0.1);">' +
+                        '<div class="tag-body" style="display:none;">' +
                         '</div>' +
                         '</div>';
                 }).join('');
@@ -10134,7 +10096,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<option value="count-desc">Most items</option>' +
                 '<option value="count-asc">Fewest items</option>' +
                 '</select>' +
-                '<button type="button" class="btnTlRefresh" style="cursor:pointer;border:1px solid var(--line-color);background:transparent;color:var(--theme-text-secondary);border-radius:3px;padding:5px 10px;font-size:0.9em;"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
+                '<button type="button" class="btnTlRefresh" style="border:1px solid var(--hsc-hairline-strong);background:transparent;color:var(--theme-text-secondary);"><i class="md-icon" style="font-size:1em;vertical-align:middle;">refresh</i></button>' +
                 '</div>' +
                 renderTopListRows(allExistingTopLists) +
                 '</div>';

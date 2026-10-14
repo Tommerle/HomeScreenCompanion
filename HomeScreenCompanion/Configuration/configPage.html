@@ -72,58 +72,67 @@
         /* API keys are plain text fields shown masked: a type="password" field makes the browser
            offer to save a password every time the settings are saved. "Show" unmasks them. */
         .api-key-field:not(.api-key-shown) { -webkit-text-security: disc; text-security: disc; }
+        /* Collapsible rows (sources, top-lists): surface-1 + hairline, no coloured border, no shadow */
         .tag-row {
+            position: relative;
             background: var(--theme-background-level2);
-            margin-bottom: 15px;
-            border-radius: 6px;
-            border: 1px solid var(--line-color);
-            border-left: 5px solid #52B54B;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--hsc-hairline);
             transition: border-color 0.2s ease, background-color 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
             overflow: hidden;
         }
 
         .tag-header {
-            padding: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 12px 16px;
             cursor: pointer;
             user-select: none;
             color: var(--theme-text-primary);
-            background: rgba(128,128,128,0.04);
-            border-bottom: 1px solid var(--line-color);
-            transition: background 0.2s;
+            transition: background-color 0.15s;
         }
 
             .tag-header:hover {
-                background: var(--theme-background-level3);
+                background: var(--hsc-tint-2);
             }
 
         .tag-info {
             display: flex;
             align-items: center;
             flex-grow: 1;
+            min-width: 0;
         }
 
         .tag-title {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin: 0 15px;
+            font-size: 1em;
+            font-weight: 600;
+            line-height: 1.35;
+            margin: 0 12px;
             color: var(--theme-text-primary);
         }
+        .tag-row.inactive .tag-title { opacity: 0.6; }
 
-        .tag-status {
+        .tag-header .expand-icon, .tag-header .drag-handle { color: var(--theme-text-secondary); }
+
+        /* Enabled / disabled as a status pill */
+        .lblActiveStatus {
+            display: inline-block;
+            margin-right: 8px;
+            padding: 2px 8px;
+            border-radius: 9999px;
             font-size: 0.8em;
-            color: var(--theme-text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-weight: 500;
+            line-height: 1.4;
+            background: rgba(82,181,75,0.15);
         }
+        .tag-row.inactive .lblActiveStatus { background: rgba(154,164,176,0.15); }
 
         .tag-body {
-            padding: 20px;
+            padding: 16px 24px 20px;
             display: none;
-            border-top: 1px solid var(--line-color);
+            border-top: 1px solid var(--hsc-hairline);
             color: var(--theme-text-primary);
             background: var(--theme-background-level1);
         }
@@ -144,31 +153,40 @@
 
         .advanced-section {
             background: var(--theme-background-level2);
-            border: 1px solid var(--line-color);
-            border-radius: 5px;
-            margin-bottom: 20px;
+            border: 1px solid var(--hsc-hairline);
+            border-radius: 8px;
+            margin-bottom: 16px;
             overflow: hidden;
         }
 
         .advanced-header {
-            padding: 15px;
+            padding: 12px 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
-            background: rgba(128,128,128,0.04);
             color: var(--theme-text-primary);
+            user-select: none;
+            transition: background-color 0.15s;
         }
 
             .advanced-header:hover {
-                background: rgba(128,128,128,0.08);
+                background: var(--hsc-tint-2);
             }
 
+        .advanced-header .settings-panel-chevron { color: var(--theme-text-secondary); }
+
         .advanced-body {
-            padding: 20px;
+            padding: 16px 24px 20px;
             display: none;
-            border-top: 1px solid var(--line-color);
+            border-top: 1px solid var(--hsc-hairline);
             color: var(--theme-text-primary);
             background: var(--theme-background-level1);
+        }
+
+        /* Provider panels nested inside a settings panel */
+        .advanced-section .advanced-section {
+            border-radius: 6px;
+            background: var(--theme-background-level2);
         }
 
         .floating-actions {
@@ -872,21 +890,22 @@
         .man-section-row {
             position: relative;
             background: var(--theme-background-level2);
-            margin-bottom: 15px;
+            margin-bottom: 6px;
             border-radius: 6px;
-            border: 1px solid var(--line-color);
-            border-left: 5px solid #52B54B;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+            border: 1px solid var(--hsc-hairline);
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 12px;
+            padding: 6px 8px 6px 12px;
             user-select: none;
+            transition: background-color 0.15s;
         }
+        .man-section-row:hover { background: var(--hsc-tint-2); }
+        .man-section-row .drag-handle { margin-right: 0; cursor: grab; }
 
         .man-section-row.man-dragging {
             opacity: 0.4 !important;
-            border: 2px dashed #999 !important;
+            border: 1px dashed var(--hsc-hairline-strong) !important;
             background: var(--theme-background-level1) !important;
         }
 
@@ -903,6 +922,33 @@
             justify-content: center;
             box-shadow: none !important;
             flex-shrink: 0;
+        }
+
+        /* Cleanup lists */
+        .tc-manage-row td { border-bottom: 1px solid var(--hsc-hairline) !important; }
+        .tc-manage-row:hover td { background: var(--hsc-tint-1); }
+        .btnTcMark, .btnTcUndo, .btnTcRefresh, .btnTlRefresh {
+            cursor: pointer;
+            border-radius: 6px !important;
+            padding: 4px 12px !important;
+            font-family: inherit;
+            font-size: 0.82em !important;
+            font-weight: 500;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+        .btnTcMark { background: transparent !important; color: var(--hsc-danger-text) !important; border: 1px solid rgba(229,115,115,0.4) !important; }
+        .btnTcMark:hover { background: rgba(229,115,115,0.08) !important; border-color: var(--hsc-danger) !important; }
+        .btnTcUndo { background: var(--hsc-tint-1) !important; color: var(--theme-text-primary) !important; border: 1px solid var(--hsc-hairline-strong) !important; }
+        .btnTcUndo:hover, .btnTcRefresh:hover, .btnTlRefresh:hover { background: var(--hsc-tint-2) !important; }
+        .hsc-managed-pill {
+            font-size: 0.75em;
+            font-weight: 500;
+            background: rgba(82,181,75,0.15);
+            color: var(--hsc-primary-text);
+            border-radius: 9999px;
+            padding: 2px 8px;
+            margin-left: 8px;
+            white-space: nowrap;
         }
 
         .hsc-api-key-hint {
@@ -1306,10 +1352,10 @@
                         <div class="hsc-eyebrow" style="margin-bottom: 8px;">Providers</div>
 
                         <!-- Trakt -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">link</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">Trakt</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">Trakt</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1326,10 +1372,10 @@
                         </div>
 
                         <!-- MDBList -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">link</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">MDBList</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">MDBList</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1346,10 +1392,10 @@
                         </div>
 
                         <!-- TMDb -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">link</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">TMDb</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">TMDb</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1379,10 +1425,10 @@
                         <div class="hsc-eyebrow" style="margin-bottom: 8px;">Providers</div>
 
                         <!-- Google Gemini -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">auto_awesome</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">Google Gemini</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">Google Gemini</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1405,10 +1451,10 @@
                         </div>
 
                         <!-- OpenAI (ChatGPT) -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">auto_awesome</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">OpenAI (ChatGPT)</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">OpenAI (ChatGPT)</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1431,10 +1477,10 @@
                         </div>
 
                         <!-- Anthropic Claude -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">auto_awesome</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">Anthropic Claude</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">Anthropic Claude</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1457,10 +1503,10 @@
                         </div>
 
                         <!-- Ollama (Local) -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">computer</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">Ollama (Local)</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">Ollama (Local)</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
@@ -1482,10 +1528,10 @@
                         <div class="hsc-eyebrow" style="margin-top: 18px; margin-bottom: 8px;">Advanced AI Settings</div>
 
                         <!-- Edit system prompt -->
-                        <div class="advanced-section settings-panel" style="border: 1px solid rgba(128,128,128,0.2); border-radius: 4px; margin-bottom: 8px;">
-                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                        <div class="advanced-section settings-panel" style="margin-bottom: 8px;">
+                            <div class="advanced-header settings-panel-toggle" style="padding: 10px 14px;">
                                 <i class="md-icon" style="margin-right: 8px; font-size: 1.1em; opacity: 0.65;">tune</i>
-                                <span style="font-size: 0.9em; font-weight: 600; opacity: 0.85;">Edit system prompt</span>
+                                <span style="font-size: 0.95em; font-weight: 600;">Edit system prompt</span>
                                 <i class="md-icon settings-panel-chevron" style="margin-left: auto; transition: transform 0.2s; font-size: 1.1em; opacity: 0.65;">expand_more</i>
                             </div>
                             <div class="settings-panel-body" style="display:none; padding: 0 14px 14px;">
