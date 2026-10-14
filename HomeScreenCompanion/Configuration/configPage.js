@@ -335,7 +335,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             height: 6px;
             border-radius: 50%;
             background: var(--hsc-warning);
-            box-shadow: 0 0 0 1.5px var(--theme-background-level2, #101010);
+            box-shadow: 0 0 0 1.5px var(--theme-background-level2);
         }
 
         .tag-indicator.schedule.schedule-active::after {
@@ -884,7 +884,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     </div>
                 </div>
 
-                <button type="button" is="emby-button" class="btnRemoveDate" style="background:transparent; color:#cc3333; min-width:40px; margin-top: 25px;" title="Remove Rule"><i class="md-icon">delete</i></button>
+                <button type="button" is="emby-button" class="btnRemoveDate hsc-btn-ghost" style="color:var(--hsc-danger-text) !important; min-width:40px; margin-top: 25px;" title="Remove Rule"><i class="md-icon">delete</i></button>
             </div>`;
     }
 
@@ -1735,7 +1735,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             return '<div class="hsc-eyebrow" style="margin:14px 0 2px;">' + text + '</div>';
         }
         var body = o.removed.length
-            ? heading('Will also be removed') + list(o.removed, '#cc3333')
+            ? heading('Will also be removed') + list(o.removed, 'var(--hsc-danger-text)')
             : '<div style="opacity:0.75;margin-top:8px;">' + o.empty + '</div>';
         if (o.kept && o.kept.length) body += heading('Kept') + list(o.kept, 'var(--hsc-primary)');
         body += '<div style="font-size:0.82em;opacity:0.65;margin-top:16px;line-height:1.5;">' + o.note + '</div>';
@@ -2376,7 +2376,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         '</span>' +
                     '</div>' +
                 '</div>' +
-                '<button type="button" class="btnRemoveFilterGroup" style="background:transparent; border:none; color:#cc3333; cursor:pointer; padding:2px 8px; font-size:0.85em; flex-shrink:0;">✕ Remove</button>' +
+                '<button type="button" class="btnRemoveFilterGroup" style="background:transparent; border:none; color:var(--hsc-danger-text); cursor:pointer; padding:2px 8px; font-size:0.85em; flex-shrink:0;">✕ Remove</button>' +
             '</div>' +
             '<div class="mi-rules-list">' + rulesHtml + '</div>' +
             '<button type="button" is="emby-button" class="btnAddMiRule raised btn-neutral" style="margin-top: 4px;">+ Add Rule</button>' +
@@ -2648,7 +2648,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     (kind(m.Type) ? '<span style="font-size:0.75em;opacity:0.6;">' + kind(m.Type) + '</span>' : '') +
                     '<button type="button" class="btnManualUp" data-idx="' + idx + '"' + (idx === 0 ? ' disabled' : '') + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;" title="Move up">▲</button>' +
                     '<button type="button" class="btnManualDown" data-idx="' + idx + '"' + (idx === items.length - 1 ? ' disabled' : '') + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;" title="Move down">▼</button>' +
-                    '<button type="button" class="btnManualRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:#cc3333;padding:2px 4px;" title="Remove">✕</button>' +
+                    '<button type="button" class="btnManualRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);padding:2px 4px;" title="Remove">✕</button>' +
                     '</div>';
             }).join('');
         }
@@ -2963,9 +2963,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         </div>
                         <div style="position:relative; margin-bottom:10px;">
                             <input is="emby-input" type="text" class="txtManualSearch" autocomplete="off" label="Add a movie or show" placeholder="Type to search…" />
-                            <div class="manualSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:4px;max-height:240px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.45);"></div>
+                            <div class="manualSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:6px;max-height:240px;overflow-y:auto;margin-top:2px;box-shadow:var(--hsc-shadow-float);"></div>
                         </div>
-                        <div class="manualItemList" style="max-height:420px;overflow-y:auto;border:1px solid var(--line-color);border-radius:4px;padding:4px 8px;min-height:44px;"></div>
+                        <div class="manualItemList" style="max-height:420px;overflow-y:auto;border:1px solid var(--line-color);border-radius:6px;padding:4px 8px;min-height:44px;"></div>
                     </div>
 
                     <div class="source-ai-container" style="display: ${sourceType === 'AI' ? 'block' : 'none'};">
@@ -2979,7 +2979,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             </select>
                         </div>
 
-                        <div class="ollama-experimental-warning" style="display:${(tagConfig.AiProvider || 'OpenAI') === 'Ollama' ? 'flex' : 'none'}; align-items:flex-start; gap:8px; background:rgba(230,193,90,0.1); border:1px solid rgba(230,193,90,0.35); border-radius:4px; padding:10px 12px; margin-bottom:15px; font-size:0.85em; line-height:1.5;">
+                        <div class="ollama-experimental-warning" style="display:${(tagConfig.AiProvider || 'OpenAI') === 'Ollama' ? 'flex' : 'none'}; align-items:flex-start; gap:8px; background:rgba(230,193,90,0.1); border:1px solid rgba(230,193,90,0.35); border-radius:6px; padding:10px 12px; margin-bottom:15px; font-size:0.85em; line-height:1.5;">
                             <i class="md-icon" style="font-size:1.1em; color:var(--hsc-warning-text); flex-shrink:0; margin-top:1px;">warning</i>
                             <span style="opacity:0.85;"><strong>Experimental:</strong> Ollama support is experimental. Local models may return inaccurate IMDB IDs — the plugin will fall back to title matching, but results <strong>WILL</strong> vary depending on the model used. Known limitations with local AI is the lack of new and updated information, and limited ability to research online. Cloud based models seems to be the best options for now. </span>
                         </div>
@@ -3065,7 +3065,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             <div class="mediainfo-filter-list">${filterGroupsHtml}</div>
                             <div style="display:flex; gap:8px; margin-top:8px;">
                                 <button type="button" is="emby-button" class="btnAddMediaInfoFilter raised hsc-btn-dashed" style="flex:1;"><i class="md-icon" style="margin-right:5px;">add</i>Add Filter Group</button>
-                                <button type="button" is="emby-button" class="btnClearAllFilters raised" style="background:transparent; border:2px dashed rgba(204,51,51,0.4); color:#cc3333; padding:0 14px; min-width:0;" title="Clear all filters"><i class="md-icon" style="font-size:1em;">delete_sweep</i></button>
+                                <button type="button" is="emby-button" class="btnClearAllFilters raised hsc-btn-danger" style="padding:0 14px; min-width:0;" title="Clear all filters"><i class="md-icon" style="font-size:1em;">delete_sweep</i></button>
                             </div>
                             <div class="mi-presets-section" style="margin-top:30px; border-top:1px solid var(--line-color); padding-top:12px; display:${sourceType === 'MediaInfo' ? 'block' : 'none'};">
                             ${true ? `
@@ -4511,7 +4511,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div class="stm-summary">' +
                     '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
                         '<span><strong style="font-size:1.4em;">' + inCount + '</strong> <span style="opacity:0.7;">of ' + items.length + ' in your library</span></span>' +
-                        '<span style="font-weight:bold;color:' + (pct >= 50 ? 'var(--hsc-primary)' : '#e6c15a') + ';">' + pct + '%</span>' +
+                        '<span style="font-weight:bold;color:' + (pct >= 50 ? 'var(--hsc-primary-text)' : 'var(--hsc-warning-text)') + ';">' + pct + '%</span>' +
                     '</div>' +
                     '<div class="stm-bar"><div class="stm-bar-fill" style="width:0%"></div></div>' +
                     '<div class="stm-filters">' +
@@ -4537,7 +4537,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         function fail(message) {
             body.innerHTML =
-                '<div class="stm-empty"><i class="md-icon" style="font-size:2.4em;display:block;margin-bottom:8px;color:#e57373;">error_outline</i>' + esc(message) + '</div>' +
+                '<div class="stm-empty"><i class="md-icon" style="font-size:2.4em;display:block;margin-bottom:8px;color:var(--hsc-danger-text);">error_outline</i>' + esc(message) + '</div>' +
                 '<div class="stm-footer"><button type="button" class="stm-done">Close</button></div>';
         }
 
@@ -4929,7 +4929,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var btnStyle = 'display:flex;align-items:center;width:100%;padding:6px 10px;' +
             'background:var(--plugin-input-bg,rgba(128,128,128,0.08));' +
             'border:1px solid var(--plugin-input-border,var(--line-color));' +
-            'border-radius:4px;font-size:0.9em;color:inherit;cursor:pointer;' +
+            'border-radius:6px;font-size:0.9em;color:inherit;cursor:pointer;' +
             'box-sizing:border-box;text-align:left;';
         return '<div class="filter-dropdown-wrapper hsc-user-dropdown" style="width:100%;">' +
             '<button type="button" class="hsc-user-dropdown-btn" style="' + btnStyle + '">' +
@@ -6242,7 +6242,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '</div>',
             '<div class="advanced-body settings-panel-body" style="display:none; padding-top: 4px;">',
 
-            '<div style="display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; padding:8px 12px; border:1px solid rgba(230,193,90,0.5); border-radius:4px; background:rgba(230,193,90,0.08); font-size:0.85em; line-height:1.45;">',
+            '<div style="display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; padding:8px 12px; border:1px solid rgba(230,193,90,0.5); border-radius:6px; background:rgba(230,193,90,0.08); font-size:0.85em; line-height:1.45;">',
             '<i class="md-icon" style="color:var(--hsc-warning-text); font-size:1.2em;">warning</i>',
             '<div><strong style="color:var(--hsc-warning-text);">Experimental.</strong> Safe to use — it never changes watched status, only the "last played" date of one episode. It has been tested, but needs more real-world use before it can be considered fully stable.</div>',
             '</div>',
@@ -6277,7 +6277,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '</div>',
             '</div>',
 
-            '<div style="margin-top:16px; padding:10px 14px; border:1px solid rgba(128,128,128,0.2); border-radius:4px;">',
+            '<div style="margin-top:16px; padding:10px 14px; border:1px solid rgba(128,128,128,0.2); border-radius:6px;">',
             '<div class="hsc-eyebrow" style="margin-bottom:6px;">Good to know</div>',
             '<ul style="font-size:0.85em; line-height:1.5; margin:0; padding-left:18px; opacity:0.85;">',
             '<li>The <strong>"last played" date</strong> of your last watched episode is set to now. Watched status and play count are unchanged, but anything showing or sorting by last played (e.g. watch history, tag rules using <em>Last played</em>) will see the new date.</li>',
@@ -6388,7 +6388,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
             function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-            var btnStyle = 'cursor:pointer;border:none;border-radius:3px;padding:4px 12px;font-size:0.82em;font-weight:500;';
+            var btnStyle = 'cursor:pointer;border:none;border-radius:6px;padding:4px 12px;font-size:0.82em;font-weight:500;';
 
             function renderSection(title, items, isTagSection, headerExtra) {
                 var sectionId = isTagSection ? 'tcTagSection' : 'tcCollSection';
@@ -6427,7 +6427,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '</div>';
             }
 
-            var searchInputStyle = 'background:rgba(128,128,128,0.08);border:1px solid var(--line-color);border-radius:4px;padding:5px 10px;font-size:0.9em;color:inherit;width:400px;max-width:100%;';
+            var searchInputStyle = 'background:rgba(128,128,128,0.08);border:1px solid var(--line-color);border-radius:6px;padding:5px 10px;font-size:0.9em;color:inherit;width:400px;max-width:100%;';
 
             var tcTypeGroups = [
                 { label: 'Movies',       types: ['movie'] },
@@ -6483,7 +6483,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             container.innerHTML =
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">' +
                 '<input type="text" id="tcSearch" placeholder="Search…" style="' + searchInputStyle + '" />' +
-                '<select is="emby-select" id="tcSort" style="color:inherit;background:rgba(128,128,128,0.08);border:1px solid var(--line-color);padding:5px;border-radius:4px;font-size:0.9em;cursor:pointer;">' +
+                '<select is="emby-select" id="tcSort" style="color:inherit;background:rgba(128,128,128,0.08);border:1px solid var(--line-color);padding:5px;border-radius:6px;font-size:0.9em;cursor:pointer;">' +
                 '<option value="name-asc">Name A–Z</option>' +
                 '<option value="name-desc">Name Z–A</option>' +
                 '<option value="count-desc">Most items</option>' +
@@ -6617,7 +6617,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 'background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#eee);' +
                 'border:1px solid var(--plugin-popup-border,#444);border-radius:6px;' +
                 'padding:8px 12px;font-size:0.82em;line-height:1.6;max-width:210px;' +
-                'box-shadow:0 4px 14px rgba(0,0,0,0.4);';
+                'box-shadow:var(--hsc-shadow-float);';
             document.body.appendChild(tcTooltip);
 
             // Ta bort tooltip när containern lämnar DOM
@@ -6750,7 +6750,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             container._tcShowModal = function () { showSummaryModal(); };
 
             function showSummaryModal() {
-                var undoBtnStyle = 'cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);border-radius:3px;padding:2px 6px;font-size:1.1em;line-height:1;margin-right:8px;flex-shrink:0;';
+                var undoBtnStyle = 'cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);border-radius:6px;padding:2px 6px;font-size:1.1em;line-height:1;margin-right:8px;flex-shrink:0;';
 
                 function buildRows(items, isTag) {
                     return items.map(function (item) {
@@ -6841,7 +6841,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             mainBtn.textContent = 'Remove';
                             mainBtn.classList.remove('btnTcUndo');
                             mainBtn.classList.add('btnTcMark');
-                            mainBtn.style.background = '#cc3333';
                         }
 
                         updateSaveButton();
@@ -6941,7 +6940,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             }
 
         }).catch(function (err) {
-            container.innerHTML = '<div style="color:#cc3333;padding:20px;">Failed to load: ' + err + '</div>';
+            container.innerHTML = '<div style="color:var(--hsc-danger-text);padding:20px;">Failed to load: ' + err + '</div>';
         });
     }
 
@@ -8043,7 +8042,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
+        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
         var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:16px;';
 
@@ -8113,7 +8112,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<input type="number" class="tlm-max-items" min="0" step="1" style="' + inputStyle + '" placeholder="0" />' +
                 '</div>' +
 
-                '<div class="tlm-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:4px;"></div>' +
+                '<div class="tlm-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
                 '<button type="button" class="btnTlmCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
                 '<button type="button" class="btnTlmSave hsc-mbtn hsc-btn-primary">' +
@@ -8181,7 +8180,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 });
             });
         }).catch(function (err) {
-            renderBox('<div style="color:#cc3333;padding:10px 0;">Failed to load: ' + (err.message || err) + '</div>' +
+            renderBox('<div style="color:var(--hsc-danger-text);padding:10px 0;">Failed to load: ' + (err.message || err) + '</div>' +
                 '<div style="margin-top:16px;text-align:right;"><button type="button" class="btnTlmClose hsc-mbtn hsc-btn-secondary">Close</button></div>');
             modal.querySelector('.btnTlmClose').addEventListener('click', function () { modal.remove(); });
         });
@@ -8205,7 +8204,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var itemWord = isShows ? 'show' : 'movie';
         var isEdit = !!existingData;
         var preset = existingData || (options && options.prefill) || null;
-        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
+        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
         var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:14px;';
         var colHeaderStyle = 'font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;opacity:0.7;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--plugin-popup-border, var(--hsc-hairline));';
@@ -8317,10 +8316,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<label style="' + labelStyle + '">' + (isShows ? 'Add Show' : 'Add Movie') + '</label>' +
                 '<div style="position:relative;">' +
                 '<input type="text" class="mtlMovieSearch" autocomplete="off" style="' + inputStyle + '" placeholder="Type to search…" />' +
-                '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:4px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.45);"></div>' +
+                '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:6px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:var(--hsc-shadow-float);"></div>' +
                 '</div></div>' +
 
-                '<div class="mtlSelectedList" style="max-height:500px;overflow-y:auto;border:1px solid var(--line-color);border-radius:4px;padding:4px 8px;min-height:60px;"></div>' +
+                '<div class="mtlSelectedList" style="max-height:500px;overflow-y:auto;border:1px solid var(--line-color);border-radius:6px;padding:4px 8px;min-height:60px;"></div>' +
                 '</div>' +
 
                 '</div>' +
@@ -8329,7 +8328,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster, isShows ? 'shows' : 'movies') +
                 '</div>' +
 
-                '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
+                '<div class="mtl-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;margin-top:8px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
                 '<span class="mtl-create-hint" style="margin-right:auto;font-size:0.82em;opacity:0.65;"></span>' +
                 '<button type="button" class="btnMtlCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
@@ -8366,7 +8365,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         '<span style="flex:1;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escAttr(m.Name) + '">' + label + '</span>' +
                         '<button type="button" class="btnMtlUp" data-idx="' + idx + '"' + upDis + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;font-size:0.9em;line-height:1;" title="Move up">▲</button>' +
                         '<button type="button" class="btnMtlDown" data-idx="' + idx + '"' + dnDis + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;font-size:0.9em;line-height:1;" title="Move down">▼</button>' +
-                        '<button type="button" class="btnMtlRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:#cc3333;padding:2px 4px;font-size:0.9em;line-height:1;" title="Remove">✕</button>' +
+                        '<button type="button" class="btnMtlRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);padding:2px 4px;font-size:0.9em;line-height:1;" title="Remove">✕</button>' +
                         '</div>';
                 }).join('');
             }
@@ -8524,7 +8523,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         .catch(function (err) {
             var innerBox = modal.querySelector('div');
             innerBox.innerHTML =
-                '<div style="color:#cc3333;padding:10px 0;">Failed to load: ' + (err.message || String(err)).replace(/</g, '&lt;') + '</div>' +
+                '<div style="color:var(--hsc-danger-text);padding:10px 0;">Failed to load: ' + (err.message || String(err)).replace(/</g, '&lt;') + '</div>' +
                 '<div style="margin-top:16px;text-align:right;">' +
                 '<button type="button" class="btnMtlClose hsc-mbtn hsc-btn-secondary">Close</button>' +
                 '</div>';
@@ -8546,7 +8545,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
         function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
+        var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
         var labelStyle = 'font-size:0.88em;font-weight:500;opacity:0.75;display:block;margin-bottom:5px;';
         var fieldStyle = 'margin-bottom:14px;';
 
@@ -8575,7 +8574,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var data      = res[2];
 
                 if (!data.Success) {
-                    body.innerHTML = '<div style="color:#cc3333;padding:8px 0;">Failed to load: ' + escHtml(data.Message || 'Unknown error') + '</div>';
+                    body.innerHTML = '<div style="color:var(--hsc-danger-text);padding:8px 0;">Failed to load: ' + escHtml(data.Message || 'Unknown error') + '</div>';
                     return;
                 }
 
@@ -8644,10 +8643,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<label style="' + labelStyle + '">' + (isShows ? 'Add Show' : 'Add Movie') + '</label>' +
                     '<div style="position:relative;">' +
                     '<input type="text" class="mtlMovieSearch" autocomplete="off" style="' + inputStyle + '" placeholder="Type to search…" />' +
-                    '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:4px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.45);"></div>' +
+                    '<div class="mtlSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--plugin-popup-bg,#2a2a2a);border:1px solid var(--line-color);border-radius:6px;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:var(--hsc-shadow-float);"></div>' +
                     '</div></div>' +
 
-                    '<div class="mtlSelectedList" style="max-height:280px;overflow-y:auto;border:1px solid var(--line-color);border-radius:4px;padding:4px 8px;min-height:60px;"></div>' +
+                    '<div class="mtlSelectedList" style="max-height:280px;overflow-y:auto;border:1px solid var(--line-color);border-radius:6px;padding:4px 8px;min-height:60px;"></div>' +
                     '</div>' +
 
                     '</div>' +
@@ -8656,7 +8655,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     buildBadgePickerHtml(presetBadgeStyle, presetBadgeOptions, presetRealPoster, isShows ? 'shows' : 'movies') +
                     '</div>' +
 
-                    '<div class="mtl-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
+                    '<div class="mtl-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
                     '<div style="border-top:1px solid var(--line-color);padding-top:16px;margin-top:8px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
                     runHtml + deleteHtml +
                     '</div>';
@@ -8685,7 +8684,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             '<span style="flex:1;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escAttr(m.Name) + '">' + label + '</span>' +
                             '<button type="button" class="btnMtlUp" data-idx="' + idx + '"' + upDis + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;font-size:0.9em;line-height:1;" title="Move up">▲</button>' +
                             '<button type="button" class="btnMtlDown" data-idx="' + idx + '"' + dnDis + ' style="cursor:pointer;border:none;background:transparent;color:inherit;padding:2px 4px;opacity:0.7;font-size:0.9em;line-height:1;" title="Move down">▼</button>' +
-                            '<button type="button" class="btnMtlRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:#cc3333;padding:2px 4px;font-size:0.9em;line-height:1;" title="Remove">✕</button>' +
+                            '<button type="button" class="btnMtlRemove" data-idx="' + idx + '" style="cursor:pointer;border:none;background:transparent;color:var(--hsc-danger-text);padding:2px 4px;font-size:0.9em;line-height:1;" title="Remove">✕</button>' +
                             '</div>';
                     }).join('');
                     updateManualDirty();
@@ -8816,7 +8815,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 };
 
             }).catch(function (err) {
-                body.innerHTML = '<div style="color:#cc3333;padding:8px 0;">Failed to load: ' + escHtml(err.message || String(err)) + '</div>';
+                body.innerHTML = '<div style="color:var(--hsc-danger-text);padding:8px 0;">Failed to load: ' + escHtml(err.message || String(err)) + '</div>';
             });
 
         } else {
@@ -8873,7 +8872,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<input type="number" class="tlm-max-items" min="0" step="1" style="' + inputStyle + '" placeholder="0" />' +
                     '</div>' +
 
-                    '<div class="tlm-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:4px;"></div>' +
+                    '<div class="tlm-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:4px;"></div>' +
                     '<div style="border-top:1px solid var(--line-color);padding-top:16px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
                     runHtml + deleteHtml +
                     '</div>';
@@ -8950,7 +8949,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 };
 
             }).catch(function (err) {
-                body.innerHTML = '<div style="color:#cc3333;padding:8px 0;">Failed to load users: ' + escHtml(err.message || String(err)) + '</div>';
+                body.innerHTML = '<div style="color:var(--hsc-danger-text);padding:8px 0;">Failed to load users: ' + escHtml(err.message || String(err)) + '</div>';
             });
         }
     }
@@ -9037,7 +9036,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var isShows = contentType === 'Shows';
             // Show lists need a tag on shows (or their seasons/episodes).
             var tags = (tagsData.Tags || []).filter(function (t) { return !isShows || (t.SeriesCount || 0) > 0; });
-            var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
+            var inputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:6px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:100%;box-sizing:border-box;';
 
             var tagRowsHtml = tags.length === 0
                 ? '<p style="padding:12px 4px;color:var(--theme-text-secondary);font-size:0.88em;font-style:italic;">' + (isShows ? 'No tags on TV shows found.' : 'No tags found.') + '</p>'
@@ -9048,7 +9047,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var countText = count + (isShows ? ' shows' : ' movies');
                     var hasTopList = existingTopLists.has(sanitizeName(name).toLowerCase());
                     var badge = hasTopList
-                        ? '<span style="font-size:0.72em;background:rgba(180,140,50,0.18);color:#c9a84c;border-radius:3px;padding:1px 6px;margin-left:6px;white-space:nowrap;">top-list</span>'
+                        ? '<span class="tag-indicator toplist" style="margin-left:6px;font-size:0.72em;">top-list</span>'
                         : '';
                     return '<button type="button" class="btnSelectTag" data-name="' + escAttr(name) + '" ' +
                         'style="width:100%;cursor:pointer;background:transparent;border:none;border-bottom:1px solid var(--line-color);' +
@@ -9284,9 +9283,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         modal.renderBox(
             '<h3 style="' + _backupTitleStyle + '">Copy ' + kind.label + '</h3>' +
             '<p style="' + _backupHintStyle + '">The browser did not allow copying automatically. Click <strong>Copy</strong>, or press Ctrl+C (Cmd+C) – the text is selected.</p>' +
-            '<textarea class="txtCopySource" readonly rows="8" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:4px;padding:8px;margin-bottom:12px;"></textarea>' +
+            '<textarea class="txtCopySource" readonly rows="8" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:6px;padding:8px;margin-bottom:12px;"></textarea>' +
             sourceNoticesHtml(notices) +
-            '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+            '<div class="backup-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
             '<button type="button" class="btnCopySourceClose hsc-mbtn hsc-btn-secondary">Close</button>' +
             '<button type="button" class="btnCopySourceAgain hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">share</i>Copy</button>' +
@@ -9371,8 +9370,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<h3 style="' + _backupTitleStyle + '">Paste ' + kind.label + '</h3>' +
             '<p style="' + _backupHintStyle + '">' + opts.hint + '</p>' +
             (state.clipHint ? '<p class="paste-clip-hint" style="' + _backupHintStyle + 'color:var(--hsc-warning-text);">' + state.clipHint + '</p>' : '') +
-            '<textarea class="txtPasteSource" rows="8" placeholder=\'{"' + kind.header + '":1, …}\' style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:4px;padding:8px;margin-bottom:8px;"></textarea>' +
-            '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+            '<textarea class="txtPasteSource" rows="8" placeholder=\'{"' + kind.header + '":1, …}\' style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82em;background:transparent;color:inherit;border:1px solid var(--line-color,rgba(255,255,255,0.2));border-radius:6px;padding:8px;margin-bottom:8px;"></textarea>' +
+            '<div class="backup-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
             '<button type="button" class="btnPasteCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
             '<button type="button" class="btnPasteApply hsc-mbtn hsc-btn-primary">' + applyHtml + '</button>' +
@@ -9532,12 +9531,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '<div style="flex:0 0 auto;"><select is="emby-select" class="selImpCollSort" title="Sort"><option value="name">Name</option><option value="most">Most items</option><option value="fewest">Fewest items</option></select></div>' +
                     '<div style="flex:0 0 auto;"><select is="emby-select" class="selImpCollCount" title="Items"><option value="">All</option><option value="0-0">Empty (0)</option><option value="1-2">1–2 items</option><option value="3-10">3–10 items</option><option value="11-50">11–50 items</option><option value="51-">51+ items</option></select></div>' +
                     '</div>' : '') +
-                '<div class="imp-coll-list" style="max-height:45vh;overflow-y:auto;border:1px solid var(--line-color,rgba(255,255,255,0.12));border-radius:4px;padding:0 8px;margin-bottom:10px;">' +
+                '<div class="imp-coll-list" style="max-height:45vh;overflow-y:auto;border:1px solid var(--line-color,rgba(255,255,255,0.12));border-radius:6px;padding:0 8px;margin-bottom:10px;">' +
                     (rowsHtml || '<div style="padding:10px 4px;opacity:0.6;font-size:0.9em;">There are no collections in the library.</div>') +
                     '<div class="imp-coll-none" style="display:none;padding:10px 4px;opacity:0.6;font-size:0.9em;">No collection matches.</div>' +
                 '</div>' +
                 '<div class="imp-coll-warn" style="display:none;border:1px solid rgba(224,160,48,0.5);background:rgba(224,160,48,0.08);border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:0.88em;line-height:1.45;"></div>' +
-                '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+                '<div class="backup-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
                 '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
                 '<span class="imp-coll-count" style="margin-right:auto;font-size:0.85em;opacity:0.7;"></span>' +
                 '<button type="button" class="btnImpCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
@@ -9631,7 +9630,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             });
         }).catch(function (err) {
             modal.renderBox('<h3 style="' + _backupTitleStyle + '">Import collection</h3>' +
-                '<p style="color:#cc3333;font-size:0.9em;">The collections could not be loaded: ' + esc(err && (err.message || err.statusText) || err) + '</p>' +
+                '<p style="color:var(--hsc-danger-text);font-size:0.9em;">The collections could not be loaded: ' + esc(err && (err.message || err.statusText) || err) + '</p>' +
                 '<div style="display:flex;justify-content:flex-end;"><button type="button" class="btnImpCancel hsc-mbtn hsc-btn-secondary">Close</button></div>');
             modal.querySelector('.btnImpCancel').addEventListener('click', modal.close);
         });
@@ -9681,7 +9680,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<h3 style="' + _backupTitleStyle + '">Download Backup</h3>' +
             '<p style="' + _backupHintStyle + '">Choose what to include. Only configuration is saved – tags, collections, playlists, top-list files and images are recreated by the plugin on the next sync run.</p>' +
             '<div style="margin-bottom:16px;">' + buildBackupSectionsHtml(null, 'chkBackupSection') + '</div>' +
-            '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+            '<div class="backup-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
             '<button type="button" class="btnBackupCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
             '<button type="button" class="btnBackupDownload hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download</button>' +
@@ -9776,7 +9775,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '<p style="' + _backupHintStyle + 'margin-bottom:6px;">' + fileInfo + '</p>' +
             '<p style="' + _backupHintStyle + '">Select what to restore. Each selected section <strong>replaces</strong> the current configuration on the server immediately. Sections you leave unchecked are not touched.</p>' +
             '<div style="margin-bottom:16px;">' + buildBackupSectionsHtml(info.sections, 'chkRestoreSection') + '</div>' +
-            '<div class="backup-error" style="color:#cc3333;font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+            '<div class="backup-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
             '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
             '<button type="button" class="btnRestoreCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
             '<button type="button" class="btnRestoreApply hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">upload</i>Restore</button>' +
@@ -9885,7 +9884,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         progressEl.textContent = 'All ' + pending.length + ' librar' + (pending.length === 1 ? 'y' : 'ies') + ' created. Finishing touches continue in the background.';
                         createBtn.style.display = 'none';
                     } else {
-                        progressEl.style.color = '#cc3333';
+                        progressEl.style.color = 'var(--hsc-danger-text)';
                         progressEl.innerHTML = 'Some libraries could not be created:<br/>' + failures.map(escHtml).join('<br/>');
                         createBtn.disabled = false;
                     }
@@ -9956,9 +9955,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
             function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-            var btnStyle = 'cursor:pointer;border:none;border-radius:3px;padding:4px 12px;font-size:0.82em;font-weight:500;';
+            var btnStyle = 'cursor:pointer;border:none;border-radius:6px;padding:4px 12px;font-size:0.82em;font-weight:500;';
 
-            var searchInputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:4px;padding:5px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:400px;max-width:100%;';
+            var searchInputStyle = 'background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);border-radius:6px;padding:5px 10px;font-size:0.9em;color:var(--plugin-popup-color);width:400px;max-width:100%;';
 
             var realTagNamesLower = new Set((tagsData.Tags || []).map(function (t) { return (t.Name || '').toLowerCase(); }));
 
@@ -10050,14 +10049,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">' +
                 '<input type="text" id="tlSearch" placeholder="Search…" style="' + searchInputStyle + '" />' +
-                '<select is="emby-select" id="tlFilter" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:4px;font-size:0.9em;cursor:pointer;">' +
+                '<select is="emby-select" id="tlFilter" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:6px;font-size:0.9em;cursor:pointer;">' +
                 '<option value="all">All</option>' +
                 '<option value="manual">Manual</option>' +
                 '<option value="bytag">By tag</option>' +
                 '<option value="movies">Movies</option>' +
                 '<option value="shows">TV shows</option>' +
                 '</select>' +
-                '<select is="emby-select" id="tlSort" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:4px;font-size:0.9em;cursor:pointer;">' +
+                '<select is="emby-select" id="tlSort" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:6px;font-size:0.9em;cursor:pointer;">' +
                 '<option value="name-asc">Name A–Z</option>' +
                 '<option value="name-desc">Name Z–A</option>' +
                 '<option value="count-desc">Most items</option>' +
@@ -10260,7 +10259,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             container.addEventListener('click', container._tlClickHandler);
 
         }).catch(function (err) {
-            container.innerHTML = '<div style="color:#cc3333;padding:20px;">Failed to load: ' + err + '</div>';
+            container.innerHTML = '<div style="color:var(--hsc-danger-text);padding:20px;">Failed to load: ' + err + '</div>';
         });
     }
 
@@ -10371,7 +10370,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 renderManageSections(view);
             })
             .catch(function () {
-                listEl.innerHTML = '<p class="textMuted" style="padding:10px 0;color:#cc3333;">Failed to load sections.</p>';
+                listEl.innerHTML = '<p class="textMuted" style="padding:10px 0;color:var(--hsc-danger-text);">Failed to load sections.</p>';
             });
     }
 
@@ -10822,7 +10821,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                         <span class="control-label" style="margin-right: 10px; flex-shrink: 0;">Sort:</span>
 
-                        <select is="emby-select" id="cbSortTags" style="color:inherit; background:rgba(128,128,128,0.08); border:1px solid var(--line-color); padding:5px; border-radius:4px; font-size:0.9em; cursor:pointer; width: 80px; margin-right: 0px;">
+                        <select is="emby-select" id="cbSortTags" style="color:inherit; background:rgba(128,128,128,0.08); border:1px solid var(--line-color); padding:5px; border-radius:6px; font-size:0.9em; cursor:pointer; width: 80px; margin-right: 0px;">
                             <option value="Manual" ${savedSort === 'Manual' ? 'selected' : ''}>Manual</option>
                             <option value="Name" ${savedSort === 'Name' ? 'selected' : ''}>Name</option>
                             <option value="Active" ${savedSort === 'Active' ? 'selected' : ''}>Status</option>

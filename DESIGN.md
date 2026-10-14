@@ -56,6 +56,9 @@ colors:
   cat-movies: "#b8a28c / #806a55"
   cat-shows: "#a29dbb / #6b668a"
 
+  # Art customiser: dark tile behind the white font samples (same in both themes)
+  art-tile: "#26262b"
+
   # Log viewer (always dark, independent of theme)
   log-bg: "#1a1a1a"
   log-ink: "#d0d0d0"

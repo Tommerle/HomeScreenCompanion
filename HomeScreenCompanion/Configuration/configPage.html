@@ -35,6 +35,7 @@
             --hsc-cat-imported: #e09550;
             --hsc-cat-movies: #b8a28c;
             --hsc-cat-shows: #a29dbb;
+            --hsc-art-tile: #26262b;  /* dark tile behind white font samples, same in both themes */
         }
         html[data-plugin-theme="light"] {
             --hsc-primary-text: #3a8c34;
@@ -360,12 +361,12 @@
             align-items: center;
             gap: 12px;
             padding: 10px 12px;
-            border: 1px solid var(--line-color, rgba(255,255,255,0.12));
-            border-radius: 6px;
+            border: 1px solid var(--plugin-popup-border, var(--hsc-hairline));
+            border-radius: 8px;
             margin-bottom: 8px;
         }
         .qs-starter-text { flex: 1; min-width: 0; line-height: 1.4; }
-        .qs-starter-text small { display: block; opacity: 0.7; }
+        .qs-starter-text small { display: block; color: var(--plugin-popup-muted, inherit); }
 
         .modal-backdrop {
             position: fixed;
@@ -533,74 +534,75 @@
         /* Customise popup (generated art) */
         .artc-wrap { display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
         .artc-previewcol { flex:0 0 auto; width:300px; max-width:100%; position:sticky; top:0; }
-        .artc-preview { position:relative; border-radius:6px; overflow:hidden; background:rgba(128,128,128,0.15); }
+        .artc-preview { position:relative; border-radius:8px; overflow:hidden; background:rgba(128,128,128,0.15); }
         .artc-preview.artc-poster { width:200px; height:300px; }
         .artc-preview.artc-bg { width:300px; height:169px; }
         .artc-preview.artc-card43 { width:300px; height:225px; }
         .artc-preview img { width:100%; height:100%; object-fit:cover; display:block; }
-        .artc-busy { position:absolute; left:6px; bottom:6px; font-size:0.75em; padding:2px 8px; border-radius:10px; background:rgba(0,0,0,0.6); color:#fff; }
+        .artc-busy { position:absolute; left:6px; bottom:6px; font-size:0.75em; font-weight:500; padding:2px 8px; border-radius:9999px; background:rgba(0,0,0,0.6); color:#fff; }
         .artc-fieldscol { flex:1 1 380px; min-width:0; }
-        .artc-section { font-weight:bold; font-size:0.95em; margin:14px 0 6px; opacity:0.85; }
+        .artc-section { font-weight:600; font-size:0.95em; margin:16px 0 8px; }
         .artc-section:first-child { margin-top:0; }
         .artc-field { margin-bottom:10px; }
-        .artc-label { font-size:0.85em; opacity:0.75; margin-bottom:4px; }
-        .artc-hint { font-size:0.78em; opacity:0.6; margin-top:3px; font-style:italic; }
-        .artc-seg { display:inline-flex; flex-wrap:nowrap; max-width:100%; gap:0; border:1px solid rgba(128,128,128,0.35); border-radius:4px; overflow:hidden; vertical-align:top; }
+        .artc-label { font-size:0.88em; font-weight:500; color:var(--plugin-popup-muted, inherit); margin-bottom:4px; }
+        .artc-hint { font-size:0.8em; color:var(--plugin-popup-muted, inherit); margin-top:4px; }
+        .artc-seg { display:inline-flex; flex-wrap:nowrap; max-width:100%; gap:2px; padding:2px; border:1px solid var(--plugin-popup-border, var(--hsc-hairline)); border-radius:8px; background:var(--hsc-tint-1); overflow:hidden; vertical-align:top; }
         .artc-segbtn { white-space:nowrap; }
         /* Longer option lists: an even grid of equal-width buttons, each with its own border (wraps cleanly). */
-        .artc-seg.artc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:5px; border:none; border-radius:0; overflow:visible; width:100%; }
-        .artc-seg.artc-grid .artc-segbtn { border:1px solid rgba(128,128,128,0.35); border-radius:4px; padding:6px 8px; }
-        .artc-segbtn { cursor:pointer; background:transparent; border:none; border-right:1px solid rgba(128,128,128,0.35); color:inherit; padding:5px 12px; font-size:0.85em; }
-        .artc-segbtn:last-child { border-right:none; }
-        .artc-segcustom { display:inline-flex; align-items:center; gap:6px; margin-left:8px; vertical-align:top; font-size:0.85em; }
-        .artc-custom { width:64px; padding:4px 6px; font-size:inherit; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid rgba(128,128,128,0.35); border-radius:4px; }
-        .artc-custom.artc-on { border-color:#52B54B; box-shadow:0 0 0 1px #52B54B inset; }
-        .artc-segbtn.artc-on { background:#52B54B; color:#fff; }
+        .artc-seg.artc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:6px; padding:0; background:transparent; border:none; border-radius:0; overflow:visible; width:100%; }
+        .artc-seg.artc-grid .artc-segbtn { border:1px solid var(--plugin-popup-border, var(--hsc-hairline-strong)); border-radius:6px; padding:6px 8px; }
+        .artc-segbtn { cursor:pointer; background:transparent; border:none; border-radius:6px; color:var(--plugin-popup-muted, inherit); padding:5px 12px; font-family:inherit; font-size:0.85em; font-weight:500; transition:background-color 0.15s, color 0.15s; }
+        .artc-segbtn:hover { color:var(--plugin-popup-color, inherit); background:var(--plugin-popup-hover, var(--hsc-tint-2)); }
+                .artc-segcustom { display:inline-flex; align-items:center; gap:6px; margin-left:8px; vertical-align:top; font-size:0.85em; }
+        .artc-custom { width:64px; padding:4px 6px; font-size:inherit; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border, var(--hsc-hairline-strong)); border-radius:6px; }
+        .artc-custom.artc-on { border-color:var(--hsc-primary); box-shadow:0 0 0 1px var(--hsc-primary) inset; }
+        .artc-segbtn.artc-on { background:var(--plugin-popup-bg2, var(--theme-background-level3)); color:var(--plugin-popup-color, inherit); box-shadow:inset 0 0 0 1px var(--plugin-popup-border, var(--hsc-hairline)); }
+        .artc-seg.artc-grid .artc-segbtn.artc-on { border-color:var(--hsc-primary); box-shadow:none; }
         .artc-fonts { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px; }
         .artc-fontgroup { grid-column:1 / -1; font-size:0.75em; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; opacity:0.7; margin-top:6px; }
         .artc-fontgroup:first-child { margin-top:0; }
-        .artc-font { position:relative; cursor:pointer; background:#26262b; border:2px solid rgba(128,128,128,0.35); border-radius:5px; padding:4px 6px; min-height:40px; color:#fff; display:flex; align-items:center; justify-content:center; }
+        .artc-font { position:relative; cursor:pointer; background:var(--hsc-art-tile); border:2px solid rgba(128,128,128,0.35); border-radius:6px; padding:4px 6px; min-height:40px; color:#fff; display:flex; align-items:center; justify-content:center; }
         .artc-font img { width:100%; height:auto; display:block; }
         /* Selected font: the tile keeps its look (sample readable) with a thick green border and a green check. */
-        .artc-font.artc-on { border-color:#52B54B; box-shadow:0 0 0 2px #52B54B; }
-        .artc-font.artc-on::after { content:'\2713'; position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#52B54B; color:#fff; font-size:13px; font-weight:bold; line-height:20px; text-align:center; box-shadow:0 0 0 2px #fff; z-index:1; }
+        .artc-font.artc-on { border-color:var(--hsc-primary); box-shadow:0 0 0 1px var(--hsc-primary); }
+        .artc-font.artc-on::after { content:'\2713'; position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:var(--hsc-primary); color:#fff; font-size:13px; font-weight:600; line-height:20px; text-align:center; box-shadow:0 0 0 2px var(--plugin-popup-bg, #fff); z-index:1; }
         .artc-fontname { font-size:0.85em; }
         /* Badge shape tiles: the preview's drawing with that shape (rank 7, the current settings), its name underneath. */
         .artc-shapes { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px; }
-        .artc-shape { cursor:pointer; background:transparent; border:2px solid rgba(128,128,128,0.35); border-radius:6px; padding:4px; color:inherit; display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+        .artc-shape { cursor:pointer; background:transparent; border:2px solid rgba(128,128,128,0.35); border-radius:8px; padding:4px; color:inherit; display:flex; flex-direction:column; align-items:stretch; gap:4px; }
         .artc-shape img, .artc-shape-noimg { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; border-radius:3px; background:rgba(128,128,128,0.2); }
         .artc-shapes.artc-shapes-land { grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); }
         .artc-shapes.artc-shapes-land .artc-shape img { aspect-ratio:16/9; }
         .artc-shape-name { font-size:0.75em; line-height:1.2; text-align:center; min-height:2.4em; display:flex; align-items:center; justify-content:center; }
-        .artc-shape.artc-on { border-color:#52B54B; box-shadow:0 0 0 1px #52B54B; }
-        .artc-shape.artc-on .artc-shape-name { color:#52B54B; font-weight:600; }
+        .artc-shape.artc-on { border-color:var(--hsc-primary); box-shadow:0 0 0 1px var(--hsc-primary); }
+        .artc-shape.artc-on .artc-shape-name { color:var(--hsc-primary-text); font-weight:600; }
         /* Badge position: a mini poster with a dot at each valid spot. */
         .artc-posrow { display:flex; align-items:center; gap:12px; }
         .artc-posposter { position:relative; width:60px; height:90px; border:2px solid rgba(128,128,128,0.55); border-radius:4px; background:rgba(128,128,128,0.12); flex:0 0 auto; }
         .artc-posdot { position:absolute; cursor:pointer; width:22px; height:22px; margin:0; padding:0; border:none; background:transparent; display:flex; align-items:center; justify-content:center; }
         .artc-posdot span { width:10px; height:10px; border-radius:50%; background:rgba(128,128,128,0.7); }
-        .artc-posdot.artc-on span { background:#52B54B; width:14px; height:14px; }
+        .artc-posdot.artc-on span { background:var(--hsc-primary); width:14px; height:14px; }
         .artc-pos-tl { left:2px; top:2px; } .artc-pos-tr { right:2px; top:2px; } .artc-pos-bl { left:2px; bottom:2px; } .artc-pos-br { right:2px; bottom:2px; } .artc-pos-bc { left:calc(50% - 11px); bottom:2px; }
         .artc-posname { font-size:0.85em; opacity:0.85; }
         .artc-pos { display:grid; grid-template-columns:repeat(3, 26px); gap:4px; padding:6px; border:1px solid rgba(128,128,128,0.35); border-radius:4px; width:max-content; }
         .artc-dot { cursor:pointer; width:26px; height:20px; background:transparent; border:none; display:flex; align-items:center; justify-content:center; padding:0; }
         .artc-dot span { width:9px; height:9px; border-radius:50%; background:rgba(128,128,128,0.55); }
-        .artc-dot.artc-on span { background:#52B54B; width:13px; height:13px; }
+        .artc-dot.artc-on span { background:var(--hsc-primary); width:13px; height:13px; }
         /* Top 10 tile layout: the tile with the number area, the poster card and a spot per place an extra can go. */
         .artc-lay { position:relative; width:240px; border:2px solid rgba(128,128,128,0.55); border-radius:4px; background:rgba(128,128,128,0.12); overflow:hidden; }
         .artc-lay-num { position:absolute; left:4%; bottom:2%; font:900 92px/1 Impact, sans-serif; color:transparent; -webkit-text-stroke:1.5px rgba(128,128,128,0.6); pointer-events:none; }
         .artc-lay-card { position:absolute; border:2px solid rgba(128,128,128,0.6); border-radius:4px; background:rgba(128,128,128,0.22); box-sizing:border-box; }
         .artc-layspot { position:absolute; cursor:pointer; min-width:22px; height:20px; padding:0 4px; margin:0; border:1px dashed rgba(128,128,128,0.9); border-radius:3px; background:transparent; color:#fff; font-size:10px; line-height:1.1; display:flex; flex-direction:column; align-items:center; justify-content:center; white-space:nowrap; box-sizing:border-box; }
         .artc-layspot.artc-full { border:1px solid var(--hsc-primary-pressed); background:var(--hsc-primary-pressed); height:auto; min-height:20px; padding:2px 4px; }
-        .artc-layspot.artc-on { background:#52B54B; border-color:#52B54B; box-shadow:0 0 0 2px #fff, 0 0 0 3px #52B54B; }
+        .artc-layspot.artc-on { background:var(--hsc-primary); border-color:var(--hsc-primary); box-shadow:0 0 0 2px var(--plugin-popup-bg, #fff), 0 0 0 3px var(--hsc-primary); }
         /* Real posters: Emby's chip (green circle) in the corner, the top-right spot beside it. */
-        .artc-posposter .artc-pos-emby { position:absolute; z-index:2; right:2px; top:3px; font-size:16px; line-height:20px; font-weight:900; color:#52B54B; pointer-events:none; }
+        .artc-posposter .artc-pos-emby { position:absolute; z-index:2; right:2px; top:3px; font-size:16px; line-height:20px; font-weight:900; color:var(--hsc-primary); pointer-events:none; }
         .artc-posposter.artc-emby .artc-pos-tr { right:12px; }
-        .artc-lay-emby { position:absolute; z-index:2; right:2px; top:2px; height:16px; padding:0 5px; border-radius:8px; background:#52B54B; color:#fff; font-size:9px; line-height:16px; font-weight:600; pointer-events:none; }
+        .artc-lay-emby { position:absolute; z-index:2; right:2px; top:2px; height:16px; padding:0 5px; border-radius:8px; background:var(--hsc-primary); color:#fff; font-size:9px; line-height:16px; font-weight:600; pointer-events:none; }
         .artc-colours { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
         .artc-swatch { cursor:pointer; width:24px; height:24px; border-radius:50%; border:2px solid rgba(128,128,128,0.5); padding:0; }
-        .artc-swatch.artc-on { border-color:#52B54B; box-shadow:0 0 0 2px #52B54B; }
-        .artc-hex { width:82px; padding:4px 6px; font-family:monospace; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2)); border-radius:3px; }
+        .artc-swatch.artc-on { border-color:var(--hsc-primary); box-shadow:0 0 0 2px var(--hsc-primary); }
+        .artc-hex { width:82px; padding:4px 6px; font-family:ui-monospace, Consolas, Menlo, monospace; color:inherit; background:var(--plugin-input-bg,rgba(255,255,255,0.08)); border:1px solid var(--plugin-input-border,rgba(255,255,255,0.2)); border-radius:6px; }
         .artc-darken { width:100%; max-width:320px; }
         @media (max-width: 640px) { .artc-previewcol { position:static; } }
 
