@@ -391,11 +391,16 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             cursor: grabbing;
         }
 
-        .tag-row.dragging {
-            opacity: 0.4 !important;
-            border: 1px dashed var(--hsc-hairline-strong) !important;
-            background: var(--theme-background-level1) !important;
+        /* Manual reordering (makeRowSortable): the moving row floats, the page does not select text */
+        .drag-handle { touch-action: none; border-radius: 6px; }
+        .drag-handle:hover { color: var(--theme-text-primary); }
+        .tag-row.hsc-sorting, .man-section-row.hsc-sorting {
+            position: relative;
+            z-index: 2;
+            border-color: var(--hsc-primary);
+            box-shadow: var(--hsc-shadow-float);
         }
+        html.hsc-sorting-active, html.hsc-sorting-active * { cursor: grabbing !important; user-select: none !important; }
 
         .sort-placeholder {
             height: 40px;
@@ -888,18 +893,140 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             </div>`;
     }
 
-    function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.tag-row:not(.dragging)')];
+    // Manual reordering of a list by its drag handle. Pointer events cover mouse, touch and pen with
+    // one code path (no HTML5 drag-and-drop): the row moves through the list live while the pointer
+    // moves, the scroll area scrolls at its edges, Esc puts the row back. The focused handle also
+    // moves its row with ArrowUp / ArrowDown. Rows hidden by a filter keep their place.
+    //   opts.list()      -> the list element (the rows' parent)
+    //   opts.rowSelector -> selector of the sortable rows (direct children of the list)
+    //   opts.canDrag()   -> false while reordering is not allowed (e.g. another sort order)
+    //   opts.onStart()   -> optional, called when a drag starts
+    //   opts.onMoved()   -> called once when the drag ended with the row in a new place
+    function makeRowSortable(row, handle, opts) {
+        if (!row || !handle) return;
+        handle.setAttribute('tabindex', '0');
+        handle.setAttribute('role', 'button');
+        handle.setAttribute('aria-label', 'Drag to reorder (or use the arrow keys)');
 
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = y - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
+        function visibleRows(list) {
+            return Array.prototype.filter.call(list.children, function (el) {
+                return el.matches(opts.rowSelector) && el.offsetParent !== null;
+            });
+        }
+        function scrollParent(el) {
+            for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                var oy = getComputedStyle(p).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
             }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
+            return document.scrollingElement || document.documentElement;
+        }
+        function finishMove(changed) {
+            row.classList.add('just-moved');
+            setTimeout(function () { row.classList.remove('just-moved'); }, 2000);
+            if (changed && opts.onMoved) opts.onMoved();
+        }
+
+        handle.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0 || !opts.canDrag()) return;
+            var list = opts.list();
+            if (!list) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (opts.onStart) opts.onStart();
+
+            var startNext = row.nextElementSibling;
+            var scroller = scrollParent(list);
+            var pointerY = e.clientY;
+            var rafId = null, done = false;
+
+            row.classList.add('hsc-sorting');
+            document.documentElement.classList.add('hsc-sorting-active');
+            try { handle.setPointerCapture(e.pointerId); } catch (err) { }
+
+            // Put the row before the first other visible row whose middle is below the pointer.
+            function place() {
+                var rows = visibleRows(list).filter(function (r) { return r !== row; });
+                var before = null;
+                for (var i = 0; i < rows.length; i++) {
+                    var b = rows[i].getBoundingClientRect();
+                    if (pointerY < b.top + b.height / 2) { before = rows[i]; break; }
+                }
+                if (before) { if (row.nextElementSibling !== before) list.insertBefore(row, before); }
+                else if (rows.length) {
+                    var last = rows[rows.length - 1];
+                    if (last.nextElementSibling !== row) list.insertBefore(row, last.nextElementSibling);
+                }
+            }
+            // Scroll while the pointer is near the top or bottom edge of the visible area.
+            function tick() {
+                rafId = null;
+                if (done) return;
+                var top = 0, bottom = window.innerHeight;
+                if (scroller !== document.scrollingElement && scroller !== document.documentElement) {
+                    var sb = scroller.getBoundingClientRect();
+                    top = Math.max(top, sb.top); bottom = Math.min(bottom, sb.bottom);
+                }
+                var edge = 60, step = 0;
+                if (pointerY < top + edge) step = -Math.ceil((top + edge - pointerY) / 4);
+                else if (pointerY > bottom - edge) step = Math.ceil((pointerY - (bottom - edge)) / 4);
+                if (step) {
+                    var before = scroller.scrollTop;
+                    scroller.scrollTop += step;
+                    if (scroller.scrollTop !== before) place();
+                    rafId = requestAnimationFrame(tick);
+                }
+            }
+            function onMove(ev) {
+                if (ev.pointerId !== e.pointerId) return;
+                ev.preventDefault();
+                pointerY = ev.clientY;
+                place();
+                if (!rafId) rafId = requestAnimationFrame(tick);
+            }
+            function end(commit) {
+                if (done) return;
+                done = true;
+                if (rafId) cancelAnimationFrame(rafId);
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                document.removeEventListener('pointercancel', onCancel);
+                handle.removeEventListener('lostpointercapture', onUp);
+                document.removeEventListener('keydown', onKey, true);
+                try { handle.releasePointerCapture(e.pointerId); } catch (err) { }
+                row.classList.remove('hsc-sorting');
+                document.documentElement.classList.remove('hsc-sorting-active');
+                if (!commit) list.insertBefore(row, startNext && startNext.parentNode === list ? startNext : null);
+                finishMove(commit && row.nextElementSibling !== startNext);
+            }
+            function onUp(ev) { if (ev.pointerId === e.pointerId) end(true); }
+            function onCancel(ev) { if (ev.pointerId === e.pointerId) end(false); }
+            function onKey(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); end(false); } }
+
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onCancel);
+            handle.addEventListener('lostpointercapture', onUp);
+            document.addEventListener('keydown', onKey, true);
+        });
+
+        // A click on the handle must not open or close the row.
+        handle.addEventListener('click', function (e) { e.stopPropagation(); });
+
+        handle.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!opts.canDrag()) return;
+            var list = opts.list();
+            var rows = visibleRows(list);
+            var i = rows.indexOf(row);
+            if (e.key === 'ArrowUp' && i > 0) list.insertBefore(row, rows[i - 1]);
+            else if (e.key === 'ArrowDown' && i >= 0 && i < rows.length - 1) list.insertBefore(row, rows[i + 1].nextElementSibling);
+            else return;
+            handle.focus();
+            row.scrollIntoView({ block: 'nearest' });
+            finishMove(true);
+        });
     }
 
     // The source card's current (unsaved) settings, as the TagConfig the server would save.
@@ -4051,61 +4178,18 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         });
         row.querySelector('.txtTagName').addEventListener('input', updateTagTitle);
 
-        var handle = row.querySelector('.drag-handle');
-
-        handle.addEventListener('mousedown', () => {
-            if (localStorage.getItem('HomeScreenCompanion_SortBy') === 'Manual') {
-                row.setAttribute('draggable', 'true');
-            }
+        // Manual order: drag the handle (mouse, touch or pen) or use its arrow keys.
+        makeRowSortable(row, row.querySelector('.drag-handle'), {
+            list: function () { return row.parentElement; },
+            rowSelector: '.tag-row',
+            canDrag: function () { return !!row.parentElement && !row.parentElement.classList.contains('sort-hidden'); },
+            onStart: function () {
+                // Closed rows are easier to move past each other.
+                row.parentElement.querySelectorAll('.tag-body').forEach(function (b) { b.style.display = 'none'; });
+                row.parentElement.querySelectorAll('.expand-icon').forEach(function (i) { i.innerText = 'expand_more'; });
+            },
+            onMoved: function () { setTimeout(checkFormState, 0); }
         });
-
-        handle.addEventListener('mouseup', () => {
-            row.setAttribute('draggable', 'false');
-        });
-
-        handle.addEventListener('touchstart', (e) => {
-            if (localStorage.getItem('HomeScreenCompanion_SortBy') !== 'Manual') return;
-            e.preventDefault();
-            var tagContainer = row.closest('#tagListContainer') || row.parentElement;
-            document.querySelectorAll('.tag-body').forEach(b => b.style.display = 'none');
-            document.querySelectorAll('.expand-icon').forEach(i => i.innerText = 'expand_more');
-            row.classList.add('dragging');
-
-            const onTouchMove = (ev) => {
-                ev.preventDefault();
-                const touch = ev.touches[0];
-                const afterEl = getDragAfterElement(tagContainer, touch.clientY);
-                let ph = tagContainer.querySelector('.sort-placeholder');
-                if (!ph) { ph = document.createElement('div'); ph.className = 'sort-placeholder'; }
-                if (afterEl == null) { if (ph.nextElementSibling !== null) tagContainer.appendChild(ph); }
-                else { if (ph.nextElementSibling !== afterEl) tagContainer.insertBefore(ph, afterEl); }
-            };
-
-            const onTouchEnd = () => {
-                document.removeEventListener('touchmove', onTouchMove);
-                document.removeEventListener('touchend', onTouchEnd);
-                document.removeEventListener('touchcancel', onTouchCancel);
-                row.classList.remove('dragging');
-                const ph = tagContainer.querySelector('.sort-placeholder');
-                if (ph) { tagContainer.insertBefore(row, ph); ph.remove(); }
-                row.classList.add('just-moved');
-                setTimeout(() => { row.classList.remove('just-moved'); }, 2000);
-                setTimeout(checkFormState, 0);
-            };
-
-            const onTouchCancel = () => {
-                document.removeEventListener('touchmove', onTouchMove);
-                document.removeEventListener('touchend', onTouchEnd);
-                document.removeEventListener('touchcancel', onTouchCancel);
-                row.classList.remove('dragging');
-                const ph = tagContainer.querySelector('.sort-placeholder');
-                if (ph) ph.remove();
-            };
-
-            document.addEventListener('touchmove', onTouchMove, { passive: false });
-            document.addEventListener('touchend', onTouchEnd);
-            document.addEventListener('touchcancel', onTouchCancel);
-        }, { passive: false });
 
         row.querySelector('.btnDuplicateRow').addEventListener('click', () => {
             var config = markAsCopy(readRowAsConfig(row));
@@ -4116,36 +4200,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         row.querySelector('.btnCopySourceRow').addEventListener('click', () => {
             copySourceToClipboard(row);
-        });
-
-        row.addEventListener('dragstart', (e) => {
-            if (localStorage.getItem('HomeScreenCompanion_SortBy') !== 'Manual') { e.preventDefault(); return; }
-
-            document.querySelectorAll('.tag-body').forEach(b => b.style.display = 'none');
-            document.querySelectorAll('.expand-icon').forEach(i => i.innerText = 'expand_more');
-
-            row.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', '');
-
-            setTimeout(() => {
-                row.style.display = 'none';
-            }, 0);
-        });
-
-        row.addEventListener('dragend', () => {
-            row.style.display = '';
-
-            row.classList.remove('dragging');
-            row.setAttribute('draggable', 'false');
-
-            var existingPlaceholder = document.querySelector('.sort-placeholder');
-            if (existingPlaceholder) existingPlaceholder.remove();
-
-            row.classList.add('just-moved');
-            setTimeout(() => { row.classList.remove('just-moved'); }, 2000);
-
-            setTimeout(checkFormState, 0);
         });
 
         row.querySelectorAll('.coll-style-picker').forEach(function (picker) {
@@ -10606,47 +10660,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 }
             }, { signal: _signal });
             
-            var container = view.querySelector('#tagListContainer');
-
             if (isFirstVisit) {
-                if (container) {
-                    let rafId = null;
-                    container.addEventListener('dragover', (e) => {
-                        if (localStorage.getItem('HomeScreenCompanion_SortBy') !== 'Manual') return;
-                        e.preventDefault();
-                        if (rafId) return;
-                        rafId = requestAnimationFrame(() => {
-                            const draggingRow = document.querySelector('.tag-row.dragging');
-                            if (!draggingRow) { rafId = null; return; }
-                            const afterElement = getDragAfterElement(container, e.clientY);
-                            var placeholder = document.querySelector('.sort-placeholder');
-                            if (!placeholder) {
-                                placeholder = document.createElement('div');
-                                placeholder.className = 'sort-placeholder';
-                            }
-                            if (afterElement == null) {
-                                if (placeholder.nextElementSibling !== null) container.appendChild(placeholder);
-                            } else {
-                                if (placeholder.nextElementSibling !== afterElement) container.insertBefore(placeholder, afterElement);
-                            }
-                            rafId = null;
-                        });
-                    });
-                    container.addEventListener('drop', (e) => {
-                        if (localStorage.getItem('HomeScreenCompanion_SortBy') !== 'Manual') return;
-                        e.preventDefault();
-                        const draggingRow = document.querySelector('.tag-row.dragging');
-                        const placeholder = document.querySelector('.sort-placeholder');
-                        if (draggingRow && placeholder) {
-                            container.insertBefore(draggingRow, placeholder);
-                            placeholder.remove();
-                            changeHandler();
-                        }
-                    });
-                }
-
-
-
                 var logOverlay = view.querySelector('#logModalOverlay');
                 var helpOverlay = view.querySelector('#helpModalOverlay');
                 var bugOverlay = view.querySelector('#bugReportModalOverlay');
