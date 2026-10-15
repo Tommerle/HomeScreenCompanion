@@ -943,18 +943,20 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             document.documentElement.classList.add('hsc-sorting-active');
             try { handle.setPointerCapture(e.pointerId); } catch (err) { }
 
-            // Put the row before the first other visible row whose middle is below the pointer.
+            // Swap the row with its visible neighbour while the pointer is past that neighbour's middle.
+            // The neighbour is the one that moves: moving the dragged row itself would detach the
+            // handle and end its pointer capture (and with it the drag).
+            function neighbour(dir) {
+                var rows = visibleRows(list), i = rows.indexOf(row);
+                return rows[i + dir] || null;
+            }
+            function mid(el) { var b = el.getBoundingClientRect(); return b.top + b.height / 2; }
             function place() {
-                var rows = visibleRows(list).filter(function (r) { return r !== row; });
-                var before = null;
-                for (var i = 0; i < rows.length; i++) {
-                    var b = rows[i].getBoundingClientRect();
-                    if (pointerY < b.top + b.height / 2) { before = rows[i]; break; }
-                }
-                if (before) { if (row.nextElementSibling !== before) list.insertBefore(row, before); }
-                else if (rows.length) {
-                    var last = rows[rows.length - 1];
-                    if (last.nextElementSibling !== row) list.insertBefore(row, last.nextElementSibling);
+                for (var guard = 0; guard < 500; guard++) {
+                    var prev = neighbour(-1), next = neighbour(1);
+                    if (prev && pointerY < mid(prev)) list.insertBefore(prev, row.nextElementSibling);
+                    else if (next && pointerY > mid(next)) list.insertBefore(next, row);
+                    else break;
                 }
             }
             // Scroll while the pointer is near the top or bottom edge of the visible area.
@@ -1020,10 +1022,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             var list = opts.list();
             var rows = visibleRows(list);
             var i = rows.indexOf(row);
-            if (e.key === 'ArrowUp' && i > 0) list.insertBefore(row, rows[i - 1]);
-            else if (e.key === 'ArrowDown' && i >= 0 && i < rows.length - 1) list.insertBefore(row, rows[i + 1].nextElementSibling);
+            // Move the neighbour, not the row: the focused handle stays in place in the DOM.
+            if (e.key === 'ArrowUp' && i > 0) list.insertBefore(rows[i - 1], row.nextElementSibling);
+            else if (e.key === 'ArrowDown' && i >= 0 && i < rows.length - 1) list.insertBefore(rows[i + 1], row);
             else return;
-            handle.focus();
             row.scrollIntoView({ block: 'nearest' });
             finishMove(true);
         });
@@ -4777,8 +4779,31 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         });
     }
 
+    // A source row's place in the manual order: the order remembered by sortRows, else its place
+    // in the saved config. A new row (no saved place) counts as first, where it was added.
+    function manualRank(row) {
+        if (row.dataset.manualOrder != null) return +row.dataset.manualOrder;
+        var i = parseInt(row.dataset.index, 10);
+        return isNaN(i) || i === 9999 ? -1 : i;
+    }
+
+    // The source rows in their manual order, whatever order the list shows (Name, Active, ...),
+    // so saving never replaces the manual order with a display sort.
+    function sourceRowsInManualOrder(view) {
+        var container = view.querySelector('#tagListContainer');
+        var rows = container ? Array.from(container.querySelectorAll('.tag-row')) : [];
+        if (container && container.classList.contains('sort-hidden'))
+            rows = rows.map(function (r, i) { return { r: r, i: i }; })
+                .sort(function (a, b) { return (manualRank(a.r) - manualRank(b.r)) || (a.i - b.i); })
+                .map(function (x) { return x.r; });
+        return rows;
+    }
+
     function sortRows(container, criteria) {
         var rows = Array.from(container.querySelectorAll('.tag-row'));
+        // While the list is in manual order its DOM order is the user's order (moved and new rows
+        // included, saved or not): remember it, so switching back to Manual restores it.
+        if (!container.classList.contains('sort-hidden')) rows.forEach(function (r, i) { r.dataset.manualOrder = i; });
 
         rows.sort((a, b) => {
             if (criteria === 'Name') {
@@ -4796,7 +4821,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var db = new Date(b.dataset.lastModified || 0).getTime();
                 return db - da;
             }
-            return parseInt(a.dataset.index) - parseInt(b.dataset.index);
+            return manualRank(a) - manualRank(b);
         });
 
         rows.forEach(row => container.appendChild(row));
@@ -5748,7 +5773,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
     function getUiConfig(view, forComparison) {
         var flatTags = [];
-        view.querySelectorAll('.tag-row').forEach(row => { flatTags.push.apply(flatTags, rowToFlatTags(row, forComparison)); });
+        var sourceRows = sourceRowsInManualOrder(view);
+        var otherRows = Array.from(view.querySelectorAll('.tag-row')).filter(function (r) { return sourceRows.indexOf(r) < 0; });
+        sourceRows.concat(otherRows).forEach(row => { flatTags.push.apply(flatTags, rowToFlatTags(row, forComparison)); });
 
         var hscEnabled      = view.querySelector('#chkHscEnabled');
         var hscSource       = view.querySelector('#selHscSourceUser');
