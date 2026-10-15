@@ -1,6 +1,9 @@
 # 🎬 Home Screen Companion for Emby
 
-<img width="747" height="420" alt="HSCv2" src="https://github.com/user-attachments/assets/c5c99ee4-f90b-4aad-9a74-70eaf4f64836" />
+
+
+https://github.com/user-attachments/assets/74f6d998-6b59-42b6-b335-261ca6cc6645
+
 
 
 
@@ -111,16 +114,62 @@ Manual install:
 ### Screenshots
 
 <details>
-<summary>Click to view screenshots</summary>
+<summary>Expand to view screenshots</summary>
 
-<img width="768" alt="main" src="https://github.com/user-attachments/assets/efc94da5-030a-4380-ab07-5ec9e5ff7151" />
-<img width="740" alt="lmi" src="https://github.com/user-attachments/assets/f2e0f1f4-fdc0-4eea-b9ef-a1b2acd14611" />
-<img width="743" alt="schedule" src="https://github.com/user-attachments/assets/f9efe07b-5974-4485-bbd7-381e6bd071dd" />
-<img width="728" alt="home screen section" src="https://github.com/user-attachments/assets/8dc7b72b-4272-4527-b505-44fa155d4692" />
-<img width="737" alt="sync" src="https://github.com/user-attachments/assets/29103ea5-fce7-47be-9f75-99ee38b58975" />
+Group overview
+<img width="1440" height="900" alt="01" src="https://github.com/user-attachments/assets/44592513-e200-4234-85c2-e010825f3175" />
+
+External source example setup
+<img width="902" height="633" alt="02" src="https://github.com/user-attachments/assets/4dcd1345-b116-4435-b82a-acc056a41bb6" />
+
+External source test
+<img width="1440" height="900" alt="03" src="https://github.com/user-attachments/assets/2b74e94e-5562-43ef-b60d-7b77faae592a" />
+
+AI list example setup
+<img width="902" height="1003" alt="04" src="https://github.com/user-attachments/assets/7dc3cf0c-61c8-4afd-8bf1-b9e2a23890a8" />
+
+Smart Playlist example setup
+<img width="902" height="875" alt="05" src="https://github.com/user-attachments/assets/a0de75d6-0403-42d4-ab9a-4c99c33ad92b" />
+
+Collection creation example
+<img width="902" height="2168" alt="06" src="https://github.com/user-attachments/assets/378e107c-daea-4d31-b960-2a303dec777b" />
+
+Schedule example
+<img width="902" height="578" alt="07" src="https://github.com/user-attachments/assets/b91c2dd7-5616-452b-8042-3561f03c68c8" />
+
+Home screen section creation example
+<img width="902" height="1284" alt="08" src="https://github.com/user-attachments/assets/b7f2e3a3-639a-461c-879d-05b976e698c1" />
+
+Top-list settings page
+<img width="1440" height="900" alt="09" src="https://github.com/user-attachments/assets/fb7a374c-5840-405b-a5ed-5f87763d4174" />
+
+Top-list creation example
+<img width="902" height="804" alt="10" src="https://github.com/user-attachments/assets/df55b486-1fb0-4484-b193-3c41315e8712" />
+
+Top 10 poster customize
+<img width="1440" height="900" alt="11" src="https://github.com/user-attachments/assets/42ab2b6b-6602-4879-8924-284894bd47a3" />
+
+Home Screen Section sorting
+<img width="1440" height="900" alt="12" src="https://github.com/user-attachments/assets/73ffd033-6e91-4bc6-acf8-568918723863" />
+
+Cleanup function
+<img width="1440" height="900" alt="13" src="https://github.com/user-attachments/assets/6c84970e-1eb1-496a-8eee-1bee67b4761f" />
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 </details>
 
 ---
 
-*Disclaimer: This plugin is not affiliated with Emby, Trakt, MDBList, OpenAI, Google, or Ollama. This plugin is heavily vibe-coded, tested on my own server — use at your own risk.*
+*Disclaimer: This plugin is not affiliated with Emby, Trakt, MDBList, OpenAI, Google, Anthropic or Ollama. This plugin is heavily vibe-coded, tested on my own server — use at your own risk.*
