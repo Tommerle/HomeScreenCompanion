@@ -11486,9 +11486,21 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             syncMenu.classList.toggle('open', isOpen);
         });
 
+        // Other: opens the less used runs above it, inside the open menu.
+        var otherBtn = view.querySelector('#btnDialOther'), otherGroup = view.querySelector('#runDialOther');
+        function setOtherOpen(open) {
+            otherGroup.classList.toggle('open', open);
+            otherBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        otherBtn.addEventListener('click', function (e) {
+            e.stopPropagation(); // a click outside the menu closes it
+            setOtherOpen(!otherGroup.classList.contains('open'));
+        });
+
         function closeSpeedDial() {
             speedDial.classList.remove('open');
             syncMenu.classList.remove('open');
+            setOtherOpen(false);
         }
         // Starts one of HSC's tasks through the plugin, so the tasks hidden from Emby's Scheduled
         // Tasks (which Emby's own task list may leave out) can be run here too.

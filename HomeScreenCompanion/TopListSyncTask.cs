@@ -41,10 +41,10 @@ namespace HomeScreenCompanion
 
         public string Key => "TopListSyncTask";
         public string Name => "Top-list section sync";
-        public string Description => "Run after manually creating a new library. Ensures each top-list home section only shows items from its own library, and that regular home sections never include top-list libraries.";
+        public string Description => "Runs by itself when a new library is created in Emby. Ensures each top-list home section only shows items from its own library, and that regular home sections never include top-list libraries.";
         public string Category => "Home Screen Companion";
 
-        // Not listed in Emby's Scheduled Tasks (part of the Tag & Collection Sync; also queued when a top-list is saved, and in the Run menu). It still runs on its triggers.
+        // Not listed in Emby's Scheduled Tasks (part of the Tag & Collection Sync; also queued when a top-list is saved or a new library appears (NewLibraryWatcher), and in the Run menu). It still runs on its triggers.
         public bool IsHidden => true;
         public bool IsEnabled => true;
         public bool IsLogged => true;

@@ -1147,6 +1147,39 @@
         .run-dial-item:hover {
             background: var(--plugin-popup-hover, rgba(128,128,128,0.15));
         }
+        .run-dial-sub { display: none; flex-direction: column; gap: 6px; }
+        .run-dial-sub.open { display: flex; }
+        .run-dial-sub .run-dial-item { margin-left: 16px; }
+        .run-dial-other-chevron { margin-left: auto; transition: transform 0.18s ease; font-size: 1em !important; opacity: 0.7; color: inherit !important; }
+        #btnDialOther[aria-expanded="true"] .run-dial-other-chevron { transform: rotate(180deg); }
+        /* What the run does: a tooltip to the left of the item, on hover or keyboard focus. */
+        .run-dial-item { position: relative; }
+        .run-dial-item[data-tip]::after {
+            content: attr(data-tip);
+            position: absolute;
+            right: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            width: max-content;
+            max-width: 280px;
+            white-space: normal;
+            text-align: left;
+            background: var(--plugin-popup-bg, #2a2a2a);
+            color: var(--plugin-popup-color, #e8e8e8);
+            border: 1px solid var(--plugin-popup-border, rgba(255,255,255,0.12));
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.92em;
+            font-weight: 400;
+            line-height: 1.4;
+            box-shadow: var(--hsc-shadow-float);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.12s ease;
+            z-index: 2000;
+        }
+        .run-speed-dial-menu.open .run-dial-item:hover::after,
+        .run-speed-dial-menu.open .run-dial-item:focus-visible::after { opacity: 1; transition-delay: 0.25s; }
         .run-dial-item .md-icon { color: var(--hsc-activity-text); font-size: 1.15em; }
 
         .run-dial-chevron {
@@ -1777,23 +1810,29 @@
                 </button>
                 <div class="run-speed-dial" id="runSpeedDial">
                     <div class="run-speed-dial-menu" id="runSyncMenu">
-                        <button type="button" class="run-dial-item" id="btnDialFullSync">
-                            <i class="md-icon">sync</i><span>Full sync</span>
+                        <!-- Other: the runs that also start by themselves; opens above the button. -->
+                        <div class="run-dial-sub" id="runDialOther">
+                            <button type="button" class="run-dial-item" id="btnDialMergeVersions" data-tip="Links each top-list movie to the same movie in your library as an extra version, so it does not show up twice. Run it after a library scan has picked up new top-list entries.">
+                                <i class="md-icon">call_merge</i><span>Merge top-list versions</span>
+                            </button>
+                            <button type="button" class="run-dial-item" id="btnDialTopListRows" data-tip="Makes each top-list home row show only titles from its own library, and keeps top-list libraries out of the other home rows. Runs by itself when a new library is created in Emby.">
+                                <i class="md-icon">format_list_numbered</i><span>Sync top-list rows</span>
+                            </button>
+                            <button type="button" class="run-dial-item" id="btnDialContinueWatching" data-tip="Moves shows you had finished to the front of Continue Watching when new episodes have arrived (if Continue Watching bump is on). Also runs by itself every 6 hours.">
+                                <i class="md-icon">fast_forward</i><span>Bump Continue Watching</span>
+                            </button>
+                        </div>
+                        <button type="button" class="run-dial-item" id="btnDialOther" aria-expanded="false" aria-controls="runDialOther" data-tip="More runs: Merge top-list versions, Sync top-list rows and Bump Continue Watching. These also run by themselves when needed.">
+                            <i class="md-icon">more_horiz</i><span>Other</span><i class="md-icon run-dial-other-chevron">expand_less</i>
                         </button>
-                        <button type="button" class="run-dial-item" id="btnDialHomeScreen">
+                        <button type="button" class="run-dial-item" id="btnDialHomeScreen" data-tip="Copies the home screen layout from the source user to the selected users (Home Screen tab).">
                             <i class="md-icon">home</i><span>Sync home screen</span>
                         </button>
-                        <button type="button" class="run-dial-item" id="btnDialTagsCollections">
+                        <button type="button" class="run-dial-item" id="btnDialTagsCollections" data-tip="Runs every active source: tags, collections, playlists, home rows and top-lists. The same run as the scheduled Tag &amp; Collection Sync task.">
                             <i class="md-icon">local_offer</i><span>Sync tags and collections</span>
                         </button>
-                        <button type="button" class="run-dial-item" id="btnDialTopListRows">
-                            <i class="md-icon">format_list_numbered</i><span>Sync top-list rows</span>
-                        </button>
-                        <button type="button" class="run-dial-item" id="btnDialMergeVersions">
-                            <i class="md-icon">call_merge</i><span>Merge top-list versions</span>
-                        </button>
-                        <button type="button" class="run-dial-item" id="btnDialContinueWatching">
-                            <i class="md-icon">fast_forward</i><span>Bump Continue Watching</span>
+                        <button type="button" class="run-dial-item" id="btnDialFullSync" data-tip="Runs Sync tags and collections and Sync home screen together.">
+                            <i class="md-icon">sync</i><span>Full sync</span>
                         </button>
                     </div>
                     <button is="emby-button" type="button" id="btnRunSync" class="raised button-submit fab-btn btn-run">
@@ -2659,7 +2698,7 @@
                 <div class="hsc-eyebrow" style="margin:18px 0 8px;">Running, logs and tools</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">play_circle</i>
-                    <div><strong>Run button</strong> — Manually trigger a sync at any time. Three options: <em>Full sync</em> (everything), <em>Sync home screen only</em> (just the home screen rows, no tag changes), and <em>Sync tags and collections only</em> (tags and collections, skips home screen). While a sync, Run Group, Home Screen Sync or top-list sync is busy, <em>Last run</em> at the top of the page shows the step it is on and how long it has been running, e.g. <em>Running · Playlists — Top 10: 34/88 users · 1m 12s</em>. Runs never overlap: a sync, Run Group, Home Screen Sync or top-list sync started while another is busy waits for it to finish (shown as <em>… waiting for … to finish</em>) and then runs.</div>
+                    <div><strong>Run button</strong> — Start a run by hand at any time; hover an option to see what it does. <em>Full sync</em> (the two below together), <em>Sync tags and collections</em> (every active source: tags, collections, playlists, home rows and top-lists) and <em>Sync home screen</em> (copies the source user's home screen to the selected users). <em>Other</em> opens the runs that also start by themselves: <em>Bump Continue Watching</em>, <em>Sync top-list rows</em> (each top-list row shows only its own library; also runs when a library is created in Emby) and <em>Merge top-list versions</em> (links top-list movies to the library movie as an extra version). While a sync, Run Group, Home Screen Sync or top-list sync is busy, <em>Last run</em> at the top of the page shows the step it is on and how long it has been running, e.g. <em>Running · Playlists — Top 10: 34/88 users · 1m 12s</em>. Runs never overlap: a sync, Run Group, Home Screen Sync or top-list sync started while another is busy waits for it to finish (shown as <em>… waiting for … to finish</em>) and then runs.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">schedule</i>

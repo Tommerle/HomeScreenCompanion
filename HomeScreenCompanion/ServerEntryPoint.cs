@@ -8,6 +8,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
+using MediaBrowser.Model.Tasks;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +27,8 @@ namespace HomeScreenCompanion
         private readonly ICollectionManager _collectionManager;
         private readonly IItemRepository _itemRepository;
         private readonly IMediaSourceManager _mediaSourceManager;
+        private readonly ITaskManager _taskManager;
+        private NewLibraryWatcher? _libraryWatcher;
 
         private readonly object _strmLock = new object();
         // Keyed by InternalId, not Id: Emby derives the Guid from the path, so a top-list entry that
@@ -34,7 +37,7 @@ namespace HomeScreenCompanion
         private readonly HashSet<long> _processedStrmIds = new HashSet<long>();
         private readonly HashSet<long> _showCopiesInFlight = new HashSet<long>();
 
-        public ServerEntryPoint(ILibraryManager libraryManager, ILogManager logManager, IJsonSerializer jsonSerializer, IProviderManager providerManager, IFileSystem fileSystem, ICollectionManager collectionManager, IItemRepository itemRepository, IMediaSourceManager mediaSourceManager)
+        public ServerEntryPoint(ILibraryManager libraryManager, ILogManager logManager, IJsonSerializer jsonSerializer, IProviderManager providerManager, IFileSystem fileSystem, ICollectionManager collectionManager, IItemRepository itemRepository, IMediaSourceManager mediaSourceManager, ITaskManager taskManager)
         {
             _libraryManager = libraryManager;
             _logger = logManager.GetLogger("HomeScreenCompanion_RealTime");
@@ -44,6 +47,7 @@ namespace HomeScreenCompanion
             _collectionManager = collectionManager;
             _itemRepository = itemRepository;
             _mediaSourceManager = mediaSourceManager;
+            _taskManager = taskManager;
         }
 
         public void Run()
@@ -66,6 +70,10 @@ namespace HomeScreenCompanion
             _collectionManager.CollectionCreated += OnCollectionCreated;
             _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
             _collectionManager.ItemsRemovedFromCollection += OnItemsRemovedFromCollection;
+
+            // A library created in Emby later runs the Top-list section sync by itself.
+            _libraryWatcher = new NewLibraryWatcher(_libraryManager, _taskManager, _jsonSerializer, _logger, Plugin.Instance.DataFolderPath);
+            _libraryWatcher.Start();
         }
 
         private void OnCollectionCreated(object sender, CollectionCreatedEventArgs e) =>
@@ -320,6 +328,7 @@ namespace HomeScreenCompanion
             _collectionManager.CollectionCreated -= OnCollectionCreated;
             _collectionManager.ItemsAddedToCollection -= OnItemsAddedToCollection;
             _collectionManager.ItemsRemovedFromCollection -= OnItemsRemovedFromCollection;
+            _libraryWatcher?.Dispose();
         }
     }
 }
