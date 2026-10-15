@@ -138,7 +138,7 @@ namespace HomeScreenCompanion
             {
                 if (Full) return true;
                 var id = item?.Imdb;
-                if (string.IsNullOrEmpty(id) || _hits.Contains(id) || _misses.Contains(id)) return false;
+                if (string.IsNullOrEmpty(id) || _hits.Contains(id!) || _misses.Contains(id!)) return false;
                 if (_counts(item!)) _hits.Add(id!); else _misses.Add(id!);
                 return Full;
             }
@@ -191,7 +191,7 @@ namespace HomeScreenCompanion
 
                         var page = movies.Concat(shows)
                             .Where(x => !string.IsNullOrEmpty(x.imdb_id))
-                            .Select(x => new ExternalItemDto { Name = x.title, Imdb = x.imdb_id, Tmdb = null });
+                            .Select(x => new ExternalItemDto { Name = x.title!, Imdb = x.imdb_id!, Tmdb = null });
                         all.AddRange(page);
 
                         if (pageCount < pageSize) break;
@@ -231,7 +231,7 @@ namespace HomeScreenCompanion
 
                         var page = result
                             .Where(x => !string.IsNullOrEmpty(x.imdb_id))
-                            .Select(x => new ExternalItemDto { Name = x.title, Imdb = x.imdb_id, Tmdb = null });
+                            .Select(x => new ExternalItemDto { Name = x.title!, Imdb = x.imdb_id!, Tmdb = null });
                         all.AddRange(page);
 
                         if (result.Count < pageSize) break;
@@ -273,13 +273,13 @@ namespace HomeScreenCompanion
 
         private class TmdbApiTarget
         {
-            public string ListId { get; set; }
-            public string Endpoint { get; set; }
-            public string MediaType { get; set; }
-            public string FullUrl { get; set; }
+            public string? ListId { get; set; }
+            public string? Endpoint { get; set; }
+            public string? MediaType { get; set; }
+            public string FullUrl { get; set; } = null!;
         }
 
-        private TmdbApiTarget ExtractTmdbApiTarget(string url)
+        private TmdbApiTarget? ExtractTmdbApiTarget(string url)
         {
             try
             {
@@ -287,7 +287,7 @@ namespace HomeScreenCompanion
 
                 if (uri.Host.Equals("api.themoviedb.org", StringComparison.OrdinalIgnoreCase))
                 {
-                    string mediaType = null;
+                    string? mediaType = null;
                     if (uri.AbsolutePath.Contains("/movie/")) mediaType = "movie";
                     else if (uri.AbsolutePath.Contains("/tv/")) mediaType = "tv";
                     else if (uri.AbsolutePath.Contains("/collection/")) mediaType = "movie";   // a collection's parts are films
@@ -340,7 +340,7 @@ namespace HomeScreenCompanion
 
             while (true)
             {
-                TmdbListResponse result = null;
+                TmdbListResponse? result = null;
 
                 if (useV4 && !string.IsNullOrEmpty(target.ListId))
                 {
@@ -415,9 +415,9 @@ namespace HomeScreenCompanion
                     var item = items[k];
                     var dto = new ExternalItemDto
                     {
-                        Name = item.title ?? item.name,
+                        Name = (item.title ?? item.name)!,
                         Tmdb = item.id.ToString(),
-                        Imdb = imdbIds[k]
+                        Imdb = imdbIds[k]!
                     };
 
                     all.Add(dto);
@@ -513,7 +513,7 @@ namespace HomeScreenCompanion
                                 string? imdb = item.movie?.ids?.imdb ?? item.show?.ids?.imdb;
 
                                 if (!string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(imdb))
-                                    list.Add(new ExternalItemDto { Name = title, Imdb = imdb, Tmdb = null });
+                                    list.Add(new ExternalItemDto { Name = title!, Imdb = imdb!, Tmdb = null });
                             }
                             if (list.Count > 0) return list;
                         }
@@ -528,7 +528,7 @@ namespace HomeScreenCompanion
                             foreach (var item in flatList)
                             {
                                 if (!string.IsNullOrEmpty(item.title) && !string.IsNullOrEmpty(item.ids?.imdb))
-                                    list.Add(new ExternalItemDto { Name = item.title, Imdb = item.ids?.imdb, Tmdb = null });
+                                    list.Add(new ExternalItemDto { Name = item.title!, Imdb = item.ids?.imdb!, Tmdb = null });
                             }
                             if (list.Count > 0) return list;
                         }

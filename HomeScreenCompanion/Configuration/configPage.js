@@ -1411,7 +1411,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             // Customise (generated styles only): opens the art popup; its options live here.
             '<input type="hidden" class="coll-art-opts" value="' + optsVal + '" />' +
             '<div class="coll-art-custom-row" style="flex-basis:100%;display:' + (isGenArtStyle(sel) ? 'flex' : 'none') + ';align-items:center;gap:8px;">' +
-                '<button type="button" is="emby-button" class="btnArtCustomise raised" style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;"><i class="md-icon" style="font-size:1em; margin-right:4px;">settings</i><span>Customise</span></button>' +
+                '<button type="button" is="emby-button" class="btnArtCustomise raised btn-neutral"><i class="md-icon" style="margin-right:5px;">settings</i><span>Customise</span></button>' +
                 '<span class="coll-art-custom-note fieldDescription" style="margin:0;' + (options ? '' : 'display:none;') + '">Customised</span>' +
             '</div>' +
             '<div class="coll-art-keep-note fieldDescription" style="flex-basis:100%;margin:0;display:' + (isKeepArtStyle(sel) ? 'block' : 'none') + ';">' +
@@ -1448,18 +1448,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             '</div>' +
             '<div class="fieldDescription">' + note + '</div>' +
         '</div>';
-    }
-
-    // The top-list badge's one Customise button is greyed (with a tooltip) when the choice has nothing to customise.
-    function custDisabledAttrs(disabled, tip) {
-        return disabled ? ' disabled title="' + escapeHtml(tip) + '"' : ' title="Customise"';
-    }
-    function setCustomiseEnabled(btn, enabled, tip) {
-        if (!btn) return;
-        btn.disabled = !enabled;
-        btn.title = enabled ? 'Customise' : tip;
-        btn.style.opacity = enabled ? '' : '0.45';
-        btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
     }
 
     // ── Customise popup (generated art) ──────────────────────────────────────────────
@@ -5830,6 +5818,94 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         };
     }
 
+    // ---- What is unsaved, in words ----
+    // Compares two getUiConfig(view, true) results (saved, current) and returns
+    // { settings: [label], sources: [{ name, what }] } for the unsaved-changes popup.
+    var _settingLabels = {
+        OpenAiModel: 'OpenAI model', GeminiModel: 'Gemini model', ClaudeModel: 'Claude model',
+        OllamaBaseUrl: 'Ollama URL', OllamaModel: 'Ollama model', AiSystemPrompt: 'AI system prompt',
+        ExtendedConsoleOutput: 'Extended log', LogMissingItems: 'Log missing movies and shows',
+        DryRunMode: 'Dry Run Mode', PreserveTagsOnEmptyResult: 'Preserve tags and collections on empty result',
+        IgnoreMarkedAsWatched: 'Ignore titles only marked as watched',
+        TopListMirrorCollections: 'Show collections on top-list items', HideTopListLibraries: 'Hide HSC libraries',
+        ShowCopyPasteButtons: 'Copy & paste sources', ShowImportCollectionButton: 'Import collection',
+        RankedCollectionsEnabled: 'Ranked collections', SavedFilters: 'Saved filters',
+        HomeSyncEnabled: 'Home Screen sync: on/off', HomeSyncLibraryOrder: 'Home Screen sync: library order',
+        HomeSyncSourceUserId: 'Home Screen sync: source user', HomeSyncTargetUserIds: 'Home Screen sync: target users',
+        ContinueWatchingBumpEnabled: 'Continue Watching bump: on/off', ContinueWatchingBumpMode: 'Continue Watching bump: mode',
+        ContinueWatchingBumpAllUsers: 'Continue Watching bump: all users', ContinueWatchingBumpUserIds: 'Continue Watching bump: users'
+    };
+    // A source card's field → the card tab it lives on.
+    function sourceFieldArea(k) {
+        if (k === 'Name') return 'name';
+        if (k === 'Tag') return 'tag name';
+        if (k === 'Active') return 'on/off';
+        if (k === 'Blacklist') return 'blacklist';
+        if (k === 'ActiveIntervals') return 'schedule';
+        if (k === 'EnableTag' || /^Tag(Target|Poster|Background|ArtTitle)/.test(k)) return 'tag settings';
+        if (/^(Enable)?Collection|^OverrideWhenActive$/.test(k)) return 'collection';
+        if (/^(Enable)?Playlist/.test(k)) return 'playlist';
+        if (/^(Enable)?HomeSection/.test(k)) return 'home screen';
+        return 'source';
+    }
+    function describeUnsavedChanges(saved, current) {
+        var same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+        var out = { settings: [], sources: [] };
+        Object.keys(_settingLabels).forEach(function (k) {
+            if (!same(saved[k], current[k])) out.settings.push(_settingLabels[k]);
+        });
+        // A card is one or more flat entries in a row (one per URL / local source).
+        function groups(tags) {
+            var gs = [];
+            (tags || []).forEach(function (t) {
+                var last = gs[gs.length - 1];
+                if (last && last.name === t.Name && last.tag === t.Tag) last.items.push(t);
+                else gs.push({ name: t.Name, tag: t.Tag, lm: t.LastModified, items: [t] });
+            });
+            return gs;
+        }
+        var before = groups(saved.Tags), after = groups(current.Tags);
+        var match = new Array(after.length).fill(-1), used = new Set();
+        // By name first, then (a renamed card) by the saved card's LastModified, which stays put.
+        after.forEach(function (g, i) {
+            var j = before.findIndex(function (b, x) { return !used.has(x) && b.name === g.name && b.tag === g.tag; });
+            if (j >= 0) { match[i] = j; used.add(j); }
+        });
+        after.forEach(function (g, i) {
+            if (match[i] >= 0) return;
+            var j = before.findIndex(function (b, x) { return !used.has(x) && b.lm && b.lm === g.lm; });
+            if (j >= 0) { match[i] = j; used.add(j); }
+        });
+        function label(g) { return g.name || g.tag || '(unnamed source)'; }
+        after.forEach(function (g, i) {
+            if (match[i] < 0) { out.sources.push({ name: label(g), what: 'new source' }); return; }
+            var b = before[match[i]];
+            var areas = [];
+            function add(a) { if (areas.indexOf(a) < 0) areas.push(a); }
+            if (b.items.length !== g.items.length) add('source');
+            var keys = new Set();
+            b.items.concat(g.items).forEach(function (t) { Object.keys(t).forEach(function (k) { keys.add(k); }); });
+            keys.delete('LastModified');
+            keys.forEach(function (k) {
+                for (var n = 0; n < Math.max(b.items.length, g.items.length); n++) {
+                    var x = b.items[n] || b.items[0], y = g.items[n] || g.items[0];
+                    if (!same(x[k], y[k])) { add(sourceFieldArea(k)); break; }
+                }
+            });
+            if (!areas.length) return;
+            var name = label(g);
+            if (label(b) !== name) name = label(b) + ' → ' + name;
+            out.sources.push({ name: name, what: areas.join(', ') });
+        });
+        before.forEach(function (b, x) {
+            if (!used.has(x)) out.sources.push({ name: label(b), what: 'deleted', deleted: true });
+        });
+        // Same cards, other order.
+        var kept = match.filter(function (j) { return j >= 0; });
+        if (kept.some(function (j, n) { return n > 0 && j < kept[n - 1]; })) out.settings.push('Order of sources');
+        return out;
+    }
+
     function checkFormState() {
         var view = activeView();
         if (!view || !originalConfigState) return;
@@ -7428,8 +7504,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var cardActive = cardBase + 'border-color:var(--hsc-primary);';
         var cardInactive = cardBase + 'border-color:var(--line-color,rgba(255,255,255,0.12));';
         var tileSel = sel === 'top10';
-        // Same Customise chip as the art pickers, under the tiles (Top 10 tile only).
-        var custBtn = '<button type="button" is="emby-button" class="btnBadgeCustomise raised"' + custDisabledAttrs(!tileSel, BADGE_NOTHING_TIP) + ' style="background:transparent; border:1px solid rgba(128,128,128,0.35); color:var(--theme-text-secondary); font-size:0.82em; padding:0 10px; min-width:0;' + (!tileSel ? 'opacity:0.45;cursor:not-allowed;' : '') + '"><i class="md-icon" style="font-size:1em; margin-right:4px;">settings</i><span>Customise</span></button>';
+        // Same Customise button as the art pickers, under the tiles; shown for the Top 10 tile only.
+        var custBtn = '<button type="button" class="btnBadgeCustomise hsc-mbtn hsc-btn-secondary"><i class="md-icon" style="font-size:1.1em;">settings</i><span>Customise</span></button>';
         // Each picker gets its own radio group: with one shared name, opening a second top-list
         // card (or the create popup) unticked the first card's choice, so its Save lit up.
         var radioName = 'tlBadgeStyle_' + (++_badgePickerSeq);
@@ -7453,12 +7529,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     '</label>';
             }).join('') +
             '</div>' +
-            '<div class="tl-badge-medal-row checkboxContainer" style="margin:8px 0 0;' + (isBadgePreset(sel) ? '' : 'display:none;') + '"><label>' +
+            // One slot under the tiles: Top 3 medal colours for a colour preset, Customise for the Top 10 tile.
+            '<div class="tl-badge-extra" style="display:flex;align-items:center;min-height:36px;margin-top:8px;">' +
+            '<div class="tl-badge-medal-row checkboxContainer" style="margin:0;' + (isBadgePreset(sel) ? '' : 'display:none;') + '"><label>' +
                 '<input is="emby-checkbox" type="checkbox" class="tl-badge-medals"' + (medalsOn ? ' checked' : '') + ' />' +
                 '<span style="display:inline-flex;align-items:center;gap:6px;">Top 3 medal colours ' +
                     '<span style="display:inline-flex;gap:3px;">' + medalDot('#d4af37') + medalDot('#b8bcc6') + medalDot('#b87333') + '</span></span></label></div>' +
-            '<div class="tl-badge-custom-row" style="display:flex;align-items:center;gap:8px;margin-top:8px;">' + custBtn +
+            '<div class="tl-badge-custom-row" style="display:' + (tileSel ? 'flex' : 'none') + ';align-items:center;gap:8px;">' + custBtn +
                 '<span class="tl-badge-custom-note fieldDescription" style="margin:0;' + (tileSel && optionsJson ? '' : 'display:none;') + '">Customised</span>' +
+            '</div>' +
             '</div>' +
             buildRealPosterHtml(realPoster, contentKind) +
             '</div>';
@@ -7495,9 +7574,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var lbl = 'font-size:0.82em;opacity:0.75;min-width:56px;';
         return '<div class="tl-rp" data-kind="' + (contentKind === 'shows' ? 'shows' : 'movies') + '" style="margin-top:14px;">' +
             '<span class=\"hsc-label\" style=\"display:block;margin-bottom:4px;color:inherit;opacity:0.75;\">Real posters</span>' +
-            '<div class="checkboxContainer" style="margin-bottom:6px;"><label>' +
+            '<div class="checkboxContainer" style="margin-bottom:2px;"><label>' +
                 '<input is="emby-checkbox" type="checkbox" class="tl-rp-on"' + (rp.on ? ' checked' : '') + ' />' +
                 '<span>Badge the real posters too</span></label></div>' +
+            '<div class="fieldDescription" style="margin:0 0 8px;">Puts a TOP 10 square on each listed title\'s own poster everywhere on the server (libraries, search, the item page, other rows and every app), not only in this top list. The image files are not changed.</div>' +
             '<div class="tl-rp-opts" style="' + (rp.on ? '' : 'display:none;') + 'margin-left:4px;">' +
                 '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' +
                 '<div>' +
@@ -7622,7 +7702,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }).catch(function () { /* keep the original icon */ });
     }
 
-    var BADGE_NOTHING_TIP = 'Customise is for the Top 10 tile';
     function initBadgePicker(container, tagName) {
         if (container && container.dataset) container.dataset.tlTag = tagName || '';
         initRealPoster(container);
@@ -7633,14 +7712,15 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 label.style.borderColor = 'var(--hsc-primary)';
             });
         });
-        // One Customise button: the Top 10 tile's popup; greyed for the presets and No number.
+        // One Customise button: the Top 10 tile's popup; hidden for the presets and No number.
         container.querySelectorAll('.tl-badge-picker').forEach(function (picker) {
             var btn = picker.querySelector('.btnBadgeCustomise');
             if (!btn) return;
             function sync() {
                 var checked = picker.querySelector('input[name^="tlBadgeStyle"]:checked');
                 var tile = !!checked && checked.value === 'top10';
-                setCustomiseEnabled(btn, tile, BADGE_NOTHING_TIP);
+                var custRow = picker.querySelector('.tl-badge-custom-row');
+                if (custRow) custRow.style.display = tile ? 'flex' : 'none';
                 var medalRow = picker.querySelector('.tl-badge-medal-row');
                 if (medalRow) medalRow.style.display = checked && isBadgePreset(checked.value) ? '' : 'none';
                 var note = picker.querySelector('.tl-badge-custom-note'), optsIn = picker.querySelector('.tl-badge-opts');
@@ -8132,7 +8212,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             modal.innerHTML =
                 '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
                 'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
-                'padding:28px;max-width:520px;width:90%;max-height:85vh;overflow-y:auto;">' +
+                'padding:28px;max-width:860px;width:95%;max-height:90vh;overflow-y:auto;">' +
                 content + '</div>';
         }
 
@@ -8293,7 +8373,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         modal.innerHTML =
             '<div style="background:var(--plugin-popup-bg,#2a2a2a);color:var(--plugin-popup-color,#e8e8e8);' +
             'border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:12px;box-shadow:var(--hsc-shadow-modal);overscroll-behavior:contain;' +
-            'padding:28px;max-width:720px;width:95%;max-height:90vh;overflow-y:auto;">' +
+            'padding:28px;max-width:860px;width:95%;max-height:90vh;overflow-y:auto;">' +
             '<div style="padding:10px 0;display:flex;align-items:center;gap:10px;">Loading <span class="tc-dot-loader"><span></span><span></span><span></span></span></div>' +
             '</div>';
         document.body.appendChild(modal);
@@ -8409,9 +8489,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 '<div class="mtl-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-top:12px;margin-bottom:4px;"></div>' +
                 '<div style="border-top:1px solid var(--line-color);padding-top:16px;margin-top:8px;display:flex;gap:10px;align-items:center;justify-content:flex-end;">' +
-                '<span class="mtl-create-hint" style="margin-right:auto;font-size:0.82em;opacity:0.65;"></span>' +
                 '<button type="button" class="btnMtlCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
-                '<button type="button" class="btnMtlCreate hsc-mbtn hsc-btn-primary" disabled>' +
+                '<button type="button" class="btnMtlCreate hsc-mbtn hsc-btn-primary">' +
                 '<i class="md-icon" style="font-size:1em;">playlist_add</i>' + escHtml(createBtnLabel) + '</button>' +
                 '</div>';
 
@@ -8449,31 +8528,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 }).join('');
             }
 
-            function updateCreateBtn() {
-                var nameVal  = (modal.querySelector('.mtlListName').value || '').trim();
-                var hasUsers = modal.querySelectorAll('.chkMtlUser:checked').length > 0;
-                modal.querySelector('.btnMtlCreate').disabled = (nameVal.length === 0 || selectedMovies.length === 0 || !hasUsers);
-                // Says why the button is disabled, so a missing user doesn't look like a dead button.
-                var missing = [];
-                if (nameVal.length === 0) missing.push('a list name');
-                if (selectedMovies.length === 0) missing.push('at least one ' + itemWord);
-                if (!hasUsers) missing.push('at least one user');
-                modal.querySelector('.mtl-create-hint').textContent = missing.length
-                    ? 'Still needed: ' + missing.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.'
-                    : '';
-            }
-
             renderSelectedList();
-            updateCreateBtn();
 
             modal.querySelector('.btnMtlClose').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
             modal.querySelector('.btnMtlCancel').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
-
-            modal.querySelector('.mtlListName').addEventListener('input', updateCreateBtn);
-
-            modal.querySelectorAll('.chkMtlUser').forEach(function (cb) {
-                cb.addEventListener('change', updateCreateBtn);
-            });
 
             var searchInput  = modal.querySelector('.mtlMovieSearch');
             var resultsBox   = modal.querySelector('.mtlSearchResults');
@@ -8519,7 +8577,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 searchInput.value = '';
                 resultsBox.style.display = 'none';
                 renderSelectedList();
-                updateCreateBtn();
             });
 
             searchInput.addEventListener('blur', function () {
@@ -8544,7 +8601,6 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     selectedMovies.splice(idx, 1);
                 }
                 renderSelectedList();
-                updateCreateBtn();
             });
 
             modal.querySelector('.btnMtlCreate').addEventListener('click', function () {
@@ -11134,15 +11190,13 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 bar.className = 'hsc-draft-bar';
                 bar.style.cssText = 'max-width:900px;box-sizing:border-box;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;margin-bottom:16px;border-radius:8px;background:rgba(82,181,75,0.08);border:1px solid rgba(82,181,75,0.45);';
                 bar.innerHTML = '<i class="md-icon" style="font-size:1.3em;">restore</i><span class="hsc-draft-text" style="flex:1;min-width:200px;"></span>' +
+                    '<button type="button" is="emby-button" class="raised button-cancel hsc-draft-show" style="margin:0;"><span>Show changes</span></button>' +
                     '<button type="button" is="emby-button" class="raised button-cancel hsc-draft-discard" style="margin:0;"><span>Discard</span></button>';
                 // Above every page tab, since restored settings can live on any of them.
                 var firstTab = view.querySelector('.page-tab-content');
                 firstTab.parentNode.insertBefore(bar, firstTab);
-                bar.querySelector('.hsc-draft-discard').addEventListener('click', function () {
-                    writeLeaveState(null);
-                    hideDraftBar();
-                    loadConfig();
-                });
+                bar.querySelector('.hsc-draft-show').addEventListener('click', showDraftChanges);
+                bar.querySelector('.hsc-draft-discard').addEventListener('click', discardDraft);
             }
             bar.style.background = serverChanged ? 'rgba(230,193,90,0.08)' : 'rgba(82,181,75,0.08)';
             bar.style.borderColor = serverChanged ? 'rgba(230,193,90,0.45)' : 'rgba(82,181,75,0.45)';
@@ -11154,6 +11208,51 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         function hideDraftBar() {
             var bar = view.querySelector('.hsc-draft-bar');
             if (bar) bar.style.display = 'none';
+        }
+        function discardDraft() {
+            writeLeaveState(null);
+            hideDraftBar();
+            loadConfig();
+        }
+        // Show changes: what is unsaved right now compared with the saved settings.
+        function showDraftChanges() {
+            var ch = null;
+            try { ch = describeUnsavedChanges(JSON.parse(originalConfigState), getUiConfig(view, true)); } catch (e) { }
+            var item = function (main, sub, deleted) {
+                return '<li style="padding:6px 0;border-bottom:1px solid var(--line-color,rgba(255,255,255,0.08));">' +
+                    '<span style="font-weight:600;' + (deleted ? 'text-decoration:line-through;opacity:0.8;' : '') + '">' + escapeHtml(main) + '</span>' +
+                    (sub ? ' <span style="opacity:0.65;font-size:0.9em;">— ' + escapeHtml(sub) + '</span>' : '') + '</li>';
+            };
+            var list = '';
+            if (ch && ch.sources.length) {
+                list += '<div style="font-size:0.8em;text-transform:uppercase;letter-spacing:0.5px;opacity:0.6;margin:4px 0 2px;">Sources</div>' +
+                    '<ul style="list-style:none;margin:0 0 12px;padding:0;">' +
+                    ch.sources.map(function (s) { return item(s.name, s.what, s.deleted); }).join('') + '</ul>';
+            }
+            if (ch && ch.settings.length) {
+                list += '<div style="font-size:0.8em;text-transform:uppercase;letter-spacing:0.5px;opacity:0.6;margin:4px 0 2px;">Settings</div>' +
+                    '<ul style="list-style:none;margin:0 0 12px;padding:0;">' +
+                    ch.settings.map(function (s) { return item(s); }).join('') + '</ul>';
+            }
+            if (!list) list = '<p style="' + _backupHintStyle + '">Nothing differs from the saved settings any more.</p>';
+            var modal = buildBackupModalShell();
+            modal.renderBox(
+                '<h3 style="' + _backupTitleStyle + '">Unsaved changes</h3>' +
+                '<p style="' + _backupHintStyle + '">These changes are not saved yet. <strong>Save and apply</strong> keeps them; <strong>Discard</strong> puts everything back as last saved.</p>' +
+                list +
+                '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin-top:6px;">' +
+                '<button type="button" class="btnDraftClose hsc-mbtn hsc-btn-secondary">Close</button>' +
+                '<button type="button" class="btnDraftDiscard hsc-mbtn hsc-btn-danger"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">undo</i>Discard</button>' +
+                '<button type="button" class="btnDraftSave hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">save</i>Save and apply</button>' +
+                '</div>'
+            );
+            modal.querySelector('.btnDraftClose').addEventListener('click', modal.close);
+            modal.querySelector('.btnDraftDiscard').addEventListener('click', function () { modal.close(); discardDraft(); });
+            // Same as the page's Save Settings button (disabled with it, e.g. while a run is going).
+            var pageSave = view.querySelector('.btn-save');
+            var popupSave = modal.querySelector('.btnDraftSave');
+            if (!pageSave || pageSave.disabled) { popupSave.disabled = true; popupSave.style.opacity = '0.5'; }
+            popupSave.addEventListener('click', function () { modal.close(); pageSave.click(); });
         }
 
         view.addEventListener('viewhide', function () {

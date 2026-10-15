@@ -1101,12 +1101,12 @@ public class HomeScreenCompanionService : IService
             return index;
         }
 
-        private static SourceTestItem MatchTestItem(TestLibraryIndex index, string name, int? year, string imdb, bool allowTitleMatch)
+        private static SourceTestItem MatchTestItem(TestLibraryIndex index, string? name, int? year, string? imdb, bool allowTitleMatch)
         {
             imdb = (imdb ?? "").Trim();
             var result = new SourceTestItem { Name = name ?? "", Year = year, Imdb = imdb };
 
-            BaseItem match = null;
+            BaseItem? match = null;
             if (!string.IsNullOrEmpty(imdb)) index.ByImdb.TryGetValue(imdb, out match);
             if (match == null && allowTitleMatch && !string.IsNullOrWhiteSpace(name))
             {
@@ -1853,7 +1853,7 @@ public class HomeScreenCompanionService : IService
                 settingsDict.TryGetValue("SectionType", out var sectionType);
 
                 // Resolve library ID
-                string resolvedLibraryId = null;
+                string? resolvedLibraryId = null;
                 if (sectionType == "boxset")
                 {
                     if (tc.HomeSectionLibraryId == "auto")
@@ -1944,13 +1944,13 @@ public class HomeScreenCompanionService : IService
             var fields = typeof(ContentSection)
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.CanRead && p.CanWrite && p.Name != "Id")
-                .Select(p => new HscSectionField { Name = p.Name, Type = GetSimpleTypeName(p.PropertyType) })
+                .Select(p => new HscSectionField { Name = p.Name, Type = GetSimpleTypeName(p.PropertyType)! })
                 .Where(f => f.Type != null)
                 .ToList();
             return new HscSectionSchemaResponse { Fields = fields };
         }
 
-        private static string GetSimpleTypeName(Type t)
+        private static string? GetSimpleTypeName(Type t)
         {
             if (t == typeof(string)) return "string";
             if (t == typeof(bool) || t == typeof(bool?)) return "bool";
@@ -2254,7 +2254,7 @@ public class HomeScreenCompanionService : IService
                 return new DeleteManagedTagsResponse { Success = true };
 
             foreach (var tag in tagNames)
-                TagCacheManager.Instance.RemoveTagFromAllEntries(tag);
+                TagCacheManager.Instance.RemoveTagFromAllEntries(tag!);
             TagCacheManager.Instance.Save();
 
             var allItems = _libraryManager.GetItemList(new InternalItemsQuery
@@ -2611,7 +2611,7 @@ public class HomeScreenCompanionService : IService
                     try
                     {
                         // Prefer GetUserPolicy (fresh from store) over the cached User.Policy property.
-                        object policy = null;
+                        object? policy = null;
                         if (getPolicyMethod != null)
                         {
                             try
@@ -2674,7 +2674,7 @@ public class HomeScreenCompanionService : IService
                 {
                     try
                     {
-                        object policy = null;
+                        object? policy = null;
                         if (getPolicyMethod != null)
                         {
                             try
@@ -2751,7 +2751,7 @@ public class HomeScreenCompanionService : IService
                 if (!userDict.TryGetValue(snap.UserId, out var user)) continue;
                 try
                 {
-                    object policy = null;
+                    object? policy = null;
                     if (getPolicyMethod != null)
                     {
                         try
@@ -2795,9 +2795,9 @@ public class HomeScreenCompanionService : IService
             return user;
         }
 
-        private static object[] BuildArgList(System.Reflection.ParameterInfo[] parms, object arg0, object arg1)
+        private static object?[] BuildArgList(System.Reflection.ParameterInfo[] parms, object arg0, object? arg1)
         {
-            var args = new object[parms.Length];
+            var args = new object?[parms.Length];
             args[0] = arg0;
             for (int i = 1; i < parms.Length; i++)
             {
@@ -2809,7 +2809,7 @@ public class HomeScreenCompanionService : IService
             return args;
         }
 
-        private void EnforceTopListLibraryPermissions(string libId, IEnumerable<string> assignedUserIds)
+        private void EnforceTopListLibraryPermissions(string libId, IEnumerable<string>? assignedUserIds)
         {
             var normalizedLibId = (libId ?? "").Trim().Replace("-", "").ToLowerInvariant();
             if (string.IsNullOrEmpty(normalizedLibId)) return;
@@ -2835,7 +2835,7 @@ public class HomeScreenCompanionService : IService
             {
                 try
                 {
-                    object policy = null;
+                    object? policy = null;
                     if (getPolicyMethod != null)
                     {
                         try
@@ -3178,10 +3178,10 @@ public class HomeScreenCompanionService : IService
             return changed;
         }
 
-        internal static string EnsureLocalImagePath(IHttpClient httpClient, string path, string tempDir)
+        internal static string? EnsureLocalImagePath(IHttpClient httpClient, string? path, string tempDir)
         {
             if (string.IsNullOrEmpty(path)) return null;
-            if (!path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            if (!path!.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 return File.Exists(path) ? path : null;
             try
             {
@@ -3336,7 +3336,7 @@ public class HomeScreenCompanionService : IService
                             catch { }
                         }
                         config.TopLists.Remove(tl);
-                        Plugin.Instance.SaveConfiguration();
+                        Plugin.Instance!.SaveConfiguration();
                     }
                 }
 
@@ -3413,7 +3413,7 @@ public class HomeScreenCompanionService : IService
                         var tracked = (tl.HomeSectionTracked ?? new System.Collections.Generic.List<HomeSectionTracking>())
                             .FirstOrDefault(t => t.UserId == userId);
 
-                        ContentSection ownedSection = null;
+                        ContentSection? ownedSection = null;
                         if (tracked != null && !string.IsNullOrEmpty(tracked.SectionId) && !tracked.SectionId.StartsWith("hsc__"))
                             ownedSection = allSections.FirstOrDefault(s => s.Id == tracked.SectionId);
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _tlFallbackName) && !string.IsNullOrEmpty(_tlFallbackName))
@@ -3587,7 +3587,7 @@ public class HomeScreenCompanionService : IService
 
                 EnforceTopListLibraryPermissions(resolvedLibraryId, tl.HomeSectionUserIds);
 
-                Plugin.Instance.SaveConfiguration();
+                Plugin.Instance!.SaveConfiguration();
                 _taskManager.QueueScheduledTask<TopListSyncTask>();
                 return new PrepareTopListHomeSectionsResponse { Success = true, UsersCreated = created, UsersUpdated = updated, Message = $"Synced: {created} created, {updated} updated." };
             }
@@ -3970,7 +3970,7 @@ public class HomeScreenCompanionService : IService
         {
             if (known == null) return true;
             if (string.IsNullOrWhiteSpace(userId)) return false;
-            return known.Contains(userId.Replace("-", "").Trim());
+            return known.Contains(userId!.Replace("-", "").Trim());
         }
 
         // Removes user ids that do not exist on this server and reports them once per context.

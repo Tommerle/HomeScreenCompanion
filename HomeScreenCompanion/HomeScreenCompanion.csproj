@@ -16,7 +16,11 @@
 		<InformationalVersion Condition="'$(ReleaseChannel)' != ''">$(Version)-$(ReleaseChannel)</InformationalVersion>
 
 		<Product>Home Screen Companion</Product>
-		
+
+		<!-- MSB3277: the Emby DLLs reference newer System.* versions; Emby supplies them at runtime.
+		     NU1903: SkiaSharp is compile-only (not shipped); the plugin runs on Emby's own SkiaSharp. -->
+		<NoWarn>$(NoWarn);MSB3277;NU1903</NoWarn>
+
 	</PropertyGroup>
 
 	<ItemGroup>

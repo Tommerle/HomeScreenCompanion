@@ -603,8 +603,8 @@ namespace HomeScreenCompanion
                 try
                 {
                     dynamic p = TopListSyncTask.GetPolicy(mgr, u, u.InternalId);
-                    if (p == null || (bool)p.EnableAllFolders) continue;
-                    var folders = ((string[])p.EnabledFolders) ?? Array.Empty<string>();
+                    if (p == null || (bool)p!.EnableAllFolders) continue;
+                    var folders = ((string[])p!.EnabledFolders) ?? Array.Empty<string>();
                     var norm = folders.Select(f => f.Replace("-", "").ToLowerInvariant()).ToList();
                     if (norm.Contains(libGuid)) continue;
                     if (!norm.Any(sourceLibs.Contains)) continue;

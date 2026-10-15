@@ -100,7 +100,7 @@ namespace HomeScreenCompanion
                 var ifMethod = typeof(IUserViewManager).GetMethod("GetUserViews");
                 if (ifMethod == null) return ids;
                 var queryParams = ifMethod.GetParameters();
-                object queryArg = null;
+                object? queryArg = null;
                 if (queryParams.Length > 0)
                 {
                     try
@@ -156,7 +156,7 @@ namespace HomeScreenCompanion
             own.Add(raw.Replace("-", ""));
             try
             {
-                BaseItem lib = null;
+                BaseItem? lib = null;
                 if (long.TryParse(raw, out var internalId))
                     lib = libraryManager.GetItemById(internalId);
                 else if (Guid.TryParse(raw, out var g))
@@ -477,7 +477,7 @@ namespace HomeScreenCompanion
             {
                 if (string.IsNullOrEmpty(tl.HomeSectionLibraryId) || tl.HomeSectionLibraryId == "auto") continue;
                 var libGuid = ResolveLibraryGuid(tl.HomeSectionLibraryId.Trim(), libraryManager);
-                if (!string.IsNullOrEmpty(libGuid)) SetLatestExclusion(userManager, libGuid, true, logger);
+                if (!string.IsNullOrEmpty(libGuid)) SetLatestExclusion(userManager, libGuid!, true, logger);
             }
             var hiddenFor = TopListLibraryVisibility.Apply(config, userManager, libraryManager, m => _log.Warn(m));
             if (hiddenFor > 0)
@@ -607,7 +607,7 @@ namespace HomeScreenCompanion
             }
         }
 
-        private static string ResolveLibraryGuid(string libId, ILibraryManager libraryManager)
+        private static string? ResolveLibraryGuid(string libId, ILibraryManager libraryManager)
         {
             if (string.IsNullOrEmpty(libId)) return null;
             var norm = libId.Replace("-", "").ToLowerInvariant();
@@ -635,9 +635,9 @@ namespace HomeScreenCompanion
             return null;
         }
 
-        internal static object GetPolicy(dynamic mgr, BaseItem user, long uid)
+        internal static object? GetPolicy(dynamic mgr, BaseItem user, long uid)
         {
-            dynamic policy = null;
+            dynamic? policy = null;
             try { policy = mgr.GetUserPolicy(user); return policy; }
             catch { }
             try { policy = mgr.GetUserPolicy(user.Id); return policy; }

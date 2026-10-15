@@ -26,7 +26,7 @@ namespace HomeScreenCompanion
             XmlSerializer = xmlSerializer;
         }
 
-        public static Plugin? Instance { get; private set; }
+        public static Plugin Instance { get; private set; } = null!;
         public static IApplicationPaths AppPaths { get; private set; } = null!;
         public static new IXmlSerializer XmlSerializer { get; private set; } = null!;
 
@@ -40,7 +40,7 @@ namespace HomeScreenCompanion
             base.UpdateConfiguration(configuration);
             HomeScreenCompanionTask.RecordImportedCollections(Configuration);
             // Toggling the collection mirror adds (or removes) memberships for all existing copies.
-            if (Configuration.TopListMirrorCollections != wasMirroring)
+            if (Configuration!.TopListMirrorCollections != wasMirroring)
                 TopListCollectionMirror.QueueFullSync();
         }
 

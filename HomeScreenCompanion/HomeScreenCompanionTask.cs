@@ -203,7 +203,7 @@ namespace HomeScreenCompanion
 
                 // Items that live under the top-list folder are .strm virtual copies — never tag them
                 // so they don't bleed into tag-based home screen sections.
-                var topListsFolder = Path.Combine(Plugin.Instance.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
+                var topListsFolder = Path.Combine(Plugin.Instance!.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
 
                 var imdbLookup = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
                 foreach (var item in allItems)
@@ -714,16 +714,16 @@ namespace HomeScreenCompanion
                         if (string.IsNullOrEmpty(tagConfig.SourceType) || tagConfig.SourceType == "External")
                         {
                             var fetchTimer = System.Diagnostics.Stopwatch.StartNew();
-                            var items = await fetcher.FetchItems(tagConfig.Url, effectiveLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
+                            var items = await fetcher.FetchItems(tagConfig.Url!, effectiveLimit, config.TraktClientId, config.MdblistApiKey, config.TmdbApiKey, cancellationToken,
                                 CountsTowardLimit(imdbLookup, blacklist, passesFilters));
                             fetchTimer.Stop();
                             fetchError = fetcher.LastError;
                             // Empty with "Preserve…" on: the URL's last good entries stand in for it (see LastGoodLists).
-                            if (items.Count > 0) { if (!dryRun) LastGoodLists.Save(tagConfig.Url, items, _jsonSerializer); }
-                            else if (config.PreserveTagsOnEmptyResult && LastGoodLists.Load(tagConfig.Url, _jsonSerializer) is var _lastGood && _lastGood != null)
+                            if (items.Count > 0) { if (!dryRun) LastGoodLists.Save(tagConfig.Url!, items, _jsonSerializer); }
+                            else if (config.PreserveTagsOnEmptyResult && LastGoodLists.Load(tagConfig.Url!, _jsonSerializer) is var _lastGood && _lastGood != null)
                             {
                                 items = _lastGood.Value.Items;
-                                (ListFetcher.IsFailure(fetchError) ? gs.Errors : gs.Warnings).Add(StandInMessage(tagConfig.Url, fetchError, _lastGood.Value.SavedUtc));
+                                (ListFetcher.IsFailure(fetchError) ? gs.Errors : gs.Warnings).Add(StandInMessage(tagConfig.Url!, fetchError, _lastGood.Value.SavedUtc));
                             }
                             gs.ListCount = items.Count;
                             int _extBlacklisted = 0, _extNoImdb = 0;
@@ -1005,7 +1005,7 @@ namespace HomeScreenCompanion
 
                                 if (!string.IsNullOrEmpty(aiItem.imdb_id))
                                 {
-                                    var imdbId = aiItem.imdb_id.Trim();
+                                    var imdbId = aiItem.imdb_id!.Trim();
                                     if (blacklist.Contains(imdbId))
                                     {
                                         _aiBlacklisted++;
@@ -2050,7 +2050,7 @@ namespace HomeScreenCompanion
             if (_preview == null && (!tagConfig.Active || !IsScheduleActive(tagConfig.ActiveIntervals)))
                 return OffScheduleSingleRun(config, tagConfig, gs, startTime, dryRun, logMissing, debug, cancellationToken);
 
-            var _topListsFolder = Path.Combine(Plugin.Instance.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
+            var _topListsFolder = Path.Combine(Plugin.Instance!.DataFolderPath, "toplists") + Path.DirectorySeparatorChar;
             var imdbLookup = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in allItems)
             {
@@ -2578,7 +2578,7 @@ namespace HomeScreenCompanion
 
                         if (!string.IsNullOrEmpty(aiItem.imdb_id))
                         {
-                            var imdbId = aiItem.imdb_id.Trim();
+                            var imdbId = aiItem.imdb_id!.Trim();
                             if (blacklist.Contains(imdbId)) { _aiBlacklisted++; _log.Debug($"    Blacklisted: {_aiLabel} ({imdbId})"); continue; }
                             if (_preview == null && tagConfig.EnableTag && !tagConfig.OnlyCollection && !HasFilterConditions(tagConfig))
                                 TagCacheManager.Instance.AddToCache($"imdb_{imdbId}", tagName);
@@ -2621,7 +2621,7 @@ namespace HomeScreenCompanion
                     else if (tagConfig.AiRefreshIntervalDays > 0 && aiItems.Count > 0)
                     {
                         tagConfig.AiLastRunDate = DateTime.UtcNow;
-                        Plugin.Instance.SaveConfiguration();
+                        Plugin.Instance!.SaveConfiguration();
                     }
                 }
             }
@@ -3149,7 +3149,7 @@ namespace HomeScreenCompanion
                     }
                 }
 
-                Plugin.Instance.SaveConfiguration();
+                Plugin.Instance!.SaveConfiguration();
             }
 
             var _boxSetFound = ApplyTagToSourceBoxSet(tagConfig, tagName, dryRun, cancellationToken);
@@ -4448,7 +4448,7 @@ namespace HomeScreenCompanion
                 // For items-type sections, dynamically ensure all top-list libraries are excluded
                 if (sectionType == "items")
                 {
-                    var topListLibIds = (config?.TopLists ?? new System.Collections.Generic.List<TopListHomeSection>())
+                    var topListLibIds = (config.TopLists ?? new System.Collections.Generic.List<TopListHomeSection>())
                         .Where(t => !string.IsNullOrEmpty(t.HomeSectionLibraryId) && t.HomeSectionLibraryId != "auto")
                         .Select(t => t.HomeSectionLibraryId)
                         .ToList();
@@ -4471,7 +4471,7 @@ namespace HomeScreenCompanion
                     }
                 }
 
-                string resolvedLibraryId = null;
+                string? resolvedLibraryId = null;
                 if (sectionType == "boxset")
                 {
                     if (tc.HomeSectionLibraryId == "auto")
@@ -5185,7 +5185,7 @@ namespace HomeScreenCompanion
             return updated;
         }
 
-        internal static ContentSection BuildContentSection(IJsonSerializer jsonSerializer, Dictionary<string, string> settings, string libraryId, ContentSection existing = null)
+        internal static ContentSection BuildContentSection(IJsonSerializer jsonSerializer, Dictionary<string, string> settings, string? libraryId, ContentSection? existing = null)
         {
             var section = existing ?? new ContentSection();
             var props = typeof(ContentSection).GetProperties(BindingFlags.Public | BindingFlags.Instance);
@@ -5204,7 +5204,7 @@ namespace HomeScreenCompanion
                 try
                 {
                     var t = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                    object converted = null;
+                    object? converted = null;
                     if (t == typeof(string)) converted = strVal;
                     else if (t == typeof(bool)) converted = bool.Parse(strVal);
                     else if (t == typeof(int)) converted = int.Parse(strVal);
@@ -5626,7 +5626,7 @@ namespace HomeScreenCompanion
                     else if (defaultWidth > 0 && !info.Is720 && !info.Is1080 && !info.Is4k && !info.Is8k) info.IsSd = true;
                 } catch { }
 
-                System.Collections.IEnumerable streams = null;
+                System.Collections.IEnumerable? streams = null;
                 try { streams = dynItem.GetMediaStreams(); } catch { }
                 if (streams == null) {
                     try {
@@ -5777,7 +5777,7 @@ namespace HomeScreenCompanion
 
             // Never let the group's own output tag satisfy its Tag: criteria (see _writtenTags).
             var ownTag = tagConfig.Tag?.Trim();
-            if (!string.IsNullOrEmpty(ownTag) && _writtenTags.Contains(ownTag))
+            if (!string.IsNullOrEmpty(ownTag) && _writtenTags.Contains(ownTag!))
                 itemTags = itemTags.Where(t => !string.Equals(t, ownTag, StringComparison.OrdinalIgnoreCase)).ToArray();
 
             if (hasFilters)

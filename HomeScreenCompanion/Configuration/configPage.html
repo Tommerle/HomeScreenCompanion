@@ -2170,7 +2170,7 @@
                     </div>
                     <div class="src-card">
                         <div class="src-card-title"><i class="md-icon" style="font-size:1.1em;color:var(--plugin-popup-muted);">delete</i> Remove Group</div>
-                        Asks <em>Delete "&lt;name&gt;"?</em> with the source's name. The card goes at once, but nothing is deleted until you click <strong>Save Settings</strong>. Changed your mind before saving? Reload the page and click <em>Discard</em> in the <em>Unsaved changes restored</em> bar. Saving only removes the source from the settings; what it made in Emby is cleaned up by the runs after that:
+                        Asks <em>Delete "&lt;name&gt;"?</em> with the source's name. The card goes at once, but nothing is deleted until you click <strong>Save Settings</strong>. Changed your mind before saving? Reload the page and click <em>Discard</em> in the <em>Unsaved changes restored</em> bar (<em>Show changes</em> there lists what will be put back). Saving only removes the source from the settings; what it made in Emby is cleaned up by the runs after that:
                         <ul style="margin:4px 0 0;padding-left:18px;line-height:1.7;">
                             <li>Its <strong>tag</strong> (taken off every title), its <strong>home rows</strong> and its users' <strong>playlists</strong> go on the next full sync, or the next <em>Run Group</em> of any source.</li>
                             <li>Its <strong>collection</strong> is only deleted by a <strong>full sync</strong>, so run <strong>Run</strong> → <em>Full sync</em> once to clear everything away (or wait for the nightly run). The log lists what was removed.</li>
@@ -2685,7 +2685,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">restore</i>
-                    <div><strong>Unsaved changes</strong> — Left the page without saving? When you come back, your unsaved changes and open sources are put back and a bar at the top says <em>Unsaved changes restored</em> — click <strong>Save Settings</strong> to keep them or <strong>Discard</strong> to go back to the saved settings. If the bar warns that settings changed on the server meanwhile, Save will not overwrite them (see below).</div>
+                    <div><strong>Unsaved changes</strong> — Left the page without saving? When you come back, your unsaved changes and open sources are put back and a bar at the top says <em>Unsaved changes restored</em> — <strong>Show changes</strong> lists which sources and settings are unsaved (with <strong>Save and apply</strong> and <strong>Discard</strong> right there); click <strong>Save Settings</strong> to keep them or <strong>Discard</strong> to go back to the saved settings. If the bar warns that settings changed on the server meanwhile, Save will not overwrite them (see below).</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">sync_problem</i>
