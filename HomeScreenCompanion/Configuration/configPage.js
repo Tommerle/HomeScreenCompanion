@@ -10071,12 +10071,12 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 var rows = items.map(function (item) {
                     var isManual = item.isManual;
                     var typeBadge = isManual
-                        ? '<span class="tag-indicator toplist" style="margin-left:0;margin-right:12px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Manual</span>'
-                        : '<span class="tag-indicator tag" style="margin-left:0;margin-right:12px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">label</i> ' + escHtml(item.tagName) + '</span>';
+                        ? '<span class="tag-indicator toplist" style="flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Manual</span>'
+                        : '<span class="tag-indicator tag" style="flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">label</i> ' + escHtml(item.tagName) + '</span>';
                     var isShows = item.contentType === 'Shows';
                     var contentBadge = isShows
-                        ? '<span class="tag-indicator ct-shows" style="margin-left:0;margin-right:8px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">tv</i> TV Shows</span>'
-                        : '<span class="tag-indicator ct-movies" style="margin-left:0;margin-right:8px;flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">movie</i> Movies</span>';
+                        ? '<span class="tag-indicator ct-shows" style="flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">tv</i> TV Shows</span>'
+                        : '<span class="tag-indicator ct-movies" style="flex-shrink:0;"><i class="md-icon" style="font-size:1.1em;">movie</i> Movies</span>';
                     var displayModeLabel = ({'': 'Always', 'tv': 'TV mode only', 'mobile,desktop': 'Non-TV only'})[item.displayMode] || 'Always';
                     var imageTypeLabel = item.imageType || 'Auto';
                     var maxItemsLabel  = item.maxItems ? String(item.maxItems) : '0 (all)';
@@ -10097,10 +10097,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     }));
                     return '<div class="tag-row" data-tlname="' + escAttr(item.tagName.toLowerCase()) + '" data-ismanual="' + (isManual ? '1' : '0') + '" data-isshows="' + (isShows ? '1' : '0') + '" data-count="' + item.count + '" data-editjson="' + editJson + '">' +
                         '<div class="tl-row-header tag-header">' +
-                        '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">' +
+                        // Same order as a source row: name, then its chips (type, tag / Manual, number of items)
+                        '<div style="display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;min-width:0;">' +
+                        '<span class="tag-title" style="margin-left:0;">' + escHtml(item.displayName) + '</span>' +
                         contentBadge + typeBadge +
-                        '<span class="tag-title">' + escHtml(item.displayName) + '</span>' +
-                        '<span class="tag-indicator source" style="margin-left:8px;">' + item.count + (isShows ? ' shows' : ' movies') + '</span>' +
+                        '<span class="tag-indicator" style="flex-shrink:0;font-variant-numeric:tabular-nums;">' + item.count + (isShows ? ' shows' : ' movies') + '</span>' +
                         '</div>' +
                         '<i class="md-icon expand-icon" style="flex-shrink:0;margin-left:12px;">expand_more</i>' +
                         '</div>' +
