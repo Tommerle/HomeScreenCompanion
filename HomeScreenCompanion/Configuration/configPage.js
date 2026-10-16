@@ -9141,6 +9141,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Create from an existing tag in your library</div>' +
                 '</button>' +
                 '</div>' +
+                // A top-list is a library of its own, and every user it is shown to gets access to it.
+                '<div class="hsc-callout warning" style="margin-top:20px;">' +
+                '<i class="md-icon">warning</i>' +
+                '<span><strong>Library access is not checked per title.</strong> A top-list gets a library of its own, and every user you show it to gets access to that library. Its ' + (isShows ? 'shows' : 'movies') + ' can come from any library on the server, so those users can see and play them even from libraries they otherwise have no access to.</span>' +
+                '</div>' +
                 '</div>';
 
             modal.querySelector('.btnChooserClose').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
@@ -9852,6 +9857,63 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 btn.disabled = false;
                 btn.innerHTML = '<i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download';
                 errEl.textContent = 'Backup failed: ' + (err.message || err);
+            });
+        });
+    }
+
+    // Download logs: one zip for troubleshooting (see LogBundle.cs on the server). API keys are always
+    // masked there; user names only when "Anonymise user names" is ticked (the default).
+    function showDownloadLogsModal() {
+        var modal = buildBackupModalShell();
+        // Opened from the log window (.modal-backdrop, z-index 99999): on top of it.
+        modal.style.zIndex = '100000';
+        modal.renderBox(
+            '<h3 style="' + _backupTitleStyle + '">Download logs</h3>' +
+            '<p style="' + _backupHintStyle + '">One zip file with everything needed to look into a problem: the plugin\'s own log of the last 7 days (all detail lines, also when Extended log is off), the latest run of each task, the plugin settings and a snapshot of the server right now – libraries, users and their library access, every user\'s home rows and the top-lists.</p>' +
+            '<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer;">' +
+            '<input type="checkbox" class="chkLogsAnonymise" checked style="margin-top:3px;" />' +
+            '<span style="flex:1;">' +
+            '<span style="display:block;font-weight:600;font-size:0.95em;">Anonymise user names</span>' +
+            '<span style="display:block;font-size:0.82em;opacity:0.65;margin-top:2px;">Each user\'s name and id becomes User 1, User 2 … – the same one in every file, so a user can still be followed. Names you typed into sources, tags or libraries yourself may still contain them.</span>' +
+            '</span></label>' +
+            '<div class="hsc-callout" style="margin:12px 0 16px;">' +
+            '<i class="md-icon">lock</i>' +
+            '<span><strong>API keys are always hidden.</strong> Keys and tokens (Trakt, MDBList, TMDb, OpenAI, Gemini, Claude, and keys in list URLs) are replaced by *** in every file, whether or not names are anonymised. Titles, source and library names stay as they are.</span>' +
+            '</div>' +
+            '<div class="logs-error" style="color:var(--hsc-danger-text);font-size:0.85em;min-height:1.2em;margin-bottom:6px;"></div>' +
+            '<div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">' +
+            '<button type="button" class="btnLogsCancel hsc-mbtn hsc-btn-secondary">Cancel</button>' +
+            '<button type="button" class="btnLogsDownload hsc-mbtn hsc-btn-primary"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download</button>' +
+            '</div>'
+        );
+        modal.querySelector('.btnLogsCancel').addEventListener('click', modal.close);
+        modal.querySelector('.btnLogsDownload').addEventListener('click', function () {
+            var btn = this;
+            var errEl = modal.querySelector('.logs-error');
+            var anonymise = modal.querySelector('.chkLogsAnonymise').checked;
+            errEl.textContent = '';
+            btn.disabled = true;
+            btn.innerHTML = 'Preparing <span class="tc-dot-loader"><span></span><span></span><span></span></span>';
+            modal.dataset.busy = '1';
+            var tok = window.ApiClient.accessToken ? window.ApiClient.accessToken() : '';
+            fetch(window.ApiClient.getUrl('HomeScreenCompanion/Logs/Download', { Anonymize: anonymise }), { headers: { 'X-Emby-Token': tok } })
+            .then(function (r) { if (!r.ok) throw new Error('Server returned ' + r.status); return r.json(); })
+            .then(function (res) {
+                if (!res.Success) throw new Error(res.Message || 'The logs could not be put together.');
+                var bin = atob(res.Data);
+                var bytes = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                var url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+                var a = document.createElement('a');
+                a.href = url; a.download = res.FileName || 'hsc-logs.zip';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                modal.close();
+            })
+            .catch(function (err) {
+                delete modal.dataset.busy;
+                btn.disabled = false;
+                btn.innerHTML = '<i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download';
+                errEl.textContent = 'Download failed: ' + (err.message || err);
             });
         });
     }
@@ -10751,6 +10813,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 view.querySelector('#btnOpenLogs').addEventListener('click', e => { e.preventDefault(); _logTab = null; renderLogModal(view); logOverlay.classList.add('modal-visible'); });
                 view.querySelector('#btnCloseLogs').addEventListener('click', () => { _logTab = null; logOverlay.classList.remove('modal-visible'); });
+                view.querySelector('#btnDownloadLogs').addEventListener('click', () => showDownloadLogsModal());
                 logOverlay.addEventListener('click', e => { if (e.target === logOverlay) { _logTab = null; logOverlay.classList.remove('modal-visible'); } });
                 view.querySelectorAll('#logTabs .log-tab').forEach(function (tab) {
                     if (tab.id === 'btnLogIssuesOnly') { tab.addEventListener('click', function () { _logIssuesOnly = !_logIssuesOnly; renderLogModal(view); }); return; }

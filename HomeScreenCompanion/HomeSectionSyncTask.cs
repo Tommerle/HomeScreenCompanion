@@ -18,7 +18,7 @@ namespace HomeScreenCompanion
         private readonly IUserManager _userManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IJsonSerializer _jsonSerializer;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
 
         public static string LastSyncTime { get; private set; } = "Never";
         public static bool IsRunning { get; private set; } = false;
@@ -59,7 +59,7 @@ namespace HomeScreenCompanion
             _userManager = userManager;
             _libraryManager = libraryManager;
             _jsonSerializer = jsonSerializer;
-            _logger = logManager.GetLogger("HomeScreenCompanion_HSC");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion_HSC"), "Home Screen");
             _log = new RunLog(ExecutionLog, _logger, "[Home Screen]", false);
         }
 
@@ -438,7 +438,7 @@ namespace HomeScreenCompanion
                     if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
                         settings = json.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settings;
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 if (!settings.ContainsKey("SectionType")) settings["SectionType"] = "items";
                 return HomeScreenCompanionTask.BuildContentSection(json, settings, tl.HomeSectionLibraryId);
             }

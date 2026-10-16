@@ -20,7 +20,7 @@ namespace HomeScreenCompanion
     public class ServerEntryPoint : IServerEntryPoint
     {
         private readonly ILibraryManager _libraryManager;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
         private readonly IJsonSerializer _jsonSerializer;
         private readonly IProviderManager _providerManager;
         private readonly IFileSystem _fileSystem;
@@ -40,7 +40,7 @@ namespace HomeScreenCompanion
         public ServerEntryPoint(ILibraryManager libraryManager, ILogManager logManager, IJsonSerializer jsonSerializer, IProviderManager providerManager, IFileSystem fileSystem, ICollectionManager collectionManager, IItemRepository itemRepository, IMediaSourceManager mediaSourceManager, ITaskManager taskManager)
         {
             _libraryManager = libraryManager;
-            _logger = logManager.GetLogger("HomeScreenCompanion_RealTime");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion_RealTime"), "Real-time");
             _jsonSerializer = jsonSerializer;
             _providerManager = providerManager;
             _fileSystem = fileSystem;
@@ -53,6 +53,8 @@ namespace HomeScreenCompanion
         public void Run()
         {
             if (Plugin.Instance == null) return;
+            // First, so the plugin's own log file is written (lines from before wait in its queue).
+            PluginLog.Initialize(Plugin.Instance.DataFolderPath);
             RunAutoMigration();
             TagCacheManager.Instance.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
             TopListCollectionMirror.Initialize(_libraryManager, _collectionManager, _logger);
@@ -329,6 +331,7 @@ namespace HomeScreenCompanion
             _collectionManager.ItemsAddedToCollection -= OnItemsAddedToCollection;
             _collectionManager.ItemsRemovedFromCollection -= OnItemsRemovedFromCollection;
             _libraryWatcher?.Dispose();
+            PluginLog.Flush();
         }
     }
 }

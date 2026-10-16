@@ -321,7 +321,7 @@ namespace HomeScreenCompanion
                     }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return null;
         }
 
@@ -518,7 +518,7 @@ namespace HomeScreenCompanion
                             if (list.Count > 0) return list;
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                     try
                     {
@@ -533,7 +533,7 @@ namespace HomeScreenCompanion
                             if (list.Count > 0) return list;
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                     return list;
                 }

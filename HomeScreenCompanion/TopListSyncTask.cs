@@ -20,7 +20,7 @@ namespace HomeScreenCompanion
         private readonly IUserViewManager _userViewManager;
         private readonly IUserManager _userManager;
         private readonly IJsonSerializer _jsonSerializer;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
 
         public static List<string> ExecutionLog { get; } = new List<string>();
         public static bool IsRunning { get; private set; } = false;
@@ -36,7 +36,7 @@ namespace HomeScreenCompanion
             _userViewManager = userViewManager;
             _userManager = userManager;
             _jsonSerializer = jsonSerializer;
-            _logger = logManager.GetLogger("HomeScreenCompanion_Access");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion_Access"), "Top-lists");
         }
 
         public string Key => "TopListSyncTask";
@@ -79,7 +79,7 @@ namespace HomeScreenCompanion
                 if (Guid.TryParse(userId, out var guid))
                     return userManager.GetUserById(guid)?.Name ?? userId;
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return userId;
         }
 
@@ -97,7 +97,12 @@ namespace HomeScreenCompanion
                 var uid = userManager.GetInternalId(userId);
                 Guid.TryParse(userId, out var userGuid);
                 // Reflect through the interface type to handle explicit interface implementations.
-                var ifMethod = typeof(IUserViewManager).GetMethod("GetUserViews");
+                // Emby 4.10 has three GetUserViews (query; query + data context + token; and one more),
+                // so GetMethod(name) is ambiguous: take the one with just the query.
+                var ifMethod = typeof(IUserViewManager).GetMethods()
+                    .Where(m => m.Name == "GetUserViews")
+                    .OrderBy(m => m.GetParameters().Length)
+                    .FirstOrDefault();
                 if (ifMethod == null) return ids;
                 var queryParams = ifMethod.GetParameters();
                 object? queryArg = null;
@@ -133,7 +138,7 @@ namespace HomeScreenCompanion
                             ids.Add(vid.ToString("N"));
                     }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return ids.Select(s => s.ToLowerInvariant()).Distinct().ToList();
         }
 
@@ -167,7 +172,7 @@ namespace HomeScreenCompanion
                     own.Add(lib.InternalId.ToString());
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return own;
         }
 
@@ -192,7 +197,7 @@ namespace HomeScreenCompanion
             IUserViewManager userViewManager,
             IUserManager userManager,
             IJsonSerializer jsonSerializer,
-            ILogger logger,
+            PluginLogger logger,
             CancellationToken cancellationToken,
             RunLog? log = null,
             string? onlyTag = null)
@@ -225,7 +230,7 @@ namespace HomeScreenCompanion
             IUserViewManager userViewManager,
             IUserManager userManager,
             IJsonSerializer jsonSerializer,
-            ILogger logger,
+            PluginLogger logger,
             CancellationToken cancellationToken,
             RunLog? log,
             string? onlyTag = null)
@@ -239,7 +244,7 @@ namespace HomeScreenCompanion
             {
                 lock (ExecutionLog) { ExecutionLog.Clear(); }
                 LastStartedUtc = DateTime.UtcNow;
-                _log = new RunLog(ExecutionLog, null, "", config?.ExtendedConsoleOutput ?? false, Progress);
+                _log = new RunLog(ExecutionLog, null, "", config?.ExtendedConsoleOutput ?? false, Progress, "Top-lists");
                 _log.Rule();
                 _log.Info($"Top-list section sync  ·  {startTime:yyyy-MM-dd HH:mm}");
                 _log.Rule();
@@ -341,7 +346,7 @@ namespace HomeScreenCompanion
                             if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
                                 settingsDict = jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settingsDict;
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         // Merge: union of newly discovered IDs and any previously stored exclusions
                         // (preserves IDs like Live TV that are only captured at initial setup time).
@@ -402,7 +407,7 @@ namespace HomeScreenCompanion
                         if (!string.IsNullOrEmpty(tc.HomeSectionSettings) && tc.HomeSectionSettings != "{}")
                             tcSettings = jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tc.HomeSectionSettings) ?? tcSettings;
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                     if (!tcSettings.TryGetValue("SectionType", out var tcSt) || string.IsNullOrEmpty(tcSt))
                         tcSt = HomeScreenCompanionTask.DefaultSectionType(tc);
@@ -438,7 +443,7 @@ namespace HomeScreenCompanion
                             }, cancellationToken).FirstOrDefault();
                             if (tagItem != null) tcSettings["_queryTagId"] = tagItem.InternalId.ToString();
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
 
 
@@ -459,7 +464,7 @@ namespace HomeScreenCompanion
                             userManager.UpdateHomeSection(uid, updatedSec, cancellationToken);
                             totalUpdated++;
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
                 }
             }
@@ -470,16 +475,7 @@ namespace HomeScreenCompanion
 
             GrantTopListLibraryAccess(topLists, userManager, libraryManager, logger);
 
-            // A show list's episodes are copies of real ones. Emby applies a user's "Latest"
-            // exclusions to Continue Watching and Next Up too, so this keeps every copy out of all
-            // three, in every app.
-            foreach (var tl in topLists.Where(ShowTopList.IsShows))
-            {
-                if (string.IsNullOrEmpty(tl.HomeSectionLibraryId) || tl.HomeSectionLibraryId == "auto") continue;
-                var libGuid = ResolveLibraryGuid(tl.HomeSectionLibraryId.Trim(), libraryManager);
-                if (!string.IsNullOrEmpty(libGuid)) SetLatestExclusion(userManager, libGuid!, true, logger);
-            }
-            var hiddenFor = TopListLibraryVisibility.Apply(config, userManager, libraryManager, m => _log.Warn(m));
+            var hiddenFor = HideLibraries(config, userManager, libraryManager, logger, m => _log.Warn(m));
             if (hiddenFor > 0)
                 _log.Info($"    HSC libraries {(config.HideTopListLibraries ? "hidden from" : "shown again in")} My Media and Latest for {RunLog.Plural(hiddenFor, "user")}");
 
@@ -489,7 +485,26 @@ namespace HomeScreenCompanion
             return (totalUpdated, summary);
         }
 
-        internal static void GrantTopListLibraryAccess(List<TopListHomeSection> topLists, IUserManager userManager, ILibraryManager libraryManager, ILogger logger)
+        /// <summary>
+        /// Keeps the plugin's libraries out of sight for every user: show-list libraries always out of
+        /// "Latest" (Emby applies those exclusions to Continue Watching and Next Up too, so a show
+        /// list's episode copies stay out of all three, in every app), and with "Hide HSC libraries"
+        /// every top-list library out of My Media and Latest (TopListLibraryVisibility). Run by every
+        /// top-list section sync and when a user is created (NewUserWatcher). Returns the number of
+        /// users whose My Media / Latest settings changed.
+        /// </summary>
+        internal static int HideLibraries(PluginConfiguration config, IUserManager userManager, ILibraryManager libraryManager, PluginLogger logger, Action<string>? warn = null)
+        {
+            foreach (var tl in (config.TopLists ?? new List<TopListHomeSection>()).Where(ShowTopList.IsShows))
+            {
+                if (string.IsNullOrEmpty(tl.HomeSectionLibraryId) || tl.HomeSectionLibraryId == "auto") continue;
+                var libGuid = ResolveLibraryGuid(tl.HomeSectionLibraryId.Trim(), libraryManager);
+                if (!string.IsNullOrEmpty(libGuid)) SetLatestExclusion(userManager, libGuid!, true, logger);
+            }
+            return TopListLibraryVisibility.Apply(config, userManager, libraryManager, warn);
+        }
+
+        internal static void GrantTopListLibraryAccess(List<TopListHomeSection> topLists, IUserManager userManager, ILibraryManager libraryManager, PluginLogger logger)
         {
             dynamic mgr = userManager;
 
@@ -586,7 +601,7 @@ namespace HomeScreenCompanion
         }
 
         // Adds (or removes) a library in every user's "Latest" exclusions (LatestItemsExcludes).
-        internal static void SetLatestExclusion(IUserManager userManager, string libGuid, bool exclude, ILogger logger)
+        internal static void SetLatestExclusion(IUserManager userManager, string libGuid, bool exclude, PluginLogger logger)
         {
             var norm = libGuid.Replace("-", "").ToLowerInvariant();
             foreach (var user in userManager.GetUserList(new UserQuery { IsDisabled = false }))
@@ -629,7 +644,7 @@ namespace HomeScreenCompanion
                     if (match != null)
                         return match.Id.ToString("N").ToLowerInvariant();
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
 
             return null;

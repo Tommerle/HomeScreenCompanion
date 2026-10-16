@@ -32,6 +32,8 @@ namespace HomeScreenCompanion
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
+            if (configuration is PluginConfiguration saved)
+                PluginLog.Write("INF", "Settings", $"Settings saved — {RunLog.Plural(saved.Tags?.Count ?? 0, "source entry", "source entries")}, {RunLog.Plural(saved.TopLists?.Count ?? 0, "top-list")}");
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;
             HomeScreenCompanionTask.KeepLastRunCounts(Configuration, configuration as PluginConfiguration);
             // Groups deleted on the settings page: their tag and home rows are cleaned up by the next full run.

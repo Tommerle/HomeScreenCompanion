@@ -118,7 +118,7 @@ namespace HomeScreenCompanion
                         if (!string.IsNullOrEmpty(ids[i]) && !rank.ContainsKey(ids[i])) rank[ids[i]] = i;
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             return series
                 .OrderBy(s => rank.TryGetValue(s.GetProviderId("Imdb") ?? "", out var r) ? r : int.MaxValue)
@@ -278,7 +278,7 @@ namespace HomeScreenCompanion
                 foreach (var f in Directory.GetFiles(seasonDir))
                     if (!wanted.Contains(f)) TryDelete(f);
                 if (Directory.GetFileSystemEntries(seasonDir).Length == 0)
-                    try { Directory.Delete(seasonDir); } catch { }
+                    try { Directory.Delete(seasonDir); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
         }
 
@@ -347,7 +347,7 @@ namespace HomeScreenCompanion
         {
             if (!IsShowFolder(folderPath)) return;
             foreach (var dir in Directory.GetDirectories(folderPath))
-                try { Directory.Delete(dir, true); } catch { }
+                try { Directory.Delete(dir, true); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             TryDelete(Path.Combine(folderPath, ManifestFileName));
         }
 
@@ -360,7 +360,7 @@ namespace HomeScreenCompanion
                     return (jsonSerializer.DeserializeFromFile<List<ManifestEntry>>(file) ?? new List<ManifestEntry>())
                         .OrderBy(e => e.Rank).ToList();
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new List<ManifestEntry>();
         }
 
@@ -393,7 +393,7 @@ namespace HomeScreenCompanion
             }).Where(i => !string.IsNullOrEmpty(i.Path) && i.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
             foreach (var copy in copies)
-                try { Refresh(copy, libraryManager, jsonSerializer, p => originalsByPath.TryGetValue(p, out var o) ? o : null); } catch { }
+                try { Refresh(copy, libraryManager, jsonSerializer, p => originalsByPath.TryGetValue(p, out var o) ? o : null); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // Brings one copy (series, season or episode) up to date with its original: rank, images
@@ -435,7 +435,7 @@ namespace HomeScreenCompanion
             else if (copy is Episode)
             {
                 string? target = null;
-                try { target = File.ReadAllText(copy.Path).Trim(); } catch { }
+                try { target = File.ReadAllText(copy.Path).Trim(); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 if (string.IsNullOrEmpty(target)) return false;
                 var original = findOriginalEpisode != null ? findOriginalEpisode(target!) : libraryManager.FindByPath(target, false);
                 if (original == null || IsCopy(original)) return false;
@@ -595,7 +595,7 @@ namespace HomeScreenCompanion
             {
                 if (File.Exists(path) && File.ReadAllText(path) == content) return false;
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             File.WriteAllText(path, content);
             return true;
         }
@@ -609,14 +609,14 @@ namespace HomeScreenCompanion
                     && File.ReadAllBytes(target).SequenceEqual(File.ReadAllBytes(source)))
                     return false;
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             File.Copy(source, target, overwrite: true);
             return true;
         }
 
         private static void TryDelete(string path)
         {
-            try { File.Delete(path); } catch { }
+            try { File.Delete(path); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
     }
 }

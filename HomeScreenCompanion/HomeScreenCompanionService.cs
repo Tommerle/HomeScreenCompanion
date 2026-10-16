@@ -46,6 +46,22 @@ namespace HomeScreenCompanion
         public string Channel { get; set; } = "";
     }
 
+    // Download logs: the zip (see LogBundle), base64 in JSON like the plugin's other downloads.
+    [Route("/HomeScreenCompanion/Logs/Download", "GET")]
+    [Authenticated(Roles = "Admin")]
+    public class DownloadLogsRequest : IReturn<DownloadLogsResponse>
+    {
+        public bool Anonymize { get; set; } = true;
+    }
+
+    public class DownloadLogsResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string Data { get; set; } = "";
+    }
+
     [Route("/HomeScreenCompanion/UploadCollectionImage", "POST")]
     [Authenticated(Roles = "Admin")]
     public class UploadCollectionImageRequest : IReturn<UploadCollectionImageResponse>
@@ -852,10 +868,13 @@ public class HomeScreenCompanionService : IService
         private readonly ITaskManager _taskManager;
         private readonly IProviderManager _providerManager;
         private readonly IFileSystem _fileSystem;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
 
-        public HomeScreenCompanionService(IHttpClient httpClient, IJsonSerializer jsonSerializer, IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserViewManager userViewManager, ITaskManager taskManager, IProviderManager providerManager, IFileSystem fileSystem, ILogManager logManager)
+        private readonly MediaBrowser.Controller.IServerApplicationHost _appHost;
+
+        public HomeScreenCompanionService(IHttpClient httpClient, IJsonSerializer jsonSerializer, IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserViewManager userViewManager, ITaskManager taskManager, IProviderManager providerManager, IFileSystem fileSystem, ILogManager logManager, MediaBrowser.Controller.IServerApplicationHost appHost)
         {
+            _appHost = appHost;
             _httpClient = httpClient;
             _jsonSerializer = jsonSerializer;
             _userManager = userManager;
@@ -865,7 +884,22 @@ public class HomeScreenCompanionService : IService
             _taskManager = taskManager;
             _providerManager = providerManager;
             _fileSystem = fileSystem;
-            _logger = logManager.GetLogger("HomeScreenCompanion_Access");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion_Access"), "Page");
+        }
+
+        public object Get(DownloadLogsRequest request)
+        {
+            try
+            {
+                var (fileName, zip) = new LogBundle(_libraryManager, _userManager, _taskManager, _jsonSerializer, _appHost).Build(request.Anonymize);
+                _logger.Info($"Logs downloaded ({zip.Length / 1024} KB{(request.Anonymize ? ", anonymised" : "")})");
+                return new DownloadLogsResponse { Success = true, FileName = fileName, Data = Convert.ToBase64String(zip) };
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Logs could not be put together", ex);
+                return new DownloadLogsResponse { Success = false, Message = ex.Message };
+            }
         }
 
         public object Get(VersionRequest request)
@@ -915,7 +949,7 @@ public class HomeScreenCompanionService : IService
                         return s; // ThemeSong, ThemeVideo, Trailer, BehindTheScenes, etc.
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return item.GetType().Name;
         }
 
@@ -1192,7 +1226,7 @@ public class HomeScreenCompanionService : IService
         {
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try { settings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings ?? "{}") ?? settings; }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             var badgeStyle = settings.TryGetValue("BadgeStyle", out var bs) && !string.IsNullOrEmpty(bs) ? bs : "neutral";
             var badgeOptions = settings.TryGetValue("BadgeOptions", out var bo) ? bo ?? "" : "";
             var folderPath = Path.Combine(Plugin.Instance.DataFolderPath, "toplists", SanitizeFolderName(tl.TagName));
@@ -1598,7 +1632,7 @@ public class HomeScreenCompanionService : IService
                         }
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
 
             var fetcher = new ListFetcher(_httpClient, _jsonSerializer);
@@ -1840,7 +1874,7 @@ public class HomeScreenCompanionService : IService
                     if (!string.IsNullOrEmpty(tc.HomeSectionSettings) && tc.HomeSectionSettings != "{}")
                         settingsDict = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tc.HomeSectionSettings) ?? settingsDict;
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                 if (!settingsDict.ContainsKey("SectionType"))
                     settingsDict["SectionType"] = HomeScreenCompanionTask.DefaultSectionType(tc);
@@ -1916,7 +1950,7 @@ public class HomeScreenCompanionService : IService
                         _userManager.UpdateHomeSection(userInternalId, updatedSection, CancellationToken.None);
                         updated++;
                     }
-                    catch { /* skip this user on error */ }
+                    catch (Exception swallowed) { /* skip this user on error */ PluginLog.Swallowed(swallowed); }
                 }
 
                 return new HscApplyTagHomeSectionsResponse { Success = true, UsersUpdated = updated, Message = $"Applied to {updated} user(s)." };
@@ -1991,7 +2025,7 @@ public class HomeScreenCompanionService : IService
                     all.CopyTo(allExtraTypes, 0);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             var tagCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var tagMovieKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -2020,7 +2054,7 @@ public class HomeScreenCompanionService : IService
                         foreach (var extra in _libraryManager.GetItemList(extraQuery))
                             if (seenIds.Add(extra.Id)) items.Add(extra);
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
                 return items;
             }
@@ -2240,7 +2274,7 @@ public class HomeScreenCompanionService : IService
                 if (item.Tags == null) continue;
                 item.RemoveTag(tagName);
                 try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); updated++; }
-                catch { /* best effort */ }
+                catch (Exception swallowed) { /* best effort */ PluginLog.Swallowed(swallowed); }
             }
             return new DeleteManagedTagResponse { Success = true, ItemsUpdated = updated };
         }
@@ -2284,7 +2318,7 @@ public class HomeScreenCompanionService : IService
                 foreach (var extra in _libraryManager.GetItemList(extraQuery))
                     if (seenIds.Add(extra.Id)) allItems.Add(extra);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             int updated = 0;
             foreach (var item in allItems)
@@ -2301,7 +2335,7 @@ public class HomeScreenCompanionService : IService
                 }
                 if (!changed) continue;
                 try { _libraryManager.UpdateItem(item, item.Parent, ItemUpdateType.MetadataEdit, null); updated++; }
-                catch { /* best effort */ }
+                catch (Exception swallowed) { /* best effort */ PluginLog.Swallowed(swallowed); }
             }
             return new DeleteManagedTagsResponse { Success = true, ItemsUpdated = updated };
         }
@@ -2449,7 +2483,7 @@ public class HomeScreenCompanionService : IService
                             }).ToList();
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 // First pass: deduplicate and preserve query order
@@ -2621,7 +2655,7 @@ public class HomeScreenCompanionService : IService
                                 var gpArgs   = BuildArgList(gpParams, gpArg0, null);
                                 policy = getPolicyMethod.Invoke(_userManager, gpArgs);
                             }
-                            catch { }
+                            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                         if (policy == null)
                             policy = user.GetType().GetProperty("Policy")?.GetValue(user);
@@ -2682,7 +2716,7 @@ public class HomeScreenCompanionService : IService
                                 var gp = getPolicyMethod.GetParameters();
                                 policy = getPolicyMethod.Invoke(_userManager, BuildArgList(gp, BuildUserArg(gp[0].ParameterType, user), null));
                             }
-                            catch { }
+                            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                         if (policy == null) policy = user.GetType().GetProperty("Policy")?.GetValue(user);
                         if (policy == null) continue;
@@ -2696,7 +2730,7 @@ public class HomeScreenCompanionService : IService
                             EnabledFolders = foldersProp?.GetValue(policy) as string[] ?? Array.Empty<string>()
                         });
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
             }
             catch (Exception ex)
@@ -2759,7 +2793,7 @@ public class HomeScreenCompanionService : IService
                             var gp = getPolicyMethod.GetParameters();
                             policy = getPolicyMethod.Invoke(_userManager, BuildArgList(gp, BuildUserArg(gp[0].ParameterType, user), null));
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
                     if (policy == null) policy = user.GetType().GetProperty("Policy")?.GetValue(user);
                     if (policy == null) continue;
@@ -2843,7 +2877,7 @@ public class HomeScreenCompanionService : IService
                             var gp = getPolicyMethod.GetParameters();
                             policy = getPolicyMethod.Invoke(_userManager, BuildArgList(gp, BuildUserArg(gp[0].ParameterType, user), null));
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
                     if (policy == null) policy = user.GetType().GetProperty("Policy")?.GetValue(user);
                     if (policy == null) continue;
@@ -2871,7 +2905,7 @@ public class HomeScreenCompanionService : IService
                     var up = updateMethod.GetParameters();
                     updateMethod.Invoke(_userManager, BuildArgList(up, BuildUserArg(up[0].ParameterType, user), policy));
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
         }
 
@@ -2955,7 +2989,7 @@ public class HomeScreenCompanionService : IService
                                        .Select(i => i.ImdbId).ToList();
                     _jsonSerializer.SerializeToFile(rankIds, Path.Combine(rankDir, sanitized + ".json"));
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                 // Update ForcedSortName directly in the library database so the new order applies
                 // immediately. MetadataRefreshMode=Default (used in the UI scan) won't override
@@ -2999,13 +3033,13 @@ public class HomeScreenCompanionService : IService
                                 MergeTopListVersionsTask.QueueStrmProbe(_providerManager, _fileSystem, li);
                             }
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         try { _libraryManager.UpdateItem(li, li.Parent, ItemUpdateType.MetadataEdit, null); }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                 return new PrepareTopListFolderResponse { Success = true, FolderPath = folderPath, FilesCreated = count };
             }
@@ -3272,7 +3306,7 @@ public class HomeScreenCompanionService : IService
                         badgeOptions = settings.TryGetValue("BadgeOptions", out var bo) ? bo ?? "" : "";
                         realPoster = settings.TryGetValue("RealPosterBadge", out var rp) ? rp ?? "" : "";
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     userIds = tlConfig.HomeSectionUserIds ?? new List<string>();
                 }
 
@@ -3333,7 +3367,7 @@ public class HomeScreenCompanionService : IService
                                 var internalId = _userManager.GetInternalId(tracking.UserId);
                                 _userManager.DeleteHomeSections(internalId, new[] { tracking.SectionId }, CancellationToken.None);
                             }
-                            catch { }
+                            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                         config.TopLists.Remove(tl);
                         Plugin.Instance!.SaveConfiguration();
@@ -3368,7 +3402,7 @@ public class HomeScreenCompanionService : IService
                     if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
                         settingsDict = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settingsDict;
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                 if (!settingsDict.ContainsKey("SectionType"))
                     settingsDict["SectionType"] = "items";
@@ -3451,7 +3485,7 @@ public class HomeScreenCompanionService : IService
                             tl.HomeSectionTracked.Add(new HomeSectionTracking { UserId = userId, SectionId = trackId });
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 // Inject the new top-list library into _queryExcludeViewIds of every existing
@@ -3469,7 +3503,7 @@ public class HomeScreenCompanionService : IService
                             if (!string.IsNullOrEmpty(tc.HomeSectionSettings) && tc.HomeSectionSettings != "{}")
                                 tcSettings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tc.HomeSectionSettings) ?? tcSettings;
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         tcSettings.TryGetValue("SectionType", out var tcSt);
                         // Only items rows get the top-list exclusion (boxset and playlist rows show one item list).
@@ -3520,7 +3554,7 @@ public class HomeScreenCompanionService : IService
                                 typeof(ContentSection).GetProperty("Id")?.SetValue(updatedSec, owned.Id);
                                 _userManager.UpdateHomeSection(uid, updatedSec, CancellationToken.None);
                             }
-                            catch { }
+                            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                     }
                 }
@@ -3539,7 +3573,7 @@ public class HomeScreenCompanionService : IService
                             if (!string.IsNullOrEmpty(otherTl.HomeSectionSettings) && otherTl.HomeSectionSettings != "{}")
                                 otherSettings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(otherTl.HomeSectionSettings) ?? otherSettings;
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         var otherExisting = (otherSettings.TryGetValue("_queryExcludeViewIds", out var otherEv) ? otherEv : "")
                             .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
@@ -3573,7 +3607,7 @@ public class HomeScreenCompanionService : IService
                                 typeof(ContentSection).GetProperty("Id")?.SetValue(updatedSec, owned.Id);
                                 _userManager.UpdateHomeSection(uid, updatedSec, CancellationToken.None);
                             }
-                            catch { }
+                            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                     }
                 }
@@ -3866,7 +3900,7 @@ public class HomeScreenCompanionService : IService
 
                         var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         try { settings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settings; }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         var badgeStyle = settings.TryGetValue("BadgeStyle", out var bs) && !string.IsNullOrEmpty(bs) ? bs : "neutral";
                         var badgeOptions = settings.TryGetValue("BadgeOptions", out var bo) ? bo ?? "" : "";
                         var folderPath = Path.Combine(dataPath, "toplists", SanitizeFolderName(tl.TagName));
@@ -4147,7 +4181,7 @@ public class HomeScreenCompanionService : IService
                         var match = System.Text.RegularExpressions.Regex.Match(nfoContent, @"<sorttitle>(\d+)</sorttitle>");
                         if (match.Success) rank = int.Parse(match.Groups[1].Value);
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
                 entries.Add((rank, File.ReadAllText(strmFile).Trim()));
             }
@@ -4221,7 +4255,7 @@ public class HomeScreenCompanionService : IService
                         lookup[imdb] = m;
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return lookup;
         }
 
@@ -4279,7 +4313,7 @@ public class HomeScreenCompanionService : IService
         {
             var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(json) || json == "{}") return d;
-            try { d = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(json!) ?? d; } catch { }
+            try { d = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(json!) ?? d; } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new Dictionary<string, string>(d, StringComparer.OrdinalIgnoreCase);
         }
 
@@ -4313,7 +4347,7 @@ public class HomeScreenCompanionService : IService
                 foreach (var f in _libraryManager.GetVirtualFolders())
                     if (!string.IsNullOrEmpty(f.ItemId)) libraryNames[NormId(f.ItemId)] = f.Name ?? "";
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             void AddUser(string? id)
             {
@@ -4486,7 +4520,7 @@ public class HomeScreenCompanionService : IService
                             foreach (var i in _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { type }, Recursive = true }))
                                 if (!string.IsNullOrEmpty(i.Name)) set.Add(i.Name);
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         localSourceNames[type] = set;
                     }
                     return set.Contains(name);
@@ -4604,7 +4638,7 @@ public class HomeScreenCompanionService : IService
             var byProvider = new Dictionary<string, BaseItem>(StringComparer.OrdinalIgnoreCase);
             var byNameYear = new Dictionary<string, BaseItem>(StringComparer.OrdinalIgnoreCase);
             string? topListsFolder = null;
-            try { topListsFolder = Path.Combine(Plugin.Instance!.DataFolderPath, "toplists") + Path.DirectorySeparatorChar; } catch { }
+            try { topListsFolder = Path.Combine(Plugin.Instance!.DataFolderPath, "toplists") + Path.DirectorySeparatorChar; } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             foreach (var item in _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Movie", "Series" },
@@ -4636,7 +4670,7 @@ public class HomeScreenCompanionService : IService
         private Dictionary<string, string> UserNamesById()
         {
             var names = new Dictionary<string, string>();
-            try { foreach (var u in _userManager.GetUserList(new UserQuery())) names[u.Id.ToString("N")] = u.Name ?? ""; } catch { }
+            try { foreach (var u in _userManager.GetUserList(new UserQuery())) names[u.Id.ToString("N")] = u.Name ?? ""; } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return names;
         }
 
@@ -4714,7 +4748,7 @@ public class HomeScreenCompanionService : IService
 
             // Same rule as the Top Lists tab: a list is fed by a tag when titles carry its name.
             bool byTag = false;
-            try { byTag = _libraryManager.GetItemList(new InternalItemsQuery { Tags = new[] { file.ListName }, Recursive = true, Limit = 1 }).Length > 0; } catch { }
+            try { byTag = _libraryManager.GetItemList(new InternalItemsQuery { Tags = new[] { file.ListName }, Recursive = true, Limit = 1 }).Length > 0; } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             file.IsManual = !byTag;
             if (byTag) file.SourceTag = file.ListName;
             else

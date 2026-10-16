@@ -79,7 +79,7 @@ namespace HomeScreenCompanion
                 {
                     _jsonSerializer.SerializeToFile(_cache, _cacheFilePath);
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
         }
 
@@ -101,7 +101,7 @@ namespace HomeScreenCompanion
                         }
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
         }
     }

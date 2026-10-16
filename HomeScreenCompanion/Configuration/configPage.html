@@ -1650,7 +1650,7 @@
                                 <input is="emby-checkbox" type="checkbox" id="chkExtendedConsoleOutput" />
                                 <span>Extended log</span>
                             </label>
-                            <div class="fieldDescription">Adds source details, per-item changes, timings and error details to the log. Useful when something goes wrong or when reporting a bug.</div>
+                            <div class="fieldDescription">Shows source details, per-item changes, timings and error details in the log window. The plugin's own log file (<em>Download logs</em> in the log window) always has them, also with this off.</div>
                         </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 15px;">
@@ -1906,7 +1906,7 @@
                     <strong style="color:var(--theme-text);">Tips for a useful bug report:</strong><br>
                     • What did you expect to happen, and what happened instead?<br>
                     • Which source type and settings were you using?<br>
-                    • Copy the relevant lines from the <strong>Logs</strong> (enable <em>Extended log</em> in Settings first if needed).
+                    • Attach the logs: open <strong>Logs</strong> and click <strong>Download logs</strong> – one zip with the plugin's log of the last 7 days, its settings and a snapshot of the server. API keys are always hidden, and user names can be anonymised. Do it soon after the problem happens: the log keeps 7 days.
                 </div>
 
                 <div style="text-align:right;margin-top:24px;padding-top:16px;border-top:1px solid var(--plugin-popup-border);">
@@ -1940,7 +1940,8 @@
             </div>
             <div class="modal-body-scroll" style="background: #1a1a1a; color: #d0d0d0; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 0.85em; padding: 16px 20px;" id="logContent">
             </div>
-            <div style="text-align:right; padding: 12px 20px; background: #1a1a1a; border-top: 1px solid #333;">
+            <div style="display:flex; justify-content:space-between; gap:10px; padding: 12px 20px; background: #1a1a1a; border-top: 1px solid #333;">
+                <button is="emby-button" type="button" id="btnDownloadLogs" class="raised hsc-btn-secondary" title="A zip with the plugin's log of the last 7 days, the settings and a snapshot of the server, for troubleshooting"><i class="md-icon" style="font-size:1em;vertical-align:middle;margin-right:6px;">download</i>Download logs</button>
                 <button is="emby-button" type="button" id="btnCloseLogs" class="raised hsc-btn-secondary">Close</button>
             </div>
         </div>
@@ -2594,6 +2595,10 @@
                     <div><strong>Libraries and collections</strong> — each top-list has its own library. <em>Hide HSC libraries</em> (on by default) keeps it out of the sidebar, "My Media" and "Latest", and <em>Show collections on top-list items</em> makes "Included in &lt;collection&gt;" show on a movie opened from a top-list. Both are in the Settings tab, see <a href="javascript:void(0)" class="help-link" onclick="this.closest('.modal-body-scroll').querySelector('#help-sec-8b').scrollIntoView({behavior:'smooth'});return false;">Advanced Settings</a>.</div>
                 </div>
                 <div class="help-feature-row">
+                    <i class="md-icon help-feat-icon">lock_open</i>
+                    <div><strong>Library access</strong> — every user a top-list is shown to gets access to its library. The list's titles can come from any library on the server, so those users can see and play them even from libraries they otherwise have no access to. Only pick users who may see everything the list can hold.</div>
+                </div>
+                <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">block</i>
                     <div><strong>Automatic exclusions</strong> — Movies in a top-list are automatically hidden from all other tag-based home screen rows, so the same movie (with a number badge) never shows up in another row.</div>
                 </div>
@@ -2656,7 +2661,7 @@
                 <div class="step-text" style="margin-bottom:10px;font-size:0.92em;">Optional settings in four groups under <em>Advanced Settings</em> in the <strong>Settings</strong> tab. Tick one and click <strong>Save Settings</strong>.</div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">bug_report</i>
-                    <div><strong>Extended log</strong> <span style="opacity:0.6;">(Logging &amp; Troubleshooting)</span> — Adds source details, per-item changes, timings and error details to the log. Turn it on when something isn't working as expected or before reporting a bug.</div>
+                    <div><strong>Extended log</strong> <span style="opacity:0.6;">(Logging &amp; Troubleshooting)</span> — Shows source details, per-item changes, timings and error details in the log window. Turn it on when something isn't working as expected. The plugin's own log file (<em>Download logs</em>) always has these lines, also with it off.</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">science</i>
@@ -2712,7 +2717,7 @@
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">receipt_long</i>
-                    <div><strong>Logs</strong> — the <strong>Logs</strong> button at the top of the page shows the last run, in three tabs: <em>Sync</em>, <em>Home Screen</em> and <em>Top-list</em>, each with a coloured dot for how it went and when it ran. Green lines went well, yellow ones are warnings and red ones errors. Turn on <em>Extended log</em> for more detail.</div>
+                    <div><strong>Logs</strong> — the <strong>Logs</strong> button at the top of the page shows the last run, in three tabs: <em>Sync</em>, <em>Home Screen</em> and <em>Top-list</em>, each with a coloured dot for how it went and when it ran. Green lines went well, yellow ones are warnings and red ones errors. Turn on <em>Extended log</em> for more detail. <strong>Download logs</strong> (bottom left of the log window) saves one zip for troubleshooting: the plugin's own log of the last 7 days with every detail line, the latest run of each task, the settings and a snapshot of the server (libraries, users and their library access, every user's home rows, the top-lists). API keys are always hidden; tick <em>Anonymise user names</em> to replace each user's name and id with User 1, User 2 … (names you typed into sources, tags or libraries yourself may still contain them).</div>
                 </div>
                 <div class="help-feature-row">
                     <i class="md-icon help-feat-icon">auto_delete</i>
@@ -2791,7 +2796,7 @@
                 </div>
                 <div class="help-feature-row" style="margin-bottom:0;">
                     <i class="md-icon help-feat-icon">bug_report</i>
-                    <div><strong>Still stuck?</strong> Turn on <em>Extended log</em>, run again and click <strong>Report a Bug</strong> at the top of the page: it links to GitHub Issues and the plugin's Emby forum thread. Say what you expected, what happened, the source type and settings, and copy the relevant log lines.</div>
+                    <div><strong>Still stuck?</strong> Click <strong>Report a Bug</strong> at the top of the page: it links to GitHub Issues and the plugin's Emby forum thread. Say what you expected, what happened, the source type and settings, and attach the zip from <strong>Download logs</strong> in the log window – soon after the problem, as the log keeps 7 days.</div>
                 </div>
 
                 <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid var(--plugin-popup-border);">

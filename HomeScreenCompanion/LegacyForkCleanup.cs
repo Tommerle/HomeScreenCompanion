@@ -39,7 +39,7 @@ namespace HomeScreenCompanion
         private readonly IUserManager _userManager;
         private readonly IUserDataManager _userDataManager;
         private readonly IJsonSerializer _jsonSerializer;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
 
         public class PendingCleanup
         {
@@ -63,7 +63,7 @@ namespace HomeScreenCompanion
             _userManager = userManager;
             _userDataManager = userDataManager;
             _jsonSerializer = jsonSerializer;
-            _logger = logManager.GetLogger("HomeScreenCompanion");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion"), "Migration");
         }
 
         private static string PendingPath => Path.Combine(Plugin.Instance!.DataFolderPath, PendingFileName);
@@ -211,7 +211,7 @@ namespace HomeScreenCompanion
                 catch (Exception ex) { _logger.Warn("[Migration] showtoplists folder could not be removed: " + ex.Message); }
             }
 
-            try { File.Delete(PendingPath); } catch { }
+            try { File.Delete(PendingPath); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         private void CleanEntry(string listName, ShowTopListEntry entry, List<User> users)
@@ -330,7 +330,7 @@ namespace HomeScreenCompanion
                     return new Dictionary<string, string>(_jsonSerializer.DeserializeFromString<Dictionary<string, string>>(json!)
                         ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }

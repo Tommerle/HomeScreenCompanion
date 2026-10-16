@@ -30,7 +30,7 @@ namespace HomeScreenCompanion
         private readonly IUserDataManager _userDataManager;
         private readonly IHttpClient _httpClient;
         private readonly IJsonSerializer _jsonSerializer;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
         private readonly ILibraryMonitor _libraryMonitor;
         private readonly IPlaylistManager _playlistManager;
         private readonly IProviderManager _providerManager;
@@ -143,7 +143,7 @@ namespace HomeScreenCompanion
             _userDataManager = userDataManager;
             _httpClient = httpClient;
             _jsonSerializer = jsonSerializer;
-            _logger = logManager.GetLogger("HomeScreenCompanion");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion"), "Sync");
             _libraryMonitor = libraryMonitor;
             _playlistManager = playlistManager;
             _providerManager = providerManager;
@@ -183,10 +183,12 @@ namespace HomeScreenCompanion
                 _writtenTags = BuildWrittenTags(config);
                 _deletedGroupRowsRemoved = 0;
 
-                bool debug = config.ExtendedConsoleOutput;
+                // The detail lines are always made: the plugin's log file gets them all, the page
+                // shows them only with Extended log on (RunLog).
+                bool debug = true;
                 bool dryRun = config.DryRunMode;
                 bool logMissing = config.LogMissingItems;
-                _log = new RunLog(ExecutionLog, _logger, "", debug, Progress);
+                _log = new RunLog(ExecutionLog, _logger, "", config.ExtendedConsoleOutput, Progress);
 
                 var startTime = DateTime.Now;
                 var runTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -1893,7 +1895,7 @@ namespace HomeScreenCompanion
                 if (ok) _log.Ok($"Top-list '{tl.TagName}': {msg}");
                 else { errors++; _log.Error($"Top-list '{tl.TagName}' failed — {msg}"); }
                 try { _libraryMonitor?.ReportFileSystemChanged(Path.Combine(Plugin.Instance!.DataFolderPath, "toplists", SanitizeTopListFolderName(tl.TagName))); }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 listSummary = ok ? msg : "rebuild failed";
             }
 
@@ -1991,11 +1993,13 @@ namespace HomeScreenCompanion
             string _displayName = !string.IsNullOrWhiteSpace(tagConfig.Name) ? $"{tagConfig.Name} [{tagConfig.Tag.Trim()}]" : tagConfig.Tag.Trim();
             string _srcLabel = string.IsNullOrEmpty(tagConfig.SourceType) ? "External" : tagConfig.SourceType;
 
-            bool debug = config.ExtendedConsoleOutput;
+            // Detail lines are always made: the plugin's log file gets them all, the page shows them
+            // only with Extended log on (RunLog). A preview has no log to write them to.
+            bool debug = _preview == null;
             bool dryRun = config.DryRunMode || _preview != null;
             bool logMissing = config.LogMissingItems;
             var startTime = DateTime.Now;
-            _log = _preview != null ? new RunLog(new List<string>(), null, "", false) : new RunLog(ExecutionLog, _logger, "", debug, Progress);
+            _log = _preview != null ? new RunLog(new List<string>(), null, "", false) : new RunLog(ExecutionLog, _logger, "", config.ExtendedConsoleOutput, Progress);
             if (_preview == null && tagConfig.SourceType == "AI" && tagConfig.AiRefreshIntervalDays > 0 &&
                 tagConfig.Active && IsScheduleActive(tagConfig.ActiveIntervals) &&
                 tagConfig.AiLastRunDate > DateTime.MinValue &&
@@ -3335,7 +3339,7 @@ namespace HomeScreenCompanion
                 if (File.Exists(DeletedGroupsFile))
                     return Plugin.XmlSerializer.DeserializeFromFile(typeof(DeletedGroupCleanup), DeletedGroupsFile) as DeletedGroupCleanup ?? new DeletedGroupCleanup();
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new DeletedGroupCleanup();
         }
 
@@ -3347,7 +3351,7 @@ namespace HomeScreenCompanion
                 Directory.CreateDirectory(Path.GetDirectoryName(DeletedGroupsFile)!);
                 Plugin.XmlSerializer.SerializeToFile(c, DeletedGroupsFile);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // tag_ranks/<tag>.json (WriteRankFile); SyncTopListFolders reads it by the top-list's folder name, the same name.
@@ -3407,7 +3411,7 @@ namespace HomeScreenCompanion
                             tagHistChanged = true;
                         }
                         if (tag.Length > 0 && !newTags.Contains(tag))
-                            try { var rf = RankFilePath(tag); if (File.Exists(rf)) File.Delete(rf); } catch { }
+                            try { var rf = RankFilePath(tag); if (File.Exists(rf)) File.Delete(rf); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         var coll = CollectionNameOf(t);
                         if (t.EnableCollection && coll.Length > 0 && !newCollections.Contains(coll)
@@ -3447,7 +3451,7 @@ namespace HomeScreenCompanion
                     if (queueChanged) SaveDeletedGroups(queue);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         private static string CollectionNameOf(TagConfig t) =>
@@ -4033,7 +4037,7 @@ namespace HomeScreenCompanion
                 _jsonSerializer.SerializeToFile(imdbIds, rankFile);
                 TopListHistory.SaveWeekAgo(tagName ?? "", _weekAgoByTag.TryGetValue(tagName ?? "", out var weekAgo) ? weekAgo : null, _jsonSerializer);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // Playlist sync for a single group — one individual playlist per user in PlaylistUserIds.
@@ -4434,7 +4438,7 @@ namespace HomeScreenCompanion
                     if (!string.IsNullOrEmpty(tc.HomeSectionSettings) && tc.HomeSectionSettings != "{}")
                         settingsDict = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tc.HomeSectionSettings) ?? settingsDict;
                 }
-                catch { /* ignore malformed settings */ }
+                catch (Exception swallowed) { /* ignore malformed settings */ PluginLog.Swallowed(swallowed); }
 
                 if (!settingsDict.ContainsKey("SectionType"))
                     settingsDict["SectionType"] = DefaultSectionType(tc);
@@ -4532,7 +4536,7 @@ namespace HomeScreenCompanion
                         var uid = _userManager.GetInternalId(t.UserId);
                         DeleteSectionForUser(uid, t.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc));
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     tc.HomeSectionTracked.Remove(t);
                     configChanged = true;
                 }
@@ -4701,7 +4705,7 @@ namespace HomeScreenCompanion
                 if (File.Exists(RowPositionsFile))
                     _rowPositions = json.DeserializeFromFile<Dictionary<string, int>>(RowPositionsFile);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return _rowPositions ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -4713,14 +4717,14 @@ namespace HomeScreenCompanion
                 if (File.Exists(RowAnchorsFile))
                     _rowAnchors = json.DeserializeFromFile<Dictionary<string, string>>(RowAnchorsFile);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return _rowAnchors ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         private static void SaveRowPositions(IJsonSerializer json)
         {
-            try { json.SerializeToFile(RowPositions(json), RowPositionsFile); } catch { }
-            try { json.SerializeToFile(RowAnchors(json), RowAnchorsFile); } catch { }
+            try { json.SerializeToFile(RowPositions(json), RowPositionsFile); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+            try { json.SerializeToFile(RowAnchors(json), RowAnchorsFile); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         private void RememberRowPosition(string groupKey, string userId, long userInternalId, string sectionId, CancellationToken cancellationToken)
@@ -4745,7 +4749,7 @@ namespace HomeScreenCompanion
                     SaveRowPositions(json);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         /// <summary>Puts a re-created row back where it was; false when no place was remembered.</summary>
@@ -4772,7 +4776,7 @@ namespace HomeScreenCompanion
                 }
                 MoveRow(userManager, userInternalId, sectionId, target, sections.Length, cancellationToken);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             lock (_rowPositionsLock)
             {
                 RowPositions(json).Remove(key);
@@ -4810,7 +4814,7 @@ namespace HomeScreenCompanion
                 else return;
                 MoveRow(userManager, userInternalId, sectionId, target, sections.Length, cancellationToken);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         private static void MoveRow(IUserManager userManager, long userInternalId, string sectionId, int target, int count, CancellationToken cancellationToken)
@@ -4834,7 +4838,7 @@ namespace HomeScreenCompanion
                 var s = json.DeserializeFromString<Dictionary<string, string>>(string.IsNullOrEmpty(tc.HomeSectionSettings) ? "{}" : tc.HomeSectionSettings);
                 if (s != null) s.TryGetValue("SectionType", out st);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             if (string.IsNullOrEmpty(st)) st = DefaultSectionType(tc);
             return st == "items" && tc.EnableTag && !string.IsNullOrWhiteSpace(tc.Tag);
         }
@@ -4873,7 +4877,7 @@ namespace HomeScreenCompanion
         {
             ContentSection[]? allSections = null;
             try { allSections = _userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>(); }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             bool realId = !string.IsNullOrEmpty(sectionId) && !sectionId.StartsWith("hsc__");
             if (realId && (allSections == null || allSections.Any(s => s.Id == sectionId)))
@@ -4920,7 +4924,7 @@ namespace HomeScreenCompanion
                     }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return false;
         }
 
@@ -5147,7 +5151,7 @@ namespace HomeScreenCompanion
                                         viewIds.Select(s => s.Trim().ToLowerInvariant()).Where(s => s.Length > 0));
                             }
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         existingExcluded = existingExcluded.Distinct().ToList();
                         var missing = libIds
@@ -5175,12 +5179,12 @@ namespace HomeScreenCompanion
                                 }
                             }
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         userManager.UpdateHomeSection(uid, sec, cancellationToken);
                         updated++;
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
             return updated;
         }
@@ -5229,7 +5233,7 @@ namespace HomeScreenCompanion
                         : arrVal.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
                     prop.SetValue(section, values);
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
 
             var queryProp = props.FirstOrDefault(p => p.Name == "Query");
@@ -5266,7 +5270,7 @@ namespace HomeScreenCompanion
                                     else if (excludeProp.PropertyType == typeof(Guid[]))
                                         excludeProp.SetValue(extQuery, ids.Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty).ToArray());
                                 }
-                                catch { }
+                                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                             }
                         }
                     }
@@ -5333,13 +5337,13 @@ namespace HomeScreenCompanion
                             if (t == typeof(bool)) qProp.SetValue(extQuery, bool.Parse(val));
                             else if (t == typeof(string)) qProp.SetValue(extQuery, val);
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
 
                     if (queryProp.CanWrite)
                         queryProp.SetValue(section, extQuery);
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
 
             // Migration: gamla inställningar sparade ScrollDirection i DisplayMode — rensa bort det
@@ -6724,7 +6728,7 @@ namespace HomeScreenCompanion
 
         private void WriteMatchedItemsDebug(List<BaseItem> matchedLocalItems)
         {
-            if (!_log.Extended || matchedLocalItems.Count == 0) return;
+            if (matchedLocalItems.Count == 0) return;
             _log.Debug($"  Matched items ({matchedLocalItems.Count}):");
             int shown = 0;
             foreach (var mi in matchedLocalItems)
@@ -6742,7 +6746,7 @@ namespace HomeScreenCompanion
 
         private void WriteTagDiffDebug(Dictionary<string, List<string>>? added, Dictionary<string, List<string>>? removed)
         {
-            if (!_log.Extended || added == null || removed == null) return;
+            if (added == null || removed == null) return;
             if (added.Count == 0 && removed.Count == 0) { _log.Debug("  No tag changes"); return; }
             _log.Section("Tags");
             foreach (var tName in added.Keys.Concat(removed.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -6767,7 +6771,6 @@ namespace HomeScreenCompanion
 
         private void WriteExceptionDebug(Exception ex)
         {
-            if (!_log.Extended) return;
             var lines = ex.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             int shown = 0;
             foreach (var line in lines)
@@ -6852,7 +6855,7 @@ namespace HomeScreenCompanion
             var path = Path.Combine(dir, ImportedCollectionsFile);
             lock (_importedFileLock)
             {
-                try { if (File.Exists(path)) foreach (var l in File.ReadAllLines(path)) if (l.Trim().Length > 0) set.Add(l.Trim()); } catch { }
+                try { if (File.Exists(path)) foreach (var l in File.ReadAllLines(path)) if (l.Trim().Length > 0) set.Add(l.Trim()); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 int before = set.Count;
                 foreach (var tc in (cfg?.Tags ?? new List<TagConfig>()).Where(t => t.CollectionImported))
                 {
@@ -6860,20 +6863,20 @@ namespace HomeScreenCompanion
                     if (cn.Length > 0) set.Add(cn);
                 }
                 if (set.Count != before)
-                    try { Directory.CreateDirectory(dir); File.WriteAllLines(path, set.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)); } catch { }
+                    try { Directory.CreateDirectory(dir); File.WriteAllLines(path, set.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
             return set;
         }
 
         private static List<string> LoadFileHistory(string filename)
         {
-            try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); if (File.Exists(path)) return File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l)).ToList(); } catch { }
+            try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); if (File.Exists(path)) return File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l)).ToList(); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new List<string>();
         }
 
         private static void SaveFileHistory(string filename, List<string> data)
         {
-            try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllLines(path, data); } catch { }
+            try { var path = Path.Combine(Plugin.Instance.DataFolderPath, filename); Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllLines(path, data); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // A film's versions (e.g. 2160p and 1080p files) are separate items that Emby shows as one
@@ -7248,14 +7251,14 @@ namespace HomeScreenCompanion
                     if (saved != null) return new Dictionary<string, string>(saved, StringComparer.OrdinalIgnoreCase);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         private void SaveSortTitleRecord(Dictionary<string, string> record)
         {
             try { _jsonSerializer.SerializeToFile(record, Path.Combine(Plugin.Instance.DataFolderPath, "homescreencompanion_sorttitles.json")); }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // onlyTag: Run Group on one top-list — rebuild just that list and leave the other folders alone.
@@ -7312,7 +7315,7 @@ namespace HomeScreenCompanion
                         origLookup[imdb] = m;
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             // Build set of tag names that are managed by the plugin's source groups.
             // Manual top-lists have names that don't match any source tag, so they are
@@ -7353,7 +7356,7 @@ namespace HomeScreenCompanion
                             && int.TryParse(miStr, out var parsedMax) && parsedMax > 0)
                             effectiveMaxItems = parsedMax;
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 // Top-list copies are skipped — see PrepareTopListFolderRequest handler.
@@ -7385,7 +7388,7 @@ namespace HomeScreenCompanion
                             }).ToList();
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -7465,7 +7468,7 @@ namespace HomeScreenCompanion
                     Directory.CreateDirectory(Path.GetDirectoryName(renderFile)!);
                     _jsonSerializer.SerializeToFile(newSigs, renderFile);
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 int removedFiles = 0;
                 foreach (var f in Directory.GetFiles(folderPath))
                 {
@@ -7473,14 +7476,14 @@ namespace HomeScreenCompanion
                     if (!ext.Equals(".strm", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".nfo", StringComparison.OrdinalIgnoreCase)
                         && !ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)) continue;
                     if (wantedFiles.Contains(Path.GetFileName(f))) continue;
-                    try { File.Delete(f); removedFiles++; } catch { }
+                    try { File.Delete(f); removedFiles++; } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 // Notify the file system monitor so Emby is aware of the changes
                 if (changedBases.Count > 0 || removedFiles > 0)
                 {
                     try { _libraryMonitor?.ReportFileSystemChanged(folderPath); }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
                 // For items already indexed in the library: update SortName and poster directly
@@ -7542,13 +7545,13 @@ namespace HomeScreenCompanion
                                 MergeTopListVersionsTask.QueueStrmProbe(_providerManager, _fileSystem, li);
                             }
                         }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                         try { _libraryManager.UpdateItem(li, li.Parent, ItemUpdateType.MetadataEdit, null); }
-                        catch { }
+                        catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                 _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "movie")} synced to its library folder");
             }
@@ -7572,7 +7575,7 @@ namespace HomeScreenCompanion
                         if (!string.IsNullOrEmpty(tl.HomeSectionSettings) && tl.HomeSectionSettings != "{}")
                             settings = _jsonSerializer.DeserializeFromString<Dictionary<string, string>>(tl.HomeSectionSettings) ?? settings;
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     var badgeStyle = BadgeLook.FromSettings(settings, "neutral");
                     int maxItems = tl.MaxItems;
                     if (maxItems <= 0 && settings.TryGetValue("MaxItems", out var mi) && int.TryParse(mi, out var parsed)) maxItems = parsed;
@@ -7592,7 +7595,7 @@ namespace HomeScreenCompanion
                     var count = ShowTopList.WriteFolder(folderPath, series, badgeStyle,
                         _libraryManager, _jsonSerializer, _httpClient, _providerManager, _fileSystem, m => _log.Warn(m),
                         ranked => TopListHistory.Update(tl.TagName, ranked, badgeStyle, _jsonSerializer, _libraryManager, _userManager, _userDataManager, m => _log.Warn(m)));
-                    try { _libraryMonitor?.ReportFileSystemChanged(folderPath); } catch { }
+                    try { _libraryMonitor?.ReportFileSystemChanged(folderPath); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     ShowTopList.ApplyIndexed(folderPath, _libraryManager, _jsonSerializer);
                     _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "show")} synced to its library folder");
                 }

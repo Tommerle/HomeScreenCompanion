@@ -24,12 +24,12 @@ namespace HomeScreenCompanion
         private readonly ILibraryManager _libraryManager;
         private readonly ITaskManager _taskManager;
         private readonly IJsonSerializer _json;
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
         private readonly string _path;
         private readonly object _lock = new object();
         private Timer? _timer;
 
-        internal NewLibraryWatcher(ILibraryManager libraryManager, ITaskManager taskManager, IJsonSerializer json, ILogger logger, string dataPath)
+        internal NewLibraryWatcher(ILibraryManager libraryManager, ITaskManager taskManager, IJsonSerializer json, PluginLogger logger, string dataPath)
         {
             _libraryManager = libraryManager;
             _taskManager = taskManager;
@@ -125,7 +125,7 @@ namespace HomeScreenCompanion
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 File.WriteAllText(_path, _json.SerializeToString(ids));
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         public void Dispose()
