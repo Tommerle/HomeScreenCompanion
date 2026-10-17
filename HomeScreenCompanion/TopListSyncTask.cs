@@ -176,6 +176,83 @@ namespace HomeScreenCompanion
             return own;
         }
 
+        // Every id form of every top-list's own library.
+        internal static HashSet<string> TopListLibraryIds(PluginConfiguration? config, ILibraryManager libraryManager)
+        {
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tl in config?.TopLists ?? new List<TopListHomeSection>())
+                if (!string.IsNullOrEmpty(tl.HomeSectionLibraryId) && tl.HomeSectionLibraryId != "auto")
+                    ids.UnionWith(OwnLibraryIds(tl.HomeSectionLibraryId, libraryManager));
+            return ids;
+        }
+
+        // A top-list's row: an items row on the list's own library (libraryIds: OwnLibraryIds of one
+        // list, or TopListLibraryIds of all). Found by its library, never by its title — a source's
+        // row can have the same title.
+        internal static bool IsTopListRow(ContentSection s, HashSet<string> libraryIds)
+            => string.Equals(s.SectionType, "items", StringComparison.OrdinalIgnoreCase)
+               && !string.IsNullOrEmpty(s.ParentId)
+               && libraryIds.Contains(s.ParentId.Trim().Replace("-", ""));
+
+        // Row-position memory key of a top-list row (kept apart from the source rows' keys).
+        internal static string RowPositionKey(TopListHomeSection tl) => "tl\u001F" + (tl.TagName ?? "").Trim();
+
+        private static string NormId(string? id) => (id ?? "").Replace("-", "").Trim().ToLowerInvariant();
+
+        // A user removed from Emby can still be on a list's users: such ids are left out.
+        internal static bool UserExists(IUserManager userManager, string userId)
+        {
+            try { return Guid.TryParse(userId, out var g) ? userManager.GetUserById(g) != null : userManager.GetInternalId(userId) > 0; }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); return false; }
+        }
+
+        private static bool LibraryExists(string libId, ILibraryManager libraryManager)
+        {
+            try
+            {
+                var raw = (libId ?? "").Trim();
+                if (long.TryParse(raw, out var internalId)) return libraryManager.GetItemById(internalId) != null;
+                if (Guid.TryParse(raw, out var g)) return libraryManager.GetItemById(g) != null;
+            }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+            return false;
+        }
+
+        private static string NameList(List<string> names)
+            => names.Count <= 10 ? string.Join(", ", names) : string.Join(", ", names.Take(10)) + $" and {names.Count - 10} more";
+
+        // The list's other users (reference home screens for a row's place).
+        internal static IEnumerable<string> OtherUsers(TopListHomeSection tl, string userId)
+            => (tl.HomeSectionUserIds ?? new List<string>()).Where(u => NormId(u) != NormId(userId));
+
+        // Where a row added again goes: where it was when Copy & Sync last moved it (remembered), else
+        // at the list's Position, else below the row that is above it on the home screen of another of
+        // the list's users, else at the bottom (where Emby puts a new row).
+        private static void PlaceAddedRow(IUserManager userManager, IJsonSerializer json, TopListHomeSection tl, HashSet<string> ownIds,
+            string userId, long userInternalId, string sectionId, string position, string? ownTitle, CancellationToken cancellationToken)
+        {
+            if (HomeScreenCompanionTask.RestoreRowPosition(userManager, json, RowPositionKey(tl), userId, userInternalId, sectionId, cancellationToken)) return;
+            if (!string.IsNullOrEmpty(position))
+            {
+                HomeScreenCompanionTask.PlaceNewRow(userManager, userInternalId, sectionId, position, cancellationToken, OtherUsers(tl, userId), ownTitle);
+                return;
+            }
+            foreach (var other in tl.HomeSectionUserIds ?? new List<string>())
+            {
+                if (NormId(other) == NormId(userId)) continue;
+                try
+                {
+                    var secs = userManager.GetHomeSections(userManager.GetInternalId(other), cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                    int at = Array.FindIndex(secs, s => IsTopListRow(s, ownIds));
+                    if (at < 0) continue;
+                    HomeScreenCompanionTask.PlaceNewRow(userManager, userInternalId, sectionId,
+                        at == 0 ? "top" : "after:" + HomeScreenCompanionTask.SectionKey(secs[at - 1]), cancellationToken);
+                    return;
+                }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+            }
+        }
+
         private static void PersistLog() { Progress.Clear(); LogStore.Save(LogStore.TopLists, ExecutionLog, LastRunStatus, LastStartedUtc); }
 
         // Brings back the last run's log and status after a server restart.
@@ -259,7 +336,8 @@ namespace HomeScreenCompanion
             if (topLists.Count == 0) { _log.Skip("No top-lists configured — nothing to do"); return (0, "No top-lists configured."); }
 
             if (standalone) { _log.Blank(); _log.Info($"» Top-list sections  ·  {RunLog.Plural(topLists.Count, "top-list")}"); }
-            int totalUpdated = 0, totalErrors = 0;
+            int totalUpdated = 0, totalErrors = 0, totalAdded = 0;
+            var userStatus = UserStatus.Read(userManager);
 
             // Collect all configured top-list library IDs so each top-list always excludes
             // its siblings, even if their libraries haven't been discovered via GetVirtualFolders yet.
@@ -308,21 +386,47 @@ namespace HomeScreenCompanion
                     }
                 }
 
-                foreach (var tracking in tl.HomeSectionTracked ?? new List<HomeSectionTracking>())
+                // Every user on the list gets the list's row: the tracked one; else a row on the list's
+                // own library the user already has (e.g. one Copy & Sync put there), taken over; else a
+                // new one. A row can go missing (removed in Emby's home screen settings, or by an older
+                // version when a source with the same title lost its row); skipping it, as this sync
+                // used to, left that user without the row for good.
+                tl.HomeSectionTracked ??= new List<HomeSectionTracking>();
+                bool libraryFound = LibraryExists(tl.HomeSectionLibraryId, libraryManager);
+                var added = new List<string>();
+                var noLibrary = new List<string>();   // no row and none can be made: the library is gone
+                // Where the list's row goes; changed since last put into effect: the rows already there move.
+                var posNow = RowPlacement.PositionIn(tl.HomeSectionSettings);
+                var posKey = RowPlacement.TopListKey(tl);
+                bool posMove = RowPlacement.ShouldMove(posKey, posNow, true);
+                int posMoved = 0;
+                foreach (var userId in (tl.HomeSectionUserIds ?? new List<string>())
+                    .Where(u => !string.IsNullOrWhiteSpace(u)).GroupBy(NormId).Select(g => g.First()).ToList())
                 {
-                    if (string.IsNullOrEmpty(tracking.UserId) || string.IsNullOrEmpty(tracking.SectionId)) continue;
+                    string who = UserLabel(userManager, userId);
                     try
                     {
-                        var uid = userManager.GetInternalId(tracking.UserId);
+                        if (!UserExists(userManager, userId)) { _log.Debug($"  {who}: skipped (no such user)"); continue; }
+                        // Disabled in Emby: the row and its tracking stay as they are.
+                        if (userStatus.Skip(userId)) { _log.Debug($"  {who}: skipped — disabled in Emby (the row is kept)"); continue; }
+                        var uid = userManager.GetInternalId(userId);
                         var sections = userManager.GetHomeSections(uid, cancellationToken)?.Sections
                             ?? Array.Empty<ContentSection>();
 
-                        var owned = sections.FirstOrDefault(s => s.Id == tracking.SectionId);
-                        if (owned == null) continue;
+                        var tracking = tl.HomeSectionTracked.FirstOrDefault(t => NormId(t.UserId) == NormId(userId));
+                        var owned = !string.IsNullOrEmpty(tracking?.SectionId)
+                            ? sections.FirstOrDefault(s => s.Id == tracking!.SectionId) : null;
+                        if (owned == null)
+                        {
+                            owned = sections.FirstOrDefault(s => IsTopListRow(s, ownIds));
+                            if (owned != null)
+                                _log.Debug($"  {who}: section {owned.Id} on the list's library taken over (the saved one, {(string.IsNullOrEmpty(tracking?.SectionId) ? "none" : tracking!.SectionId)}, was gone)");
+                        }
+                        if (owned == null && !libraryFound) { noLibrary.Add(who); continue; }
 
                         // Every view this user's section editor lists (hidden libraries, channels
                         // and Live TV included).
-                        var allViewIds = GetSectionEditorViewIds(userViewManager, userManager, tracking.UserId);
+                        var allViewIds = GetSectionEditorViewIds(userViewManager, userManager, userId);
 
                         // Always also include virtual folder IDs (ensures regular libraries are covered)
                         foreach (var f in libraryManager.GetVirtualFolders())
@@ -364,28 +468,72 @@ namespace HomeScreenCompanion
                         settingsDict["ExcludedFolders"] = excludeStr;
                         tl.HomeSectionSettings = jsonSerializer.SerializeToString(settingsDict);
 
-                        var updated = HomeScreenCompanionTask.BuildContentSection(
-                            jsonSerializer, settingsDict, tl.HomeSectionLibraryId, owned);
-                        typeof(ContentSection).GetProperty("Id")?.SetValue(updated, owned.Id);
-                        userManager.UpdateHomeSection(uid, updated, cancellationToken);
-                        _log.Debug($"  {UserLabel(userManager, tracking.UserId)}: section updated");
-                        totalUpdated++;
-                        tlUpdated++;
+                        string rowId;
+                        if (owned != null)
+                        {
+                            var updated = HomeScreenCompanionTask.BuildContentSection(
+                                jsonSerializer, settingsDict, tl.HomeSectionLibraryId, owned);
+                            typeof(ContentSection).GetProperty("Id")?.SetValue(updated, owned.Id);
+                            userManager.UpdateHomeSection(uid, updated, cancellationToken);
+                            rowId = owned.Id;
+                            bool moved = posMove && HomeScreenCompanionTask.MoveToPosition(userManager, uid, rowId, posNow, cancellationToken,
+                                OtherUsers(tl, userId), settingsDict.TryGetValue("CustomName", out var ownName) ? ownName : null);
+                            if (moved) posMoved++;
+                            _log.Debug($"  {who}: section updated{(moved ? ", moved to its new position" : "")}");
+                            totalUpdated++;
+                            tlUpdated++;
+                        }
+                        else
+                        {
+                            var beforeIds = new HashSet<string>(sections.Where(s => !string.IsNullOrEmpty(s.Id)).Select(s => s.Id));
+                            userManager.AddHomeSection(uid, HomeScreenCompanionTask.BuildContentSection(
+                                jsonSerializer, settingsDict, tl.HomeSectionLibraryId), cancellationToken);
+                            var after = userManager.GetHomeSections(uid, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                            rowId = after.Where(s => !string.IsNullOrEmpty(s.Id) && !beforeIds.Contains(s.Id)).Select(s => s.Id).FirstOrDefault()
+                                ?? after.FirstOrDefault(s => IsTopListRow(s, ownIds))?.Id ?? "";
+                            if (rowId.Length == 0)
+                            {
+                                totalErrors++;
+                                _log.Warn($"Top-list '{tlName}': the row for {who} was added but not found again — the next sync takes it over");
+                                continue;
+                            }
+                            PlaceAddedRow(userManager, jsonSerializer, tl, ownIds, userId, uid, rowId, posNow,
+                                settingsDict.TryGetValue("CustomName", out var newName) ? newName : null, cancellationToken);
+                            _log.Debug($"  {who}: section added (it was missing)");
+                            totalAdded++;
+                            added.Add(who);
+                        }
+                        // One entry per user, pointing at the row.
+                        tl.HomeSectionTracked.RemoveAll(t => NormId(t.UserId) == NormId(userId));
+                        tl.HomeSectionTracked.Add(new HomeSectionTracking { UserId = userId, SectionId = rowId });
                     }
-                    catch (Exception ex) { totalErrors++; _log.Warn($"Top-list '{tlName}': section could not be updated for {UserLabel(userManager, tracking.UserId)} — {ex.Message}"); }
+                    catch (Exception ex) { totalErrors++; _log.Warn($"Top-list '{tlName}': section could not be updated for {who} — {ex.Message}"); }
                 }
-                if (tlUpdated > 0 || tlRemoved > 0)
-                    _log.Ok($"Top-list '{tlName}': {RunLog.Plural(tlUpdated, "section")} updated{(tlRemoved > 0 ? $", {tlRemoved} removed" : "")}");
+                if (posMove)
+                {
+                    RowPlacement.MarkApplied(posKey, posNow);
+                    if (posMoved > 0) _log.Ok($"Top-list '{tlName}': row moved to its new position ({HomeScreenCompanionTask.PositionLabel(posNow)}) for {RunLog.Plural(posMoved, "user")}");
+                }
+                if (noLibrary.Count > 0)
+                {
+                    totalErrors++;
+                    _log.Warn($"Top-list '{tlName}': its library ({tl.HomeSectionLibraryId}) is gone, so no row could be made for {NameList(noLibrary)} — open the top-list and click Save to make the library again");
+                }
+                if (tlUpdated > 0 || tlRemoved > 0 || added.Count > 0)
+                    _log.Ok($"Top-list '{tlName}': {RunLog.Plural(tlUpdated, "section")} updated"
+                        + (added.Count > 0 ? $", {added.Count} added — the row was missing for {NameList(added)}" : "")
+                        + (tlRemoved > 0 ? $", {tlRemoved} removed" : ""));
                 else
                     _log.Skip($"Top-list '{tlName}': no home sections to update");
             }
 
             if (onlyTag != null)
             {
+                if (userStatus.SummaryLine() is string disabledOne) _log.Skip(disabledOne);
                 // Run Group on one top-list: the sweep over every other row below belongs to the full sync.
                 GrantTopListLibraryAccess(topLists.Where(t => string.Equals(t.TagName, onlyTag, StringComparison.OrdinalIgnoreCase)).ToList(), userManager, libraryManager, logger);
                 Plugin.Instance?.SaveConfiguration();
-                return (totalUpdated, $"Updated {totalUpdated} section(s) of top-list '{onlyTag}'.");
+                return (totalUpdated, $"Updated {totalUpdated} section(s){(totalAdded > 0 ? $", added {totalAdded}" : "")} of top-list '{onlyTag}'.");
             }
 
             // Ensure ALL top-list libraries are excluded from every TAG items-type section.
@@ -480,8 +628,9 @@ namespace HomeScreenCompanion
                 _log.Info($"    HSC libraries {(config.HideTopListLibraries ? "hidden from" : "shown again in")} My Media and Latest for {RunLog.Plural(hiddenFor, "user")}");
 
             Plugin.Instance?.SaveConfiguration();
-            var summary = $"Updated {totalUpdated} section(s) across {topLists.Count} top-list(s).";
-            _log.Info($"    {RunLog.Plural(totalUpdated, "section")} updated across {RunLog.Plural(topLists.Count, "top-list")}{(totalErrors > 0 ? $", {RunLog.Plural(totalErrors, "error")}" : "")}  ·  {RunLog.Elapsed(DateTime.Now - startTime)}");
+            if (userStatus.SummaryLine() is string disabledLine) _log.Skip(disabledLine);
+            var summary = $"Updated {totalUpdated} section(s){(totalAdded > 0 ? $", added {totalAdded}" : "")} across {topLists.Count} top-list(s).";
+            _log.Info($"    {RunLog.Plural(totalUpdated, "section")} updated{(totalAdded > 0 ? $", {totalAdded} added" : "")} across {RunLog.Plural(topLists.Count, "top-list")}{(totalErrors > 0 ? $", {RunLog.Plural(totalErrors, "error")}" : "")}  ·  {RunLog.Elapsed(DateTime.Now - startTime)}");
             return (totalUpdated, summary);
         }
 

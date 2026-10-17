@@ -182,6 +182,7 @@ namespace HomeScreenCompanion
                 if (config == null) return;
                 _writtenTags = BuildWrittenTags(config);
                 _deletedGroupRowsRemoved = 0;
+                _userStatus = UserStatus.Read(_userManager);
 
                 // The detail lines are always made: the plugin's log file gets them all, the page
                 // shows them only with Extended log on (RunLog).
@@ -1778,6 +1779,7 @@ namespace HomeScreenCompanion
                 if (statsList.Any(g => g.EnablePlaylist))
                     _log.Info($"  Playlists:     {statsList.Sum(g => g.PlaylistUsersCreated)} created, {statsList.Sum(g => g.PlaylistUsersUpdated)} updated{(statsList.Sum(g => g.PlaylistUsersFailed) > 0 ? $", {statsList.Sum(g => g.PlaylistUsersFailed)} failed" : "")}");
                 _log.Info($"  Home sections: {totalHsSynced} synced, {totalHsRemoved + _deletedGroupRowsRemoved} removed");
+                if (_userStatus?.SummaryLine() is string _disabledLine) _log.Info("  " + _disabledLine);
                 _log.Info($"  Done in {elapsedStr}  ·  {StatusSymbol(groupsFailed, groupsWarned)} {finalStatus}");
                 _log.Rule();
             }
@@ -1975,6 +1977,7 @@ namespace HomeScreenCompanion
             var config = Plugin.Instance?.Configuration;
             if (config == null) return (false, "Config not found");
             _writtenTags = BuildWrittenTags(config);
+            _userStatus = UserStatus.Read(_userManager);
 
             var tagConfig = _preview?.Source ?? config.Tags.FirstOrDefault(t =>
                 string.Equals(t.Name, entryName, StringComparison.OrdinalIgnoreCase) ||
@@ -3481,7 +3484,7 @@ namespace HomeScreenCompanion
                     catch { continue; }
                     try
                     {
-                        if (DeleteSectionForUser(uid, r.SectionId, r.SectionMarker, r.HomeSectionSettings, cancellationToken, r.DefaultTitle)) n++;
+                        if (DeleteSectionForUser(uid, r.UserId, r.SectionId, r.SectionMarker, r.HomeSectionSettings, cancellationToken, r.DefaultTitle)) n++;
                     }
                     catch (Exception ex)
                     {
@@ -3893,6 +3896,7 @@ namespace HomeScreenCompanion
                 if (!Guid.TryParse(userId, out var guid)) continue;
                 var user = _userManager.GetUserById(guid);
                 if (user == null) { _log.Debug($"  User {userId} no longer exists — skipped"); continue; }
+                if (_preview == null && SkipDisabled(userId)) { _log.Debug($"    Next Watch for {user.Name}: skipped — disabled in Emby (their playlist is kept)"); continue; }
                 try
                 {
                     var r = _nextWatch.Recommend(user, limit, allow, blacklist, tagConfig.NextWatchSeedDays, tagConfig.NextWatchUseTaste);
@@ -4089,8 +4093,9 @@ namespace HomeScreenCompanion
                         if (!Guid.TryParse(userId, out var userGuid)) continue;
                         var plUser = _userManager.GetUserById(userGuid);
                         if (plUser == null) { _log.Debug($"  User {userId} no longer exists — skipped"); continue; }
+                        if (SkipDisabled(userId)) { _log.Debug($"  {plUser.Name}: skipped — disabled in Emby (their playlist is kept)"); continue; }
 
-                        var plName = string.IsNullOrWhiteSpace(tagConfig.PlaylistName) ? tagConfig.Name : tagConfig.PlaylistName;
+                        var plName =string.IsNullOrWhiteSpace(tagConfig.PlaylistName) ? tagConfig.Name : tagConfig.PlaylistName;
 
                         // 1. Try to find playlist by stored ID (most reliable)
                         var mapping = tagConfig.PlaylistMappings?.FirstOrDefault(m =>
@@ -4343,6 +4348,8 @@ namespace HomeScreenCompanion
             _deletedGroupRowsRemoved = RemoveDeletedGroupLeftovers(cancellationToken);
             // The tags of the tag rows (see TagAnchor): kept on the anchor so they always exist.
             var anchoredTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // A source's row is never looked up among the top-lists' rows (see the title fallback below).
+            var topListLibraries = TopListSyncTask.TopListLibraryIds(config, _libraryManager);
 
             foreach (var tc in config.Tags)
             {
@@ -4395,7 +4402,7 @@ namespace HomeScreenCompanion
                                     // Switched off by its schedule (or made inactive): remember where the row
                                     // was, so it comes back at the same place when it switches on again.
                                     if (tc.EnableHomeSection) RememberRowPosition(hsKey, tracking.UserId, uid, tracking.SectionId, cancellationToken);
-                                    if (DeleteSectionForUser(uid, tracking.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc))) _removedHs++;
+                                    if (DeleteSectionForUser(uid, tracking.UserId, tracking.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc))) _removedHs++;
                                 }
                                 catch (Exception ex)
                                 {
@@ -4534,7 +4541,7 @@ namespace HomeScreenCompanion
                     try
                     {
                         var uid = _userManager.GetInternalId(t.UserId);
-                        DeleteSectionForUser(uid, t.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc));
+                        DeleteSectionForUser(uid, t.UserId, t.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc));
                     }
                     catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                     tc.HomeSectionTracked.Remove(t);
@@ -4542,10 +4549,17 @@ namespace HomeScreenCompanion
                 }
 
                 int _hsSynced = 0;
+                // Position changed since it was last put into effect: the rows already there move too.
+                var _posNow = settingsDict.TryGetValue("_position", out var _posSaved) ? _posSaved ?? "" : "";
+                var _posKey = RowPlacement.SourceKey(tc);
+                bool _posMove = RowPlacement.ShouldMove(_posKey, _posNow, false);
+                int _posMoved = 0;
                 if (tc.HomeSectionUserIds.Count > 0)
                     _log.Section($"Home section: {_hsDisplayName}");
                 foreach (var userId in tc.HomeSectionUserIds)
                 {
+                    // Disabled in Emby: their row (and its tracking) stays as it is.
+                    if (SkipDisabled(userId)) { _log.Debug($"  {UserName(userId)}: skipped — disabled in Emby (the row is kept)"); continue; }
                     string _hsAction = "created";
                     // A playlist row shows this user's own playlist from the source.
                     string? userLibraryId = resolvedLibraryId;
@@ -4577,10 +4591,12 @@ namespace HomeScreenCompanion
                             ownedSection = allCurrentSections.FirstOrDefault(s => s.Id == tracked.SectionId);
                         // The title fallback never takes a row another group or top-list owns: two sources
                         // with the same Custom Title for one user would otherwise share (and keep
-                        // overwriting) one row.
+                        // overwriting) one row. Nor any row on a top-list's library, tracked or not: it
+                        // would turn the top-list's row into this source's row.
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _hsFallbackName) && !string.IsNullOrEmpty(_hsFallbackName))
                             ownedSection = allCurrentSections.FirstOrDefault(s => SameTitle(s.CustomName, _hsFallbackName)
-                                && !SectionOwnedElsewhere(config, hsKey, userId, s.Id));
+                                && !SectionOwnedElsewhere(config, hsKey, userId, s.Id)
+                                && !TopListSyncTask.IsTopListRow(s, topListLibraries));
 
                         if (ownedSection != null)
                         {
@@ -4592,6 +4608,12 @@ namespace HomeScreenCompanion
                                 _userManager.UpdateHomeSection(userInternalId, updateSection, cancellationToken);
                                 trackId = ownedSection.Id ?? sectionMarker;
                                 _hsAction = "updated";
+                                if (_posMove && MoveToPosition(_userManager, userInternalId, ownedSection.Id ?? "", _posNow, cancellationToken,
+                                        tc.HomeSectionUserIds.Where(u => u != userId), settingsDict.TryGetValue("CustomName", out var _movedName) ? _movedName : null))
+                                {
+                                    _posMoved++;
+                                    _hsAction = "updated, moved to its new position";
+                                }
                                 goto _hsSectionDone;
                             }
                             catch (Exception ex)
@@ -4618,7 +4640,8 @@ namespace HomeScreenCompanion
                             trackId = !string.IsNullOrEmpty(newId) ? newId : sectionMarker;
                             // Back where it was when it was removed, else at the row's chosen position.
                             if (!string.IsNullOrEmpty(newId) && !RestoreRowPosition(hsKey, userId, userInternalId, newId, cancellationToken))
-                                PlaceNewRow(_userManager, userInternalId, newId, settingsDict.TryGetValue("_position", out var _pos) ? _pos : "", cancellationToken);
+                                PlaceNewRow(_userManager, userInternalId, newId, settingsDict.TryGetValue("_position", out var _pos) ? _pos : "", cancellationToken,
+                                    tc.HomeSectionUserIds.Where(u => u != userId), settingsDict.TryGetValue("CustomName", out var _ownName) ? _ownName : null);
                         }
 
                         _hsSectionDone:
@@ -4645,6 +4668,11 @@ namespace HomeScreenCompanion
                             : userId;
                         HsWarn(statsList, _hsTagName, _hsDisplayName, $"home section failed for {_hsUserName2}: {ex.Message}");
                     }
+                }
+                if (_posMove)
+                {
+                    RowPlacement.MarkApplied(_posKey, _posNow);
+                    if (_posMoved > 0) _log.Ok($"{_hsDisplayName}: row moved to its new position ({PositionLabel(_posNow)}) for {RunLog.Plural(_posMoved, "user")}");
                 }
                 if (_hsSynced > 0)
                 {
@@ -4675,6 +4703,9 @@ namespace HomeScreenCompanion
             var key = GroupKey(tc);
             return live.Tags.Any(t => t.Active && string.Equals(GroupKey(t), key, StringComparison.OrdinalIgnoreCase));
         }
+
+        internal static bool SectionOwnedElsewhere(PluginConfiguration config, TagConfig tc, string userId, string? sectionId)
+            => SectionOwnedElsewhere(config, GroupKey(tc), userId, sectionId);
 
         // A user's home row that another group (not groupKey) or a top-list tracks as its own.
         private static bool SectionOwnedElsewhere(PluginConfiguration config, string groupKey, string userId, string? sectionId)
@@ -4794,27 +4825,101 @@ namespace HomeScreenCompanion
                 : "type:" + (s.SectionType ?? "").ToLowerInvariant() + "|" + (s.ParentId ?? "");
 
         // Where a new row goes (HomeSectionSettings "_position"): "" or "bottom" = where Emby puts it
-        // (the bottom), "top", or "after:<SectionKey>" = right below that row (bottom when this
-        // user's home screen does not have it).
-        internal static void PlaceNewRow(IUserManager userManager, long userInternalId, string sectionId, string position, CancellationToken cancellationToken)
+        // (the bottom), "top", "before:<SectionKey>" = right above that row, or "after:<SectionKey>" =
+        // right below it. When this user's home screen does not have that row: next to the nearest
+        // row around it (in the order of another of the users who has it) that this user does have —
+        // below the nearest one above it for "after" (else at the top), above the nearest one below it
+        // for "before" (else at the bottom); at the bottom when none of them has the row.
+        internal static void PlaceNewRow(IUserManager userManager, long userInternalId, string sectionId, string position, CancellationToken cancellationToken,
+            IEnumerable<string>? referenceUserIds = null, string? ownTitle = null)
         {
             if (string.IsNullOrEmpty(position) || position == "bottom") return;
             try
             {
                 var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
-                int target;
-                if (position == "top") target = 0;
-                else if (position.StartsWith("after:", StringComparison.Ordinal))
-                {
-                    var anchor = position.Substring("after:".Length);
-                    int above = sections.Where(s => s.Id != sectionId).ToList().FindIndex(s => SectionKey(s) == anchor);
-                    if (above < 0) return;
-                    target = above + 1;
-                }
-                else return;
-                MoveRow(userManager, userInternalId, sectionId, target, sections.Length, cancellationToken);
+                var target = TargetIndex(userManager, sections, sectionId, position, referenceUserIds, ownTitle, cancellationToken);
+                if (target.HasValue) MoveRow(userManager, userInternalId, sectionId, target.Value, sections.Length, cancellationToken);
             }
             catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+        }
+
+        /// <summary>Moves a row that is already there to the position (the setting was changed): also
+        /// to the bottom for "". A row whose anchor nobody has stays where it is. True when it moved.</summary>
+        internal static bool MoveToPosition(IUserManager userManager, long userInternalId, string sectionId, string position, CancellationToken cancellationToken,
+            IEnumerable<string>? referenceUserIds = null, string? ownTitle = null)
+        {
+            try
+            {
+                var sections = userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>();
+                int current = Array.FindIndex(sections, s => s.Id == sectionId);
+                if (current < 0) return false;
+                int? target = string.IsNullOrEmpty(position) || position == "bottom" ? sections.Length - 1
+                    : TargetIndex(userManager, sections, sectionId, position, referenceUserIds, ownTitle, cancellationToken);
+                if (!target.HasValue || target.Value == current) return false;
+                userManager.MoveHomeSections(userInternalId, new[] { sectionId }, target.Value, cancellationToken);
+                return true;
+            }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); return false; }
+        }
+
+        // A Position for the log: "bottom", "top", "after 'Continue Watching'".
+        internal static string PositionLabel(string? position)
+        {
+            if (string.IsNullOrEmpty(position) || position == "bottom") return "bottom";
+            if (position == "top") return "top";
+            bool before = position!.StartsWith("before:", StringComparison.Ordinal);
+            if (!before && !position.StartsWith("after:", StringComparison.Ordinal)) return position;
+            var key = position.Substring(before ? "before:".Length : "after:".Length);
+            var row = key.StartsWith("name:", StringComparison.Ordinal) ? "'" + key.Substring(5) + "'"
+                : key.StartsWith("type:", StringComparison.Ordinal) ? key.Substring(5).Split('|')[0] + " row" : key;
+            return (before ? "before " : "after ") + row;
+        }
+
+        // The index the row gets among the other rows (its final index); null: leave it where it is.
+        private static int? TargetIndex(IUserManager userManager, ContentSection[] sections, string sectionId, string position,
+            IEnumerable<string>? referenceUserIds, string? ownTitle, CancellationToken cancellationToken)
+        {
+            if (position == "top") return 0;
+            bool before = position.StartsWith("before:", StringComparison.Ordinal);
+            if (!before && !position.StartsWith("after:", StringComparison.Ordinal)) return null;
+            var anchor = position.Substring(before ? "before:".Length : "after:".Length);
+            var others = sections.Where(s => s.Id != sectionId).ToList();
+            int at = others.FindIndex(s => SectionKey(s) == anchor);
+            if (at >= 0) return before ? at : at + 1;
+            var near = RowKeysNear(userManager, anchor, before, referenceUserIds, ownTitle, cancellationToken);
+            if (near == null) return null;
+            foreach (var key in near)
+            {
+                int found = others.FindIndex(s => SectionKey(s) == key);
+                if (found >= 0) return before ? found : found + 1;
+            }
+            // None of the rows around it: "after" goes to the top, "before" to the bottom.
+            return before ? (int?)null : 0;
+        }
+
+        // The keys of the rows next to the anchor row, nearest first — those above it for "after",
+        // those below it for "before" — on the home screen of the first reference user who has that
+        // row (the row being placed left out); null when none has it.
+        private static List<string>? RowKeysNear(IUserManager userManager, string anchor, bool below, IEnumerable<string>? referenceUserIds, string? ownTitle, CancellationToken cancellationToken)
+        {
+            if (referenceUserIds == null) return null;
+            string? ownKey = string.IsNullOrWhiteSpace(ownTitle) ? null : "name:" + StripInactive(ownTitle).Trim().ToLowerInvariant();
+            foreach (var userId in referenceUserIds)
+            {
+                try
+                {
+                    var keys = (userManager.GetHomeSections(userManager.GetInternalId(userId), cancellationToken)?.Sections ?? Array.Empty<ContentSection>())
+                        .Select(SectionKey).Where(k => k != ownKey).ToList();
+                    int at = keys.IndexOf(anchor);
+                    if (at < 0) continue;
+                    if (below) return keys.Skip(at + 1).ToList();
+                    var above = keys.Take(at).ToList();
+                    above.Reverse();
+                    return above;
+                }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+            }
+            return null;
         }
 
         private static void MoveRow(IUserManager userManager, long userInternalId, string sectionId, int target, int count, CancellationToken cancellationToken)
@@ -4872,30 +4977,45 @@ namespace HomeScreenCompanion
 
         // Removes a group's row for one user: by its tracked id, else (the id is gone, e.g. Copy & Sync
         // re-created the user's rows with new ids) by its marker, else by its title. True when a row
-        // was removed.
-        private bool DeleteSectionForUser(long userInternalId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken, string? defaultTitle = null)
+        // was removed. Never a top-list's row: not one a top-list tracks, and by marker or title never
+        // a row on a top-list's library either — a source and a top-list can have the same title.
+        private bool DeleteSectionForUser(long userInternalId, string userId, string sectionId, string sectionMarker, string settingsJson, CancellationToken cancellationToken, string? defaultTitle = null)
         {
             ContentSection[]? allSections = null;
             try { allSections = _userManager.GetHomeSections(userInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>(); }
             catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
+            var cfg = Plugin.Instance?.Configuration;
+            var topListTracked = new HashSet<string>(
+                (cfg?.TopLists ?? new List<TopListHomeSection>()).SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>())
+                    .Select(t => t.SectionId).Where(id => !string.IsNullOrEmpty(id)));
+
             bool realId = !string.IsNullOrEmpty(sectionId) && !sectionId.StartsWith("hsc__");
             if (realId && (allSections == null || allSections.Any(s => s.Id == sectionId)))
             {
+                if (topListTracked.Contains(sectionId))
+                {
+                    _log.Debug($"  {UserName(userId)}: row {sectionId} kept — it is a top-list's row");
+                    return false;
+                }
                 _userManager.DeleteHomeSections(userInternalId, new[] { sectionId }, cancellationToken);
                 return true;
             }
             if (allSections == null) return false;
 
+            var topListLibs = TopListSyncTask.TopListLibraryIds(cfg, _libraryManager);
+            bool IsTopListRow(ContentSection s) => topListTracked.Contains(s.Id ?? "") || TopListSyncTask.IsTopListRow(s, topListLibs);
+
             var marker = (!string.IsNullOrEmpty(sectionId) && sectionId.StartsWith("hsc__")) ? sectionId : sectionMarker;
             if (!string.IsNullOrEmpty(marker))
             {
                 var markerIds = allSections
-                    .Where(s => s.Subtitle == marker && !string.IsNullOrEmpty(s.Id))
+                    .Where(s => s.Subtitle == marker && !string.IsNullOrEmpty(s.Id) && !IsTopListRow(s))
                     .Select(s => s.Id).ToArray();
                 if (markerIds.Length > 0)
                 {
                     _userManager.DeleteHomeSections(userInternalId, markerIds, cancellationToken);
+                    _log.Debug($"  {UserName(userId)}: {RunLog.Plural(markerIds.Length, "row")} removed by marker '{marker}' (the saved id {(realId ? sectionId : "-")} was gone)");
                     return true;
                 }
             }
@@ -4909,17 +5029,19 @@ namespace HomeScreenCompanion
                 if (!string.IsNullOrEmpty(cn))
                 {
                     // Never a row another group or top-list tracks (same title, different source).
-                    var cfg = Plugin.Instance?.Configuration;
                     var trackedIds = new HashSet<string>(
                         (cfg?.Tags ?? new List<TagConfig>()).SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>())
-                            .Concat((cfg?.TopLists ?? new List<TopListHomeSection>()).SelectMany(t => t.HomeSectionTracked ?? new List<HomeSectionTracking>()))
                             .Select(t => t.SectionId).Where(id => !string.IsNullOrEmpty(id)));
-                    var fallbackIds = allSections
-                        .Where(s => SameTitle(s.CustomName, cn) && !string.IsNullOrEmpty(s.Id) && !trackedIds.Contains(s.Id))
+                    var sameTitle = allSections.Where(s => SameTitle(s.CustomName, cn) && !string.IsNullOrEmpty(s.Id)).ToList();
+                    foreach (var s in sameTitle.Where(IsTopListRow))
+                        _log.Debug($"  {UserName(userId)}: '{s.CustomName}' ({s.Id}) kept — a top-list's row with the same title");
+                    var fallbackIds = sameTitle
+                        .Where(s => !trackedIds.Contains(s.Id) && !IsTopListRow(s))
                         .Select(s => s.Id).ToArray();
                     if (fallbackIds.Length > 0)
                     {
                         _userManager.DeleteHomeSections(userInternalId, fallbackIds, cancellationToken);
+                        _log.Debug($"  {UserName(userId)}: {RunLog.Plural(fallbackIds.Length, "row")} '{cn}' removed by title (the saved id {(realId ? sectionId : "-")} was gone)");
                         return true;
                     }
                 }
@@ -4928,12 +5050,20 @@ namespace HomeScreenCompanion
             return false;
         }
 
+        private string UserName(string userId)
+            => Guid.TryParse(userId, out var g) ? (_userManager.GetUserById(g)?.Name ?? userId) : userId;
+
         // Returns true when this entry is a LocalCollection home section with media type = Collections.
         // Used to decide that only the BoxSet itself (not its items) should receive the tag.
         // Tags this plugin writes onto items (some entry of the group has tagging on). A group's
         // Tag: criteria must not see its own output tag, or an item that got it once keeps
         // matching its own rule forever (e.g. tag "zzrow-musicals" + Tag:contains:Musicals).
         private HashSet<string> _writtenTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Users disabled in Emby, read at the start of each run: left out of everything done per user
+        // (see UserStatus). Null outside a run.
+        private UserStatus? _userStatus;
+        private bool SkipDisabled(string userId) => _userStatus?.Skip(userId) == true;
 
         private HashSet<string> BuildWrittenTags(PluginConfiguration config) => new HashSet<string>(
             (config.Tags ?? new List<TagConfig>())
@@ -6679,6 +6809,7 @@ namespace HomeScreenCompanion
                 _log.Info($"  Playlists:     {gs.PlaylistUsersCreated} created, {gs.PlaylistUsersUpdated} updated{(gs.PlaylistUsersFailed > 0 ? $", {gs.PlaylistUsersFailed} failed" : "")}");
             if (gs.EnableHomeSection)
                 _log.Info($"  Home sections: {(gs.HomeSectionSynced ? 1 : 0)} synced");
+            if (_userStatus?.SummaryLine() is string disabledLine) _log.Info("  " + disabledLine);
             _log.Info($"  Done in {RunLog.Elapsed(DateTime.Now - startTime)}  ·  {StatusSymbol(failed, warned)} {finalStatus}");
             _log.Rule();
         }

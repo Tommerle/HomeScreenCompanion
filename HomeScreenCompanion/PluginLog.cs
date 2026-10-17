@@ -83,11 +83,29 @@ namespace HomeScreenCompanion
                     Write("CAT", "Caught", $"{site} — more of these today are not logged");
                     return;
                 }
-                var inner = ex.GetBaseException();
-                var what = inner == ex ? $"{ex.GetType().Name}: {ex.Message}" : $"{ex.GetType().Name}: {ex.Message} ← {inner.GetType().Name}: {inner.Message}";
-                Write("CAT", "Caught", $"{site} — {what}");
+                Write("CAT", "Caught", $"{site} — {Describe(ex)}");
             }
             catch { }
+        }
+
+        /// <summary>"Type: message", with the inner exception and the details some exceptions keep in
+        /// properties of their own (a SQLiteException's message says nothing: its text and code are in
+        /// ErrorMessage / ExtendedErrorCode).</summary>
+        internal static string Describe(Exception ex)
+        {
+            var inner = ex.GetBaseException();
+            var what = inner == ex ? $"{ex.GetType().Name}: {ex.Message}" : $"{ex.GetType().Name}: {ex.Message} ← {inner.GetType().Name}: {inner.Message}";
+            var details = new List<string>();
+            foreach (var name in new[] { "ErrorMessage", "ExtendedErrorCode", "ErrorCode" })
+            {
+                try
+                {
+                    var value = inner.GetType().GetProperty(name)?.GetValue(inner)?.ToString();
+                    if (!string.IsNullOrEmpty(value) && !details.Any(d => d.EndsWith(" " + value))) details.Add($"{name} {value}");
+                }
+                catch { }
+            }
+            return details.Count == 0 ? what : $"{what} ({string.Join(", ", details)})";
         }
 
         /// <summary>Wraps an Emby logger so whatever the plugin writes to it also lands in the plugin's own log.</summary>

@@ -219,9 +219,13 @@ namespace HomeScreenCompanion
             return l != null ? $"{l.Name} ({l.Id})" : id!;
         }
 
-        private List<User> AllUsers()
+        private List<User> AllUsers() => UsersInOrder(_userManager);
+
+        // Every user (hidden and disabled ones too), in the order an anonymised zip numbers them:
+        // "User 1", "User 2" … by name. The download window's "Who is who" list uses the same order.
+        internal static List<User> UsersInOrder(IUserManager userManager)
         {
-            try { return _userManager.GetUserList(new UserQuery()).OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
+            try { return userManager.GetUserList(new UserQuery()).OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
             catch (Exception ex) { PluginLog.Swallowed(ex); return new List<User>(); }
         }
 

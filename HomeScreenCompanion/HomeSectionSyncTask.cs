@@ -146,9 +146,10 @@ namespace HomeScreenCompanion
                 string sourceKey = NormId(config.HomeSyncSourceUserId);
 
                 progress.Report(20);
-                int totalCopied = 0, failedUsers = 0;
+                int totalCopied = 0, failedUsers = 0, skippedUsers = 0;
                 bool topListsChanged = false;
                 int targetCount = config.HomeSyncTargetUserIds.Count;
+                var userStatus = UserStatus.Read(_userManager);
                 _log.Blank();
                 _log.Info("» Copying home screen");
 
@@ -161,6 +162,13 @@ namespace HomeScreenCompanion
                     string targetName = Guid.TryParse(targetIdStr, out var tgtGuid)
                         ? (_userManager.GetUserById(tgtGuid)?.Name ?? targetIdStr)
                         : targetIdStr;
+                    // Disabled in Emby: their home screen is left as it is.
+                    if (userStatus.Skip(targetIdStr))
+                    {
+                        skippedUsers++;
+                        _log.Skip($"{targetName}: skipped — disabled in Emby (home screen left as it is)");
+                        continue;
+                    }
                     try
                     {
                         var targetInternalId = _userManager.GetInternalId(targetIdStr);
@@ -255,13 +263,19 @@ namespace HomeScreenCompanion
                             var row = before.FirstOrDefault(s => managed.TopListRow(s) == tl);
                             if (row == null)
                             {
-                                var add = keptTopListRows.TryGetValue(tl, out var kept) ? CopySection(kept) : managed.NewTopListRow(tl, _jsonSerializer);
+                                bool ownKept = keptTopListRows.TryGetValue(tl, out var kept);
+                                var add = ownKept ? CopySection(kept) : managed.NewTopListRow(tl, _jsonSerializer);
                                 _userManager.AddHomeSection(targetInternalId, add, cancellationToken);
                                 row = (_userManager.GetHomeSections(targetInternalId, cancellationToken)?.Sections ?? Array.Empty<ContentSection>())
                                     .FirstOrDefault(s => !string.IsNullOrEmpty(s.Id) && !before.Any(b => b.Id == s.Id));
                                 if (row == null) continue;
-                                HomeScreenCompanionTask.RestoreRowPosition(_userManager, _jsonSerializer, TopListRowKey(tl), targetIdStr, targetInternalId, row.Id, cancellationToken);
-                                _log.Debug($"  {targetName}: = '{row.CustomName ?? row.Name}' kept (top-list row)");
+                                // Back where it was, else (a new one) at the list's Position.
+                                if (!HomeScreenCompanionTask.RestoreRowPosition(_userManager, _jsonSerializer, TopListRowKey(tl), targetIdStr, targetInternalId, row.Id, cancellationToken) && !ownKept)
+                                    HomeScreenCompanionTask.PlaceNewRow(_userManager, targetInternalId, row.Id, RowPlacement.PositionIn(tl.HomeSectionSettings), cancellationToken,
+                                        TopListSyncTask.OtherUsers(tl, targetIdStr), row.CustomName);
+                                _log.Debug(ownKept
+                                    ? $"  {targetName}: = '{row.CustomName ?? row.Name}' kept (top-list row)"
+                                    : $"  {targetName}: + '{row.CustomName ?? row.Name}' added (top-list row; they had none)");
                                 copiedHere++;
                             }
                             var tracked = (tl.HomeSectionTracked ??= new List<HomeSectionTracking>()).FirstOrDefault(t => NormId(t.UserId) == targetKey);
@@ -298,6 +312,7 @@ namespace HomeScreenCompanion
                                 _log.Debug($"  Master order: [{string.Join(", ", sourceConf.OrderedViews)}]");
                                 foreach (var targetIdStr in config.HomeSyncTargetUserIds)
                                 {
+                                    if (userStatus.IsDisabled(targetIdStr)) continue;
                                     string targetName2 = Guid.TryParse(targetIdStr, out var tgtGuid2)
                                         ? (_userManager.GetUserById(tgtGuid2)?.Name ?? targetIdStr)
                                         : targetIdStr;
@@ -335,10 +350,11 @@ namespace HomeScreenCompanion
 
                 LastSectionsCopied = totalCopied;
                 LastSyncTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-                LastSyncResult = $"OK — {totalCopied} section(s) copied to {targetCount} user(s).";
+                LastSyncResult = $"OK — {totalCopied} section(s) copied to {targetCount - skippedUsers} user(s).";
                 _log.Rule();
                 _log.Info("Summary");
-                _log.Info($"  Sections:      {totalCopied} copied to {RunLog.Plural(targetCount - failedUsers, "user")}{(failedUsers > 0 ? $", {RunLog.Plural(failedUsers, "user")} failed" : "")}");
+                _log.Info($"  Sections:      {totalCopied} copied to {RunLog.Plural(targetCount - skippedUsers - failedUsers, "user")}{(failedUsers > 0 ? $", {RunLog.Plural(failedUsers, "user")} failed" : "")}");
+                if (userStatus.SummaryLine() is string disabledLine) _log.Info("  " + disabledLine);
                 _log.Info($"  Done in {RunLog.Elapsed(DateTime.Now - startTime)}  ·  {(failedUsers > 0 ? "✖ Completed with " + RunLog.Plural(failedUsers, "error") : "✔ Completed")}");
                 _log.Rule();
                 progress.Report(100);
@@ -445,7 +461,7 @@ namespace HomeScreenCompanion
         }
 
         // Row-position memory key of a top-list row (kept apart from the tag rows' keys).
-        private static string TopListRowKey(TopListHomeSection tl) => "tl\u001F" + (tl.TagName ?? "").Trim();
+        private static string TopListRowKey(TopListHomeSection tl) => TopListSyncTask.RowPositionKey(tl);
 
         private static ContentSection CopySection(ContentSection source)
         {

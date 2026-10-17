@@ -62,6 +62,23 @@ namespace HomeScreenCompanion
         public string Data { get; set; } = "";
     }
 
+    // Download logs: the number each user gets in an anonymised zip ("User 3" = …). Shown only in
+    // the download window, so the one sending the zip can say which user they mean; never in the zip.
+    [Route("/HomeScreenCompanion/Logs/UserNumbers", "GET")]
+    [Authenticated(Roles = "Admin")]
+    public class LogUserNumbersRequest : IReturn<LogUserNumbersResponse> { }
+
+    public class LogUserNumbersResponse
+    {
+        public List<LogUserNumber> Users { get; set; } = new List<LogUserNumber>();
+    }
+
+    public class LogUserNumber
+    {
+        public int Number { get; set; }
+        public string Name { get; set; } = "";
+    }
+
     [Route("/HomeScreenCompanion/UploadCollectionImage", "POST")]
     [Authenticated(Roles = "Admin")]
     public class UploadCollectionImageRequest : IReturn<UploadCollectionImageResponse>
@@ -334,6 +351,25 @@ namespace HomeScreenCompanion
     public class ManagedCollectionInfo { public string Id { get; set; } = ""; public string Name { get; set; } = ""; public int ItemCount { get; set; } }
     public class GetManagedCollectionsResponse { public List<ManagedCollectionInfo> Collections { get; set; } = new List<ManagedCollectionInfo>(); }
 
+    // Every playlist on the server (Cleanup tab), with its owner and the users it is shared with.
+    [Route("/HomeScreenCompanion/Manage/Playlists", "GET")]
+    [Authenticated(Roles = "Admin")]
+    public class GetManagedPlaylistsRequest : IReturn<GetManagedPlaylistsResponse> { }
+    public class ManagedPlaylistInfo
+    {
+        public string Id { get; set; } = "";            // Guid (N), as DeletePlaylist takes it
+        public string Name { get; set; } = "";
+        public int ItemCount { get; set; }
+        public string OwnerId { get; set; } = "";       // "" = no user owns it
+        public string OwnerName { get; set; } = "";
+        public List<string> SharedWith { get; set; } = new List<string>();   // other users' names
+        public bool IsPublic { get; set; }               // every user sees it
+        public string ManagedBy { get; set; } = "";     // the HSC source that makes it; "" = none
+        public bool ManagedActive { get; set; }
+        public int ManagedIndex { get; set; } = -1;     // index in Tags of that source
+    }
+    public class GetManagedPlaylistsResponse { public List<ManagedPlaylistInfo> Playlists { get; set; } = new List<ManagedPlaylistInfo>(); }
+
     // ── Import existing collections (Sources tab) ──
     // Every Emby collection, with what stops it from being taken over (HSC already makes it, or
     // another collection has the same name: HSC finds its collection by name).
@@ -377,6 +413,10 @@ namespace HomeScreenCompanion
     [Authenticated(Roles = "Admin")]
     public class DeleteManagedCollectionRequest : IReturn<DeleteManagedCollectionResponse> { public string CollectionId { get; set; } = ""; }
     public class DeleteManagedCollectionResponse { public bool Success { get; set; } public string Message { get; set; } = ""; }
+
+    [Route("/HomeScreenCompanion/Manage/DeletePlaylist", "POST")]
+    [Authenticated(Roles = "Admin")]
+    public class DeleteManagedPlaylistRequest : IReturn<DeleteManagedCollectionResponse> { public string PlaylistId { get; set; } = ""; }
 
     [Route("/HomeScreenCompanion/TopList/Status", "GET")]
     [Authenticated(Roles = "Admin")]
@@ -871,10 +911,12 @@ public class HomeScreenCompanionService : IService
         private readonly PluginLogger _logger;
 
         private readonly MediaBrowser.Controller.IServerApplicationHost _appHost;
+        private readonly MediaBrowser.Controller.Persistence.IItemRepository _itemRepository;
 
-        public HomeScreenCompanionService(IHttpClient httpClient, IJsonSerializer jsonSerializer, IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserViewManager userViewManager, ITaskManager taskManager, IProviderManager providerManager, IFileSystem fileSystem, ILogManager logManager, MediaBrowser.Controller.IServerApplicationHost appHost)
+        public HomeScreenCompanionService(IHttpClient httpClient, IJsonSerializer jsonSerializer, IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserViewManager userViewManager, ITaskManager taskManager, IProviderManager providerManager, IFileSystem fileSystem, ILogManager logManager, MediaBrowser.Controller.IServerApplicationHost appHost, MediaBrowser.Controller.Persistence.IItemRepository itemRepository)
         {
             _appHost = appHost;
+            _itemRepository = itemRepository;
             _httpClient = httpClient;
             _jsonSerializer = jsonSerializer;
             _userManager = userManager;
@@ -900,6 +942,15 @@ public class HomeScreenCompanionService : IService
                 _logger.ErrorException("Logs could not be put together", ex);
                 return new DownloadLogsResponse { Success = false, Message = ex.Message };
             }
+        }
+
+        public object Get(LogUserNumbersRequest request)
+        {
+            var users = LogBundle.UsersInOrder(_userManager);
+            return new LogUserNumbersResponse
+            {
+                Users = users.Select((u, i) => new LogUserNumber { Number = i + 1, Name = u.Name ?? "" }).ToList()
+            };
         }
 
         public object Get(VersionRequest request)
@@ -1928,10 +1979,13 @@ public class HomeScreenCompanionService : IService
                 var sectionMarker = "hsc__" + safeTag;
 
                 int updated = 0;
+                var topListLibraries = TopListSyncTask.TopListLibraryIds(config, _libraryManager);
+                var userStatus = UserStatus.Read(_userManager);
                 foreach (var userId in (tc.HomeSectionUserIds ?? new System.Collections.Generic.List<string>()))
                 {
                     var tracking = realTracked.FirstOrDefault(t => t.UserId == userId);
                     if (tracking == null) continue; // no real tracked section for this user
+                    if (userStatus.IsDisabled(userId)) continue; // disabled in Emby: their row is left as it is
 
                     try
                     {
@@ -1939,9 +1993,13 @@ public class HomeScreenCompanionService : IService
                         var currentSections = _userManager.GetHomeSections(userInternalId, CancellationToken.None);
                         var allSections = currentSections?.Sections ?? Array.Empty<ContentSection>();
 
+                        // By title only a row no other source or top-list owns, and never a row on a
+                        // top-list's library (a top-list can have the same title).
                         ContentSection ownedSection = allSections.FirstOrDefault(s => s.Id == tracking.SectionId);
                         if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _applyFallbackName) && !string.IsNullOrEmpty(_applyFallbackName))
-                            ownedSection = allSections.FirstOrDefault(s => HomeScreenCompanionTask.SameTitle(s.CustomName, _applyFallbackName));
+                            ownedSection = allSections.FirstOrDefault(s => HomeScreenCompanionTask.SameTitle(s.CustomName, _applyFallbackName)
+                                && !HomeScreenCompanionTask.SectionOwnedElsewhere(config, tc, userId, s.Id)
+                                && !TopListSyncTask.IsTopListRow(s, topListLibraries));
 
                         if (ownedSection == null) continue;
 
@@ -2139,6 +2197,79 @@ public class HomeScreenCompanionService : IService
             }
             result.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
             return new GetManagedCollectionsResponse { Collections = result };
+        }
+
+        // Owner = the user whose share is ManageDelete (Emby gives it to the creator only; users it
+        // is shared with get Read or Write). When the owner is deleted the others keep their share,
+        // so the playlist has no owner but is still shared.
+        public object Get(GetManagedPlaylistsRequest request)
+        {
+            var playlists = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { "Playlist" },
+                Recursive = true
+            }).Where(p => p.GetType().Name.Contains("Playlist")).ToArray();
+
+            var usersById = _userManager.GetUserList(new UserQuery()).ToDictionary(u => u.InternalId);
+            var sharesByItem = new Dictionary<long, List<MediaBrowser.Controller.Library.UserItemShare>>();
+            if (playlists.Length > 0)
+            {
+                try
+                {
+                    var shares = _itemRepository.GetUserItemShares(
+                        new MediaBrowser.Controller.Library.UserItemShareQuery { ItemIds = playlists.Select(p => p.InternalId).ToArray() },
+                        CancellationToken.None) ?? Array.Empty<MediaBrowser.Controller.Library.UserItemShare>();
+                    foreach (var s in shares)
+                    {
+                        if (!sharesByItem.TryGetValue(s.ItemId, out var list)) sharesByItem[s.ItemId] = list = new List<MediaBrowser.Controller.Library.UserItemShare>();
+                        list.Add(s);
+                    }
+                }
+                catch (Exception ex) { _logger.Warn($"Cleanup: playlist owners could not be read: {ex.Message}"); }
+            }
+
+            // The playlists HSC sources make, by playlist id → (source name, active, index).
+            var hsc = new Dictionary<Guid, (string Name, bool Active, int Index)>();
+            var tags = Plugin.Instance?.Configuration?.Tags ?? new List<TagConfig>();
+            for (int i = 0; i < tags.Count; i++)
+            {
+                var t = tags[i];
+                if (t?.PlaylistMappings == null) continue;
+                foreach (var m in t.PlaylistMappings)
+                    if (m != null && Guid.TryParse(m.PlaylistId, out var g) && !hsc.ContainsKey(g))
+                        hsc[g] = (string.IsNullOrWhiteSpace(t.Name) ? (t.Tag ?? "") : t.Name.Trim(), t.Active, i);
+            }
+
+            var result = new List<ManagedPlaylistInfo>();
+            foreach (var p in playlists)
+            {
+                int count = 0;
+                try { count = _libraryManager.GetItemList(new InternalItemsQuery { ListIds = new[] { p.InternalId } }).Length; }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+                var info = new ManagedPlaylistInfo { Id = p.Id.ToString("N"), Name = p.Name ?? "", ItemCount = count, IsPublic = p.IsPublic };
+
+                var known = (sharesByItem.TryGetValue(p.InternalId, out var ps) ? ps : new List<MediaBrowser.Controller.Library.UserItemShare>())
+                    .Where(s => usersById.ContainsKey(s.UserId)).ToList();
+                var ownerShare = known.FirstOrDefault(s => s.ShareLevel == MediaBrowser.Model.Dto.UserItemShareLevel.ManageDelete);
+                if (ownerShare != null)
+                {
+                    var owner = usersById[ownerShare.UserId];
+                    info.OwnerId = owner.Id.ToString("N");
+                    info.OwnerName = owner.Name ?? "";
+                }
+                info.SharedWith = known.Where(s => s != ownerShare).Select(s => usersById[s.UserId].Name ?? "")
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+                if (hsc.TryGetValue(p.Id, out var src))
+                {
+                    info.ManagedBy = src.Name;
+                    info.ManagedActive = src.Active;
+                    info.ManagedIndex = src.Index;
+                }
+                result.Add(info);
+            }
+            result.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase) is int c && c != 0
+                ? c : string.Compare(a.OwnerName, b.OwnerName, StringComparison.OrdinalIgnoreCase));
+            return new GetManagedPlaylistsResponse { Playlists = result };
         }
 
         // Collection names the saved sources make (collection on), name → source name.
@@ -2354,6 +2485,27 @@ public class HomeScreenCompanionService : IService
             try
             {
                 _libraryManager.DeleteItem(item, new DeleteOptions { DeleteFileLocation = true });
+                return new DeleteManagedCollectionResponse { Success = true };
+            }
+            catch (Exception ex)
+            {
+                return new DeleteManagedCollectionResponse { Success = false, Message = ex.Message };
+            }
+        }
+
+        // Removed with its folder (userplaylists\<name> [playlist]\): left behind, Emby indexes the
+        // .m3u again as a new playlist that no user owns.
+        public object Post(DeleteManagedPlaylistRequest request)
+        {
+            if (!Guid.TryParse(request.PlaylistId ?? "", out var guid))
+                return new DeleteManagedCollectionResponse { Success = false, Message = "Invalid PlaylistId." };
+            var item = _libraryManager.GetItemById(guid);
+            if (item == null || !item.GetType().Name.Contains("Playlist"))
+                return new DeleteManagedCollectionResponse { Success = false, Message = "Playlist not found." };
+            try
+            {
+                _libraryManager.DeleteItem(item, new DeleteOptions { DeleteFileLocation = true });
+                _logger.Info($"Cleanup: playlist \"{item.Name}\" removed");
                 return new DeleteManagedCollectionResponse { Success = true };
             }
             catch (Exception ex)
@@ -3419,7 +3571,12 @@ public class HomeScreenCompanionService : IService
                     .Where(f => !string.IsNullOrEmpty(f.ItemId))
                     .Select(f => f.ItemId.Trim().ToLowerInvariant())
                     .ToList();
-                foreach (var viewUserId in tl.HomeSectionUserIds ?? new System.Collections.Generic.List<string>())
+                // Users removed from Emby can still be on the list, and disabled ones are left as they
+                // are (see UserStatus): both left out here and below.
+                var userStatus = UserStatus.Read(_userManager);
+                var listUsers = (tl.HomeSectionUserIds ?? new System.Collections.Generic.List<string>())
+                    .Where(u => TopListSyncTask.UserExists(_userManager, u) && !userStatus.IsDisabled(u)).ToList();
+                foreach (var viewUserId in listUsers)
                     allLibIds.AddRange(TopListSyncTask.GetSectionEditorViewIds(_userViewManager, _userManager, viewUserId));
                 var ownIds = TopListSyncTask.OwnLibraryIds(resolvedLibraryId, _libraryManager);
                 var storedExclude = (settingsDict.TryGetValue("_queryExcludeViewIds", out var storedEv) ? storedEv : "")
@@ -3436,7 +3593,7 @@ public class HomeScreenCompanionService : IService
 
                 int created = 0, updated = 0;
 
-                foreach (var userId in (tl.HomeSectionUserIds ?? new System.Collections.Generic.List<string>()))
+                foreach (var userId in listUsers)
                 {
                     try
                     {
@@ -3450,8 +3607,10 @@ public class HomeScreenCompanionService : IService
                         ContentSection? ownedSection = null;
                         if (tracked != null && !string.IsNullOrEmpty(tracked.SectionId) && !tracked.SectionId.StartsWith("hsc__"))
                             ownedSection = allSections.FirstOrDefault(s => s.Id == tracked.SectionId);
-                        if (ownedSection == null && settingsDict.TryGetValue("CustomName", out var _tlFallbackName) && !string.IsNullOrEmpty(_tlFallbackName))
-                            ownedSection = allSections.FirstOrDefault(s => string.Equals(s.CustomName, _tlFallbackName, StringComparison.OrdinalIgnoreCase));
+                        // Its id is gone: the user's row on the list's own library. Never a row found by
+                        // its title — a source's row can have the same title, and would be made over.
+                        if (ownedSection == null)
+                            ownedSection = allSections.FirstOrDefault(s => TopListSyncTask.IsTopListRow(s, ownIds));
 
                         string trackId;
                         if (ownedSection != null)
@@ -3474,6 +3633,10 @@ public class HomeScreenCompanionService : IService
                                 .Where(s => !string.IsNullOrEmpty(s.Id) && !beforeIds.Contains(s.Id))
                                 .Select(s => s.Id).FirstOrDefault() ?? "";
                             trackId = !string.IsNullOrEmpty(newId) ? newId : sectionMarker;
+                            // At the list's Position (a new row is at the bottom).
+                            if (!string.IsNullOrEmpty(newId))
+                                HomeScreenCompanionTask.PlaceNewRow(_userManager, userInternalId, newId, RowPlacement.PositionIn(tl.HomeSectionSettings), CancellationToken.None,
+                                    TopListSyncTask.OtherUsers(tl, userId), settingsDict.TryGetValue("CustomName", out var _tlOwnName) ? _tlOwnName : null);
                             created++;
                         }
 
@@ -3485,7 +3648,12 @@ public class HomeScreenCompanionService : IService
                             tl.HomeSectionTracked.Add(new HomeSectionTracking { UserId = userId, SectionId = trackId });
                         }
                     }
-                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
+                    catch (Exception ex)
+                    {
+                        // The top-list sync queued below makes or updates the row again.
+                        var who = Guid.TryParse(userId, out var whoGuid) ? (_userManager.GetUserById(whoGuid)?.Name ?? userId) : userId;
+                        PluginLog.Write("WRN", "Page", $"Top-list '{tl.TagName}': the row for {who} could not be saved — {PluginLog.Describe(ex)}");
+                    }
                 }
 
                 // Inject the new top-list library into _queryExcludeViewIds of every existing
