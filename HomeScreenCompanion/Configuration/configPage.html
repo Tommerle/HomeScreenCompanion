@@ -778,6 +778,9 @@
         .hsc-callout.warning { background: rgba(230,193,90,0.08); border-color: rgba(230,193,90,0.3); }
         .hsc-callout.warning > .md-icon { color: var(--hsc-warning-text); }
         .hsc-callout.danger { background: rgba(229,115,115,0.08); border-color: rgba(229,115,115,0.3); }
+        /* Source shown as a top-list (Top-List tab): the Home Screen tab hides what the top-list sets. */
+        .homescreen-tab:not(.tl-mode) .hse-tl-note { display: none !important; }
+        .homescreen-tab.tl-mode .hse-tl-hide { display: none !important; }
         .hsc-callout.danger > .md-icon { color: var(--hsc-danger-text); }
         .hsc-callout.success { background: rgba(82,181,75,0.08); border-color: rgba(82,181,75,0.3); }
         .hsc-callout.success > .md-icon { color: var(--hsc-primary-text); }
@@ -1780,7 +1783,7 @@
             </div>
 
             <div id="tabCleanup" class="page-tab-content" style="display:none;">
-                <div id="tcManageContainer"></div>
+                <div id="tcManageContainer" style="max-width:900px;"></div>
             </div>
 
             <div id="tabTopLists" class="page-tab-content" style="display:none;">

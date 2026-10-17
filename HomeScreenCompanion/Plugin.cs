@@ -32,6 +32,9 @@ namespace HomeScreenCompanion
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
+            // Sources with Top-List on: their TopLists entries follow the source (first, so the
+            // steps below see the lists as saved).
+            SourceTopLists.Derive(Configuration, configuration as PluginConfiguration);
             if (configuration is PluginConfiguration saved)
                 PluginLog.Write("INF", "Settings", $"Settings saved — {RunLog.Plural(saved.Tags?.Count ?? 0, "source entry", "source entries")}, {RunLog.Plural(saved.TopLists?.Count ?? 0, "top-list")}");
             var wasMirroring = Configuration?.TopListMirrorCollections ?? false;

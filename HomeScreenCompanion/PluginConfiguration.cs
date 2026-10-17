@@ -204,6 +204,17 @@ namespace HomeScreenCompanion
         public string PlaylistPosterOptions { get; set; } = "";
         public string PlaylistBackgroundOptions { get; set; } = "";
 
+        // Top-List tab: the source's home row is a ranked top-list (its own hidden library with
+        // numbered posters) instead of a plain row. Users, title, position, display mode, image type
+        // and card size come from the Home Screen tab; the TopLists entry is derived from this
+        // source on every save (see SourceTopLists).
+        public bool EnableTopList { get; set; } = false;
+        public string TopListContentType { get; set; } = "Movies";
+        public int TopListMaxItems { get; set; } = 0;
+        public string TopListBadgeStyle { get; set; } = "neutral";
+        public string TopListBadgeOptions { get; set; } = "";
+        public string TopListRealPoster { get; set; } = "";
+
         public DateTime LastModified { get; set; } = DateTime.MinValue;
     }
 
@@ -224,6 +235,8 @@ namespace HomeScreenCompanion
         public List<HomeSectionTracking> HomeSectionTracked { get; set; } = new List<HomeSectionTracking>();
         // "Movies" (default) or "Shows" — see ShowTopList.
         public string ContentType { get; set; } = "Movies";
+        // Made by a source's Top-List tab (SourceTopLists): edited there, not in the Top-Lists tab.
+        public bool FromSource { get; set; } = false;
 
         // Legacy, for migration only (stoep-labs fork, see LegacyForkCleanup): the fork's tag-based
         // show lists.

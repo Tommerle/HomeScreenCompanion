@@ -575,7 +575,8 @@ namespace HomeScreenCompanion
                     var ruleFeatures = new List<string>();
                     if (tagConfig.EnableTag && !tagConfig.OnlyCollection) ruleFeatures.Add("Tag");
                     if (tagConfig.EnableCollection) ruleFeatures.Add("Collection");
-                    if (tagConfig.EnableHomeSection) ruleFeatures.Add("HS");
+                    if (SourceTopLists.PlainRow(tagConfig)) ruleFeatures.Add("HS");
+                    if (tagConfig.EnableTopList) ruleFeatures.Add("Top-list");
                     string featureStr = ruleFeatures.Count > 0 ? $"  ({string.Join(", ", ruleFeatures)})" : "";
 
                     activeGroupIdx++;
@@ -586,7 +587,7 @@ namespace HomeScreenCompanion
                         SourceType = srcLabel,
                         EnableTag = tagConfig.EnableTag && !tagConfig.OnlyCollection,
                         EnableCollection = tagConfig.EnableCollection,
-                        EnableHomeSection = tagConfig.EnableHomeSection,
+                        EnableHomeSection = SourceTopLists.PlainRow(tagConfig),
                         BoxSetHse = IsBoxSetHomeSectionEntry(tagConfig),
                         TagName = tagName,
                         GroupIndex = activeGroupIdx,
@@ -1639,6 +1640,9 @@ namespace HomeScreenCompanion
                 _log.Blank();
                 _log.Info("» Home sections");
                 phaseTimer.Restart();
+                // Top-lists switched off in their source go first: the source's plain row comes back
+                // in their place (and must not take over their rows).
+                if (!dryRun) SourceTopLists.RemoveQueued(config, _libraryManager, _userManager, _log, cancellationToken);
                 if (!dryRun) ManageHomeSections(config, cancellationToken, debug, statsList);
                 else _log.Skip("Dry run — home sections are not changed");
                 if (!dryRun)
@@ -2042,7 +2046,7 @@ namespace HomeScreenCompanion
                 SourceLabel = DescribeSource(tagConfig),
                 EnableTag = tagConfig.EnableTag && !tagConfig.OnlyCollection,
                 EnableCollection = tagConfig.EnableCollection,
-                EnableHomeSection = tagConfig.EnableHomeSection,
+                EnableHomeSection = SourceTopLists.PlainRow(tagConfig),
                 EnablePlaylist = tagConfig.EnablePlaylist,
                 PlaylistName = string.IsNullOrWhiteSpace(tagConfig.PlaylistName) ? tagConfig.Name : tagConfig.PlaylistName,
                 PlaylistUsersTotal = tagConfig.PlaylistUserIds?.Count ?? 0,
@@ -3179,20 +3183,32 @@ namespace HomeScreenCompanion
             if (_isBoxSetHse && !_boxSetFound)
                 gs.Warnings.Add($"Collection '{tagConfig.LocalSourceId}' was not found in the library");
 
+            // This group's top-list switched off: removed before its plain row comes back.
+            if (!dryRun) SourceTopLists.RemoveQueued(config, _libraryManager, _userManager, _log, cancellationToken, tagName, tagConfig.Name);
             // Manage home sections for this entry
-            if (tagConfig.EnableHomeSection)
+            // A source whose row is its top-list: ManageHomeSections removes a plain row it still
+            // has (the top-list's own row is made below).
+            bool _hsRows = tagConfig.EnableHomeSection;
+            if (SourceTopLists.PlainRow(tagConfig))
             {
                 _log.Blank();
                 _log.Info("» Home sections");
                 if (dryRun) _log.Skip("Dry run — home sections are not changed");
             }
-            if (!dryRun && tagConfig.EnableHomeSection)
+            if (!dryRun && _hsRows)
                 ManageHomeSections(config, cancellationToken, debug, new List<GroupRunStats> { gs }, tagName);
             else if (!dryRun)
                 RemoveDeletedGroupLeftovers(cancellationToken);
             CleanupDisabledPlaylists(config, dryRun);
             // Only this group's own top-list (other lists are not fed by this tag).
             SyncTopListFolders(config, dryRun, tagName);
+            // Made in the group's Top-List tab: its rows too (the group has no other row).
+            if (!dryRun && tagConfig.EnableTopList && (config.TopLists ?? new List<TopListHomeSection>()).Any(t => t.FromSource && string.Equals(t.TagName, tagName, StringComparison.OrdinalIgnoreCase)))
+            {
+                _log.Blank();
+                _log.Info("» Top-list");
+                TopListSyncTask.SyncAll(_libraryManager, _userViewManager, _userManager, _jsonSerializer, _logger, cancellationToken, _log, tagName);
+            }
 
             WriteSingleRunFooter(gs, startTime, dryRun, logMissing);
 
@@ -4381,12 +4397,13 @@ namespace HomeScreenCompanion
                 // sync puts its settings back (e.g. the tag Emby's own editor may have dropped).
                 // Not when another group in schedule writes the same tag: the row would show that
                 // group's titles, so it is removed like a collection row (and comes back in place).
-                bool scheduledOffTagRow = tc.EnableHomeSection && tc.Active && !isActive && IsTagRow(tc, _jsonSerializer)
+                bool plainRow = SourceTopLists.PlainRow(tc);
+                bool scheduledOffTagRow = plainRow && tc.Active && !isActive && IsTagRow(tc, _jsonSerializer)
                     && !TagUsedElsewhereInSchedule(config, tc);
                 if (scheduledOffTagRow && isFirstForGroup) anchoredTags.Add(_hsTagName);
-                else if (tc.EnableHomeSection && isActive && isFirstForGroup && IsTagRow(tc, _jsonSerializer)) anchoredTags.Add(_hsTagName);
+                else if (plainRow && isActive && isFirstForGroup && IsTagRow(tc, _jsonSerializer)) anchoredTags.Add(_hsTagName);
 
-                if (!tc.EnableHomeSection || (!isActive && !scheduledOffTagRow))
+                if (!plainRow || (!isActive && !scheduledOffTagRow))
                 {
                     if (tc.HomeSectionTracked.Count > 0)
                     {
@@ -4401,7 +4418,7 @@ namespace HomeScreenCompanion
                                     var uid = _userManager.GetInternalId(tracking.UserId);
                                     // Switched off by its schedule (or made inactive): remember where the row
                                     // was, so it comes back at the same place when it switches on again.
-                                    if (tc.EnableHomeSection) RememberRowPosition(hsKey, tracking.UserId, uid, tracking.SectionId, cancellationToken);
+                                    if (plainRow) RememberRowPosition(hsKey, tracking.UserId, uid, tracking.SectionId, cancellationToken);
                                     if (DeleteSectionForUser(uid, tracking.UserId, tracking.SectionId, sectionMarker, tc.HomeSectionSettings, cancellationToken, DefaultRowTitle(tc))) _removedHs++;
                                 }
                                 catch (Exception ex)
@@ -4413,7 +4430,7 @@ namespace HomeScreenCompanion
                             {
                                 var _gsR = statsList?.FirstOrDefault(s => s.TagName != null && string.Equals(s.TagName, _hsTagName, StringComparison.OrdinalIgnoreCase));
                                 if (_gsR != null) _gsR.HomeSectionRemoved = true;
-                                _log.Skip($"{_hsDisplayName}: home section removed for {RunLog.Plural(_removedHs, "user")} (group is {(tc.EnableHomeSection ? "inactive or not in schedule" : "no longer set to show a home section")})");
+                                _log.Skip($"{_hsDisplayName}: home section removed for {RunLog.Plural(_removedHs, "user")} (group is {(plainRow ? "inactive or not in schedule" : tc.EnableTopList ? "now shown as its top-list" : "no longer set to show a home section")})");
                             }
                         }
                         // Always clear tracking (including duplicate flat entries) so this
@@ -6639,7 +6656,8 @@ namespace HomeScreenCompanion
             if (tc.EnableTag && !tc.OnlyCollection) features.Add("tag");
             if (tc.EnableCollection) features.Add("collection");
             if (tc.EnablePlaylist) features.Add("playlist");
-            if (tc.EnableHomeSection) features.Add("home section");
+            if (SourceTopLists.PlainRow(tc)) features.Add("home section");
+            if (tc.EnableTopList) features.Add("top-list");
             if (features.Count > 0) parts.Add("creates: " + string.Join(", ", features));
             return string.Join("  ·  ", parts);
         }
@@ -7398,6 +7416,10 @@ namespace HomeScreenCompanion
             var dataPath = Plugin.Instance.DataFolderPath;
             var topListsPath = Path.Combine(dataPath, "toplists");
 
+            // Lists switched off in their source: rows, library and copies go first (a list made
+            // again in the same folder is written below).
+            if (!dryRun) SourceTopLists.RemoveQueued(config, _libraryManager, _userManager, _log, CancellationToken.None, onlyTag);
+
             var configuredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var tl in config.TopLists ?? new List<TopListHomeSection>())
                 if (!string.IsNullOrWhiteSpace(tl.TagName))
@@ -7686,6 +7708,10 @@ namespace HomeScreenCompanion
 
                 _log.Ok($"Top-list '{tl.TagName}': {RunLog.Plural(count, "movie")} synced to its library folder");
             }
+
+            // A source's new top-list gets its library now that its files are there.
+            if (SourceTopLists.EnsureLibraries(config, _libraryManager, _userManager, _providerManager, _fileSystem, _log, onlyTag))
+                Plugin.Instance.SaveConfiguration();
         }
 
         // Show top-lists are rebuilt on every sync, manual ones too: their series get new episodes,

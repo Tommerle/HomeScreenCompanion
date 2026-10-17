@@ -1909,7 +1909,7 @@ public class HomeScreenCompanionService : IService
                 if (tc == null)
                     return new HscApplyTagHomeSectionsResponse { Success = false, Message = $"Tag '{request.TagName}' not found." };
 
-                if (!tc.EnableHomeSection)
+                if (!SourceTopLists.PlainRow(tc))
                     return new HscApplyTagHomeSectionsResponse { Success = true, Message = "Home section not enabled for this tag." };
 
                 var realTracked = (tc.HomeSectionTracked ?? new System.Collections.Generic.List<HomeSectionTracking>())
@@ -3522,6 +3522,11 @@ public class HomeScreenCompanionService : IService
                             catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                         config.TopLists.Remove(tl);
+                        // Made in a source's Top-List tab: switched off there too (else the next
+                        // settings save would make it again).
+                        if (tl.FromSource)
+                            foreach (var tc in (config.Tags ?? new List<TagConfig>()).Where(t => string.Equals((t.Tag ?? "").Trim(), (tl.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase)))
+                                tc.EnableTopList = false;
                         Plugin.Instance!.SaveConfiguration();
                     }
                 }
@@ -3663,7 +3668,7 @@ public class HomeScreenCompanionService : IService
                 {
                     foreach (var tc in (config.Tags ?? new System.Collections.Generic.List<TagConfig>()))
                     {
-                        if (!tc.EnableHomeSection) continue;
+                        if (!SourceTopLists.PlainRow(tc)) continue;
 
                         var tcSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         try

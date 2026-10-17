@@ -56,6 +56,10 @@ namespace HomeScreenCompanion
             // First, so the plugin's own log file is written (lines from before wait in its queue).
             PluginLog.Initialize(Plugin.Instance.DataFolderPath);
             RunAutoMigration();
+            // Old tag top-lists move to their source's Top-List tab (once; see SourceTopLists).
+            SourceTopLists.Json = _jsonSerializer;
+            try { if (SourceTopLists.Migrate(Plugin.Instance.Configuration)) Plugin.Instance.SaveConfiguration(); }
+            catch (Exception ex) { _logger.Warn($"[Migration] Top-lists could not be moved to their sources: {ex.Message}"); }
             TagCacheManager.Instance.Initialize(Plugin.Instance.DataFolderPath, _jsonSerializer);
             TopListCollectionMirror.Initialize(_libraryManager, _collectionManager, _logger);
             ShowTopList.Initialize(_itemRepository, _mediaSourceManager);

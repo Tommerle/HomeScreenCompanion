@@ -68,7 +68,7 @@ namespace HomeScreenCompanion
 
         private static string Norm(string? p) => (p ?? "").Replace("\\", "/").TrimEnd('/').ToLowerInvariant();
 
-        private static VirtualFolderInfo? LibraryFor(ILibraryManager libraryManager, string folderPath) =>
+        internal static VirtualFolderInfo? LibraryFor(ILibraryManager libraryManager, string folderPath) =>
             libraryManager.GetVirtualFolders().FirstOrDefault(f =>
                 (f.Locations ?? Array.Empty<string>()).Any(l => Norm(l) == Norm(folderPath)));
 
@@ -510,6 +510,28 @@ namespace HomeScreenCompanion
         private static VirtualFolderInfo? CreateLibrary(string name, string folderPath, List<BaseItem> movies,
             ILibraryManager libraryManager, IUserManager userManager, RunLog log)
         {
+            var options = new LibraryOptions
+            {
+                PathInfos = new[] { new MediaPathInfo { Path = folderPath } },
+                TypeOptions = new[]
+                {
+                    new TypeOptions
+                    {
+                        Type = "Movie",
+                        MetadataFetchers = new[] { "Nfo", "TheMovieDb" },
+                        MetadataFetcherOrder = new[] { "Nfo", "TheMovieDb" },
+                        ImageFetchers = new[] { "TheMovieDb" },
+                        ImageFetcherOrder = new[] { "TheMovieDb" }
+                    }
+                }
+            };
+            return CreateLibrary(name, folderPath, "movies", options, "Ranked library", libraryManager, userManager, log);
+        }
+
+        // Also used for top-lists made by a source (SourceTopLists): label names it in the log.
+        internal static VirtualFolderInfo? CreateLibrary(string name, string folderPath, string collectionType, LibraryOptions options,
+            string label, ILibraryManager libraryManager, IUserManager userManager, RunLog log)
+        {
             dynamic mgr = userManager;
             var users = userManager.GetUserList(new UserQuery { IsDisabled = false }).ToList();
             var before = new Dictionary<long, PolicyState>();
@@ -526,26 +548,14 @@ namespace HomeScreenCompanion
 
             try
             {
-                var options = new LibraryOptions
-                {
-                    PathInfos = new[] { new MediaPathInfo { Path = folderPath } },
-                    TypeOptions = new[]
-                    {
-                        new TypeOptions
-                        {
-                            Type = "Movie",
-                            MetadataFetchers = new[] { "Nfo", "TheMovieDb" },
-                            MetadataFetcherOrder = new[] { "Nfo", "TheMovieDb" },
-                            ImageFetchers = new[] { "TheMovieDb" },
-                            ImageFetcherOrder = new[] { "TheMovieDb" }
-                        }
-                    }
-                };
-                libraryManager.AddVirtualFolder(name, "movies", options, false);
+                // The content type goes in the options (as Emby's own Add Library does): the
+                // (name, string, options, bool) overload takes a sort name, not the type.
+                options.ContentType = collectionType;
+                libraryManager.AddVirtualFolder(name, options, false);
             }
             catch (Exception ex)
             {
-                log.Error($"Ranked library '{name}' could not be created: {ex.Message}");
+                log.Error($"{label} '{name}' could not be created: {ex.Message}");
                 return null;
             }
 
@@ -571,10 +581,10 @@ namespace HomeScreenCompanion
             for (int i = 0; i < 10; i++)
             {
                 var lib = LibraryFor(libraryManager, folderPath);
-                if (lib != null && !string.IsNullOrEmpty(lib.ItemId)) { log.Ok($"Ranked library '{name}' created"); return lib; }
+                if (lib != null && !string.IsNullOrEmpty(lib.ItemId)) { log.Ok($"{label} '{name}' created"); return lib; }
                 Thread.Sleep(1000);
             }
-            log.Error($"Ranked library '{name}' was created but Emby does not list it");
+            log.Error($"{label} '{name}' was created but Emby does not list it");
             return null;
         }
 

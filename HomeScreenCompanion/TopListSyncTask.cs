@@ -183,6 +183,10 @@ namespace HomeScreenCompanion
             foreach (var tl in config?.TopLists ?? new List<TopListHomeSection>())
                 if (!string.IsNullOrEmpty(tl.HomeSectionLibraryId) && tl.HomeSectionLibraryId != "auto")
                     ids.UnionWith(OwnLibraryIds(tl.HomeSectionLibraryId, libraryManager));
+            // Lists switched off in their source keep their library until the run removes it: its
+            // rows are still top-list rows (a source row with the same title must not take them over).
+            foreach (var libId in SourceTopLists.QueuedLibraryIds())
+                ids.UnionWith(OwnLibraryIds(libId, libraryManager));
             return ids;
         }
 
@@ -547,7 +551,7 @@ namespace HomeScreenCompanion
             {
                 foreach (var tc in config.Tags ?? new List<TagConfig>())
                 {
-                    if (!tc.EnableHomeSection) continue;
+                    if (!SourceTopLists.PlainRow(tc)) continue;
 
                     var tcSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     try

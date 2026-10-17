@@ -1817,6 +1817,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 if (tagShared) kept.push(['label', 'Tag "' + esc(tag) + '"', 'another group uses it too']);
                 else removed.push(['label', 'Tag "' + esc(tag) + '"', 'taken off every title that has it']);
             }
+            if (row.dataset.tlSaved === '1') {
+                var tlTitle = '';
+                try { tlTitle = (JSON.parse(cfg.HomeSectionSettings || '{}').CustomName || '').trim(); } catch (e) {}
+                removed.push(['format_list_numbered', 'Top-list "' + esc(tlTitle || title) + '"', 'its home rows, its library and the copies in it']);
+            }
             if (cfg.EnableCollection && collName) {
                 if (cfg.CollectionImported) kept.push(['video_library', 'Collection "' + esc(collName) + '"', 'it was imported, so it stays in Emby']);
                 else if (collShared) kept.push(['video_library', 'Collection "' + esc(collName) + '"', 'another group uses it too']);
@@ -2044,7 +2049,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var aiRecentlyWatchedCount = parseInt((row.querySelector('.txtAiWatchedCount') || {}).value, 10) || 20;
         var aiRefreshIntervalDays = parseInt((row.querySelector('.txtAiRefreshInterval') || {}).value, 10) || 0;
 
-        return {
+        return Object.assign({
             Name: entryLabel, Tag: tagName, Active: active, Blacklist: bl, ActiveIntervals: intervals,
             EnableTag: enableTag, EnableCollection: enableColl, CollectionName: collName, CollectionSortName: collSortName,
             CollectionDescription: collDesc, CollectionPosterPath: collPoster,
@@ -2092,7 +2097,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             NextWatchSeedDays: readNwSeedDays(row), NextWatchUseTaste: readNwUseTaste(row),
             MediaInfoTargetEpisode: false, MediaInfoTargetSeason: false, MediaInfoTargetSeries: false,
             MediaInfoTargetType: '', MediaInfoSeasonMode: false,
-        };
+        }, readTopListTab(row));
     }
 
     var _formAc = null;
@@ -2942,6 +2947,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var homeSectionOrigNameEnc = encodeURIComponent((tagConfig.Name || tagConfig.Tag || '').trim());
         var homeSectionTrackedEnc = encodeURIComponent(JSON.stringify(tagConfig.HomeSectionTracked || []));
         var hsDefaultSectionType = tagConfig.EnableCollection ? 'boxset' : (tagConfig.EnableTag !== false ? 'items' : (tagConfig.EnablePlaylist ? 'playlist' : 'boxset'));
+        var topListOn = !!tagConfig.EnableTopList;
 
         var mediaFilters = (tagConfig.MediaInfoFilters && tagConfig.MediaInfoFilters.length > 0)
             ? tagConfig.MediaInfoFilters
@@ -2976,7 +2982,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         if (tagConfig.EnablePlaylist) {
             indicatorsHtml += `<span class="tag-indicator playlist"><i class="md-icon" style="font-size:1.1em;">queue_music</i> Playlist</span>`;
         }
-        if (_topListTagNames.has(tagName.toLowerCase())) {
+        if (topListOn) {
             indicatorsHtml += `<span class="tag-indicator toplist"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Top-List</span>`;
         }
         var lastRuns = tagConfig.LastRuns || [];
@@ -2989,7 +2995,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var newClass = isNew ? "just-added" : "";
 
         var html = `
-        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-group-key="${encodeURIComponent(groupIssueKey(tagConfig.Name, tagConfig.Tag))}" data-dirty="false">
+        <div class="tag-row ${inactiveClass} ${newClass}" data-index="${idx}" data-tag="${tagName.toLowerCase()}" data-last-modified="${lastMod}" data-nw-migrated="${tagConfig.NextWatchUsersMigrated ? '1' : '0'}" data-coll-imported="${tagConfig.CollectionImported ? '1' : '0'}" data-imported-st="${tagConfig.CollectionImported ? (tagConfig.SourceType || '') : ''}" data-poster-replaced="${tagConfig.CollectionPosterReplaced ? '1' : '0'}" data-bg-replaced="${tagConfig.CollectionBackgroundReplaced ? '1' : '0'}" data-thumb-replaced="${tagConfig.CollectionThumbReplaced ? '1' : '0'}" data-banner-replaced="${tagConfig.CollectionBannerReplaced ? '1' : '0'}" data-last-runs="${encodeURIComponent(JSON.stringify(tagConfig.LastRuns || []))}" data-group-key="${encodeURIComponent(groupIssueKey(tagConfig.Name, tagConfig.Tag))}" data-tl-saved="${topListOn && !isNew ? '1' : '0'}" data-tl-saved-tag="${escapeHtml((tagConfig.Tag || '').trim().toLowerCase())}" data-dirty="false">
             <div class="tag-header">
                 <div style="display:flex; align-items:center; min-width:0;">
                     <div class="header-actions" style="margin-right:12px; display:flex; align-items:center;" onclick="event.stopPropagation()">
@@ -3025,6 +3031,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     <div class="tag-tab" data-tab="schedule">Schedule</div>
                     <div class="tag-tab" data-tab="advanced">Blacklist</div>
                     <div class="tag-tab" data-tab="homescreen">Home Screen</div>
+                    <div class="tag-tab" data-tab="toplist">Top-List</div>
                 </div>
                 
                 <div class="tab-content general-tab">
@@ -3491,7 +3498,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     </div>
                 </div>
 
-                <div class="tab-content homescreen-tab" style="display:none;"
+                <div class="tab-content homescreen-tab${topListOn ? ' tl-mode' : ''}" style="display:none;"
                     data-hse-libraryid="${homeSectionLibraryId}"
                     data-hse-userids="${homeSectionUserIdsEnc}"
                     data-hse-settings="${homeSectionSettingsEnc}"
@@ -3506,6 +3513,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         </label>
                         <div class="fieldDescription">A home screen section will be managed for selected users each time sync runs.</div>
                         <div class="hse-disabled-hint" style="font-size:0.9em; color:var(--hsc-danger-text); margin-top:4px; display:${(tagConfig.EnableTag === false && !tagConfig.EnableCollection && !tagConfig.EnablePlaylist) ? 'block' : 'none'};">Requires <strong>Apply Tag</strong>, <strong>Create Collection</strong> or <strong>Create Playlist</strong> to be enabled.</div>
+                        <div class="hse-tl-note hsc-callout" style="margin-top:10px;"><i class="md-icon">format_list_numbered</i><span>This row is shown as a <strong>top-list</strong> (Top-List tab). The users, title, position and look below are used for it; section type, media type, view type, sort and playstate are set by the top-list.</span></div>
                     </div>
                     <div class="hse-details" style="display:${enableHomeSection ? 'block' : 'none'}; margin-top:15px;">
                         <div style="margin-bottom:15px;">
@@ -3518,6 +3526,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                         </div>
                     </div>
                 </div>
+
+                ${buildTopListTabHtml(tagConfig)}
 
                 <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:20px; border-top:1px solid var(--line-color); padding-top:10px;">
                     <button is="emby-button" type="button" class="raised button-submit btnRunEntry hsc-btn-activity"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>
@@ -3547,13 +3557,183 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
     }
 
+    // ── Top-List tab (a source's home row shown as a ranked top-list) ──
+    // The source is where the list is set: the server derives its TopLists entry on Save
+    // (SourceTopLists.cs) and the next run makes the library, copies and rows. The tab's own
+    // fields are content type, max items and the badges; users, title, position and look come
+    // from the Home Screen tab, whose fields the top-list sets are hidden (tl-mode).
+    function buildTopListTabHtml(tc) {
+        var on = !!tc.EnableTopList;
+        var shows = tc.TopListContentType === 'Shows';
+        var enc = function (v) { return encodeURIComponent(v || ''); };
+        return '<div class="tab-content toplist-tab" style="display:none;"' +
+            ' data-tl-badge="' + enc(tc.TopListBadgeStyle || 'neutral') + '"' +
+            ' data-tl-badgeopts="' + enc(tc.TopListBadgeOptions) + '"' +
+            ' data-tl-rp="' + enc(tc.TopListRealPoster) + '" data-tl-loaded="0">' +
+            '<div class="checkboxContainer checkboxContainer-withDescription">' +
+                '<label><input is="emby-checkbox" type="checkbox" class="chkEnableTopList"' + (on ? ' checked' : '') + ' /><span>Show as a top-list</span></label>' +
+                '<div class="fieldDescription">The home row becomes a ranked top-list: the titles in list order with numbered posters, from a hidden library of its own. It takes the place of the plain row, with the users, title and position set in the Home Screen tab.</div>' +
+                '<div class="tl-req" style="display:none;font-size:0.9em;margin-top:6px;"></div>' +
+                '<div class="tl-note fieldDescription" style="display:none;color:var(--hsc-warning-text);margin-top:6px;"></div>' +
+            '</div>' +
+            '<div class="tl-settings" style="margin-left:20px;padding-left:15px;border-left:2px solid var(--line-color);margin-top:10px;display:' + (on ? 'block' : 'none') + ';">' +
+                '<div style="margin-bottom:12px;"><label class="selectLabel">Content</label>' +
+                    '<select is="emby-select" class="selTopListContent" style="width:100%;">' +
+                        '<option value="Movies"' + (shows ? '' : ' selected') + '>Movies</option>' +
+                        '<option value="Shows"' + (shows ? ' selected' : '') + '>TV Shows</option>' +
+                    '</select>' +
+                    '<div class="fieldDescription">Only titles of this kind are ranked. Switching it later makes the list again (a new library).</div>' +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">' +
+                    '<label style="font-size:0.9em;white-space:nowrap;margin:0;">Max items</label>' +
+                    '<input is="emby-input" class="txtTopListMax" type="number" value="' + (Math.max(0, tc.TopListMaxItems || 0)) + '" min="0" style="width:90px;" />' +
+                    '<span style="font-size:0.8em;opacity:0.5;">0 = all</span>' +
+                '</div>' +
+                '<div class="tl-badge-host"><em style="opacity:0.5">Loading badges...</em></div>' +
+                '<div class="hsc-callout warning" style="margin-top:6px;"><i class="md-icon">warning</i>' +
+                    '<span><strong>Library access is not checked per title.</strong> A top-list gets a library of its own, and every user it is shown to gets access to that library. Its titles can come from any library on the server, so those users can see and play them even from libraries they otherwise have no access to.</span>' +
+                '</div>' +
+            '</div>' +
+            '</div>';
+    }
+
+    function hseUserIdsOf(row) {
+        var hseTab = row.querySelector('.homescreen-tab');
+        if (!hseTab) return [];
+        if (hseTab.dataset.hseLoaded === '1')
+            return Array.from(hseTab.querySelectorAll('.chkHseUser:checked')).map(function (c) { return c.value; });
+        try { return JSON.parse(decodeURIComponent(hseTab.dataset.hseUserids || '%5B%5D')) || []; } catch (e) { return []; }
+    }
+
+    function topListContentOf(row) {
+        return (row.querySelector('.selTopListContent') || {}).value === 'Shows' ? 'Shows' : 'Movies';
+    }
+
+    // What the top-list still needs: [tab to open ('' = none), text].
+    function topListMissing(row) {
+        var miss = [];
+        if ((row.querySelector('.selSourceType') || {}).value === 'NextWatch')
+            return [['', 'Not available for <strong>Your Next Watch</strong>: its row is each user\'s own playlist.']];
+        if (!(row.querySelector('.chkEnableTag') || {}).checked)
+            miss.push(['tag', '<strong>Apply Tag</strong> on: the top-list ranks the titles with the tag.']);
+        var hseOn = !!(row.querySelector('.chkEnableHomeSection') || {}).checked;
+        if (!hseOn || hseUserIdsOf(row).length === 0)
+            miss.push(['homescreen', '<strong>Add as home screen section</strong> on, with at least one user: they get the top-list row.']);
+        if (topListContentOf(row) === 'Shows' && !(row.querySelector('.chkTagTargetSeries') || {}).checked)
+            miss.push(['tag', 'For TV shows, tag level <strong>Series</strong>: a show top-list ranks the tagged shows.']);
+        return miss;
+    }
+
+    function updateTopListTab(row) {
+        var tab = row.querySelector('.toplist-tab');
+        if (!tab) return;
+        var chk = tab.querySelector('.chkEnableTopList');
+        var on = chk.checked;
+        var miss = topListMissing(row);
+        // Can't be switched on before it has what it needs; once on it stays switchable off.
+        chk.disabled = !on && miss.length > 0;
+        var label = chk.closest('.checkboxContainer');
+        if (label) label.style.opacity = chk.disabled ? '0.75' : '';
+
+        var req = tab.querySelector('.tl-req');
+        if (miss.length) {
+            req.style.display = 'block';
+            req.style.color = on ? 'var(--hsc-warning-text)' : 'var(--hsc-danger-text)';
+            req.innerHTML = (on ? 'Not shown until it has: ' : 'Needs: ') + '<ul style="margin:4px 0 0;padding-left:20px;line-height:1.5;">' +
+                miss.map(function (m) {
+                    var link = m[0] ? ' <a href="javascript:void(0)" class="tl-req-link help-link" data-goto="' + m[0] + '">' + (m[0] === 'tag' ? 'Tag tab' : 'Home Screen tab') + '</a>' : '';
+                    return '<li>' + m[1] + link + '</li>';
+                }).join('') + '</ul>';
+        } else {
+            req.style.display = 'none';
+            req.innerHTML = '';
+        }
+
+        // What Save changes for a list the server already has.
+        var note = tab.querySelector('.tl-note');
+        var saved = row.dataset.tlSaved === '1';
+        var tagNow = (((row.querySelector('.txtTagName') || {}).value || (row.querySelector('.txtEntryLabel') || {}).value || '') + '').trim().toLowerCase();
+        var text = '';
+        if (saved && !on) text = 'Saving with this off removes the top-list at the next run (its rows, library and copies), and the plain row of the Home Screen tab comes back.';
+        else if (saved && on && row.dataset.tlSavedTag && tagNow && tagNow !== row.dataset.tlSavedTag)
+            text = 'The tag name has changed: the top-list is made again under the new name at the next run, and the old one (its rows and library) is removed.';
+        note.textContent = text;
+        note.style.display = text ? 'block' : 'none';
+
+        tab.querySelector('.tl-settings').style.display = on ? 'block' : 'none';
+        var hseTab = row.querySelector('.homescreen-tab');
+        if (hseTab) hseTab.classList.toggle('tl-mode', on);
+    }
+
+    function topListBadgeHtml(row, values) {
+        var shows = topListContentOf(row) === 'Shows';
+        return buildBadgePickerHtml(values.style, values.options, values.realPoster, shows ? 'shows' : 'movies');
+    }
+
+    function topListBadgeValues(tab) {
+        var host = tab.querySelector('.tl-badge-host');
+        if (tab.dataset.tlLoaded === '1')
+            return { style: readBadgeStyle(host), options: readBadgeOptions(host), realPoster: readRealPoster(host) };
+        var dec = function (v) { try { return decodeURIComponent(v || ''); } catch (e) { return ''; } };
+        return { style: dec(tab.dataset.tlBadge) || 'neutral', options: dec(tab.dataset.tlBadgeopts), realPoster: dec(tab.dataset.tlRp) };
+    }
+
+    function initTopListTab(row) {
+        var tab = row.querySelector('.toplist-tab');
+        if (!tab || tab.dataset.tlLoaded === '1') return;
+        var host = tab.querySelector('.tl-badge-host');
+        host.innerHTML = topListBadgeHtml(row, topListBadgeValues(tab));
+        tab.dataset.tlLoaded = '1';
+        initBadgePicker(host, ((row.querySelector('.txtTagName') || {}).value || '').trim());
+        updateTopListTab(row);
+    }
+
+    // Movies ↔ TV Shows: the badge previews are drawn for the kind (the chosen look is kept).
+    function onTopListContentChanged(row) {
+        var tab = row.querySelector('.toplist-tab');
+        if (!tab || tab.dataset.tlLoaded !== '1') return;
+        var host = tab.querySelector('.tl-badge-host');
+        var values = topListBadgeValues(tab);
+        host.innerHTML = topListBadgeHtml(row, values);
+        initBadgePicker(host, ((row.querySelector('.txtTagName') || {}).value || '').trim());
+    }
+
+    // Switched on for a list the server does not have yet: Content starts as the Home Screen
+    // tab's media type when that is only shows.
+    function onTopListToggled(row) {
+        var chk = row.querySelector('.chkEnableTopList');
+        if (!chk.checked || row.dataset.tlSaved === '1') return;
+        var hseTab = row.querySelector('.homescreen-tab');
+        var itemTypes = '';
+        if (hseTab && hseTab.dataset.hseLoaded === '1') itemTypes = (hseTab.querySelector('.selHseItemTypes') || {}).value || '';
+        else {
+            try { itemTypes = (JSON.parse(JSON.parse(decodeURIComponent(hseTab.dataset.hseSettings || '%7B%7D')).ItemTypes || '[]') || []).join(','); } catch (e) { }
+        }
+        var sel = row.querySelector('.selTopListContent');
+        if (sel && itemTypes === 'Series' && sel.value !== 'Shows') { sel.value = 'Shows'; onTopListContentChanged(row); }
+    }
+
+    // The tab's fields as saved (TagConfig.EnableTopList etc.).
+    function readTopListTab(row) {
+        var tab = row.querySelector('.toplist-tab');
+        if (!tab) return {};
+        var b = topListBadgeValues(tab);
+        return {
+            EnableTopList: !!(tab.querySelector('.chkEnableTopList') || {}).checked,
+            TopListContentType: topListContentOf(row),
+            TopListMaxItems: Math.max(0, parseInt((tab.querySelector('.txtTopListMax') || {}).value, 10) || 0),
+            TopListBadgeStyle: b.style || 'neutral',
+            TopListBadgeOptions: b.options || '',
+            TopListRealPoster: b.realPoster || ''
+        };
+    }
+
     function refreshTopListBadges() {
         document.querySelectorAll('.tag-row').forEach(function (row) {
             var container = row.querySelector('.badge-container');
-            if (!container) return;
-            var tagName = (row.dataset.tag || '').toLowerCase();
+            if (!container || !row.querySelector('.selSourceType')) return;
             var existing = container.querySelector('.tag-indicator.toplist');
-            if (_topListTagNames.has(tagName)) {
+            if (!!(row.querySelector('.chkEnableTopList') || {}).checked) {
                 if (!existing) {
                     var span = document.createElement('span');
                     span.className = 'tag-indicator toplist';
@@ -3610,7 +3790,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
             if (hasPlaylist) {
                 html += `<span class="tag-indicator playlist"><i class="md-icon" style="font-size:1.1em;">queue_music</i> Playlist</span>`;
             }
-            if (_topListTagNames.has((row.dataset.tag || '').toLowerCase())) {
+            if (!!(row.querySelector('.chkEnableTopList') || {}).checked) {
                 html += `<span class="tag-indicator toplist"><i class="md-icon" style="font-size:1.1em;">format_list_numbered</i> Top-List</span>`;
             }
             try { html += lastRunChipHtml(JSON.parse(decodeURIComponent(row.dataset.lastRuns || '%5B%5D')), rowToFlatTags(row, true)); } catch (e) { }
@@ -3630,8 +3810,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 row.querySelector('.advanced-tab').style.display = target === 'advanced' ? 'block' : 'none';
                 row.querySelector('.homescreen-tab').style.display = target === 'homescreen' ? 'block' : 'none';
                 row.querySelector('.playlist-tab').style.display = target === 'playlist' ? 'block' : 'none';
+                row.querySelector('.toplist-tab').style.display = target === 'toplist' ? 'block' : 'none';
                 if (target === 'homescreen') initHomeSectionTab(row);
                 if (target === 'playlist') initPlaylistTab(row);
+                if (target === 'toplist') initTopListTab(row);
                 var activeTabEl = row.querySelector('.' + target + '-tab');
                 if (activeTabEl) activeTabEl.querySelectorAll('textarea.txtMiValue, textarea.txtTagBlacklist').forEach(function(ta) {
                     ta.style.height = 'auto';
@@ -3640,6 +3822,26 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 });
             });
         });
+
+        // Top-List tab: what it needs, the Home Screen tab's top-list mode and the chip follow
+        // every change in the card (Apply Tag, users, tag level, tag name...).
+        row.addEventListener('change', function (e) {
+            if (e.target.classList.contains('chkEnableTopList')) onTopListToggled(row);
+            if (e.target.classList.contains('selTopListContent')) onTopListContentChanged(row);
+            updateTopListTab(row);
+            if (e.target.classList.contains('chkEnableTopList')) updateBadges(row);
+        });
+        row.addEventListener('input', function (e) {
+            if (e.target.classList.contains('txtTagName') || e.target.classList.contains('txtEntryLabel')) updateTopListTab(row);
+        });
+        row.addEventListener('click', function (e) {
+            var link = e.target.closest('.tl-req-link');
+            if (!link || !row.contains(link)) return;
+            e.preventDefault();
+            var tab = row.querySelector('.tag-tab[data-tab="' + link.dataset.goto + '"]');
+            if (tab) tab.click();
+        });
+        updateTopListTab(row);
 
         // A changed Max items hides the "9 of 10" chip until the next run.
         row.addEventListener('input', e => {
@@ -5210,7 +5412,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var html = '';
 
         var st = s.SectionType || defaultSectionType || (collEnabled ? 'boxset' : 'items');
-        html += '<div class="hse-nw-hide" style="margin-bottom:12px;"><label class="selectLabel">Section Type</label>';
+        html += '<div class="hse-nw-hide hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">Section Type</label>';
         html += '<select is="emby-select" class="selHseSectionType hse-field-str" data-field="SectionType" style="width:100%;">';
         var sectionTypeOptions = [];
         if (collEnabled) sectionTypeOptions.push(['boxset', 'Single Collection']);
@@ -5232,7 +5434,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         var savedItemTypes = [];
         try { savedItemTypes = JSON.parse(s.ItemTypes || '[]'); } catch {}
         var savedItemTypesStr = savedItemTypes.length > 0 ? savedItemTypes.join(',') : 'Movie,Series';
-        html += '<div class="hse-items-only hse-nw-hide" style="margin-bottom:12px;"><label class="selectLabel">Media Type</label>';
+        html += '<div class="hse-items-only hse-nw-hide hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">Media Type</label>';
         html += '<select is="emby-select" class="selHseItemTypes" style="width:100%;">';
         var itemTypeOptions = [
                 ['Movie',        'Movies'],
@@ -5270,7 +5472,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
         // Emby native uses "" for Cards (default); migrate old stored "cards" value
         var viewTypeVal = (s.ViewType === 'cards' ? '' : s.ViewType) || '';
-        html += '<div class="hse-items-only" style="margin-bottom:12px;"><label class="selectLabel">View Type</label>';
+        html += '<div class="hse-items-only hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">View Type</label>';
         html += '<select is="emby-select" class="selHseViewType hse-field-str" data-field="ViewType" style="width:100%;">';
         [['','Cards (default)'],['spotlight','Spotlight']].forEach(function(o) {
             html += '<option value="' + o[0] + '"' + (viewTypeVal === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
@@ -5291,7 +5493,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         html += '<select is="emby-select" class="selHseCardSize hse-field-str" data-field="CardSizeOffset" style="width:100%;">' + cardSizeOptionsHtml(s.CardSizeOffset) + '</select></div>';
 
         var sortByVal = s.SortBy || '';
-        html += '<div class="hse-nw-hide" style="margin-bottom:12px;"><label class="selectLabel">Sort By</label>';
+        html += '<div class="hse-nw-hide hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">Sort By</label>';
         html += '<select is="emby-select" class="hse-field-str" data-field="SortBy" style="width:100%;">';
         html += '<option value=""' + (sortByVal === '' ? ' selected' : '') + '>(Default)</option>';
         [
@@ -5310,7 +5512,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         html += '</div>';
 
         var sortOrderVal = s.SortOrder || '';
-        html += '<div class="hse-nw-hide" style="margin-bottom:12px;"><label class="selectLabel">Sort Order</label>';
+        html += '<div class="hse-nw-hide hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">Sort Order</label>';
         html += '<select is="emby-select" class="hse-field-str" data-field="SortOrder" style="width:100%;">';
         html += '<option value=""' + (sortOrderVal === '' ? ' selected' : '') + '>(Default)</option>';
         [['Ascending','Ascending'],['Descending','Descending']].forEach(function(o) { html += '<option value="' + o[0] + '"' + (sortOrderVal === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; });
@@ -5323,7 +5525,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         html += '</select></div>';
 
         var playstateVal = s._queryIsPlayed || '';
-        html += '<div class="hse-items-only hse-nw-hide" style="margin-bottom:12px;"><label class="selectLabel">Playstate</label>';
+        html += '<div class="hse-items-only hse-nw-hide hse-tl-hide" style="margin-bottom:12px;"><label class="selectLabel">Playstate</label>';
         html += '<select is="emby-select" class="hse-field-str" data-field="_queryIsPlayed" style="width:100%;">';
         html += '<option value=""' + (playstateVal === '' ? ' selected' : '') + '>Any</option>';
         [['true','Played'],['false','Unplayed']].forEach(function(o) { html += '<option value="' + o[0] + '"' + (playstateVal === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; });
@@ -5786,6 +5988,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 NextWatchUsersMigrated: row.dataset.nwMigrated === '1',
                 NextWatchSeedDays: readNwSeedDays(row), NextWatchUseTaste: readNwUseTaste(row)
             };
+            Object.assign(baseTag, readTopListTab(row));
 
             if (st === 'External') {
                 var pushedExternal = false;
@@ -6279,6 +6482,9 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     PlaylistMappings: t.PlaylistMappings || [],
                     NextWatchUsersMigrated: !!t.NextWatchUsersMigrated,
                     NextWatchSeedDays: t.NextWatchSeedDays > 0 ? t.NextWatchSeedDays : 90, NextWatchUseTaste: t.NextWatchUseTaste !== false,
+                    EnableTopList: !!t.EnableTopList, TopListContentType: t.TopListContentType === 'Shows' ? 'Shows' : 'Movies',
+                    TopListMaxItems: t.TopListMaxItems || 0, TopListBadgeStyle: t.TopListBadgeStyle || 'neutral',
+                    TopListBadgeOptions: t.TopListBadgeOptions || '', TopListRealPoster: t.TopListRealPoster || '',
                     LastRuns: [],
                 };
             }
@@ -6793,7 +6999,30 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '<span>Include extras</span>' +
                 '</label>';
 
+            // One list at a time, picked with the segmented control at the top (remembered in this browser).
+            var tcSections = [
+                { key: 'tags', label: 'Tags',        icon: 'label',              id: 'tcTagSection' },
+                { key: 'coll', label: 'Collections', icon: 'video_library',      id: 'tcCollSection' },
+                { key: 'pl',   label: 'Playlists',   icon: 'playlist_play',      id: 'tcPlSection' }
+            ];
+            var shownSection = 'tags';
+            try {
+                var savedShown = localStorage.getItem('HomeScreenCompanion_CleanupList');
+                if (tcSections.some(function (s) { return s.key === savedShown; })) shownSection = savedShown;
+            } catch (e) {}
+
+            var tcSegBase = 'flex:1;cursor:pointer;border:none;border-radius:6px;padding:8px 12px;font-family:inherit;font-size:0.9em;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;color:inherit;';
+            var tcSegOn  = tcSegBase + 'background:var(--plugin-popup-bg2, var(--theme-background-level3));';
+            var tcSegOff = tcSegBase + 'background:transparent;opacity:0.7;';
+            var listPickerHtml =
+                '<div id="tcListPicker" style="display:flex;border:1px solid var(--plugin-popup-border,rgba(255,255,255,0.12));border-radius:8px;overflow:hidden;margin-bottom:16px;padding:2px;gap:2px;background:var(--hsc-tint-1);max-width:560px;">' +
+                tcSections.map(function (s) {
+                    return '<button type="button" class="btnTcList" data-key="' + s.key + '" style="' + (s.key === shownSection ? tcSegOn : tcSegOff) + '"><i class="md-icon" style="font-size:1.1em;">' + s.icon + '</i>' + s.label + '</button>';
+                }).join('') +
+                '</div>';
+
             container.innerHTML =
+                listPickerHtml +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">' +
                 '<input type="text" id="tcSearch" placeholder="Search…" style="' + searchInputStyle + '" />' +
                 '<select is="emby-select" id="tcSort" style="color:inherit;background:rgba(128,128,128,0.08);border:1px solid var(--line-color);padding:5px;border-radius:6px;font-size:0.9em;cursor:pointer;">' +
@@ -6815,6 +7044,25 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</div>';
 
             container.dataset.loaded = '1';
+
+            function applyShownSection() {
+                tcSections.forEach(function (s) {
+                    var el = container.querySelector('#' + s.id);
+                    if (el) el.style.display = s.key === shownSection ? '' : 'none';
+                });
+                container.querySelectorAll('.btnTcList').forEach(function (btn) {
+                    btn.style.cssText = btn.dataset.key === shownSection ? tcSegOn : tcSegOff;
+                });
+            }
+            applyShownSection();
+
+            container.querySelectorAll('.btnTcList').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    shownSection = this.dataset.key;
+                    try { localStorage.setItem('HomeScreenCompanion_CleanupList', shownSection); } catch (e) {}
+                    applyShownSection();
+                });
+            });
 
             function getSelectedTypeGroups() {
                 return Array.from(container.querySelectorAll('.cbTypeFilter:checked')).map(function (cb) { return cb.dataset.group; });
@@ -8926,9 +9174,72 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         });
     }
 
+    // Shows the Tag & Collection tab with the source card open on one of its tabs.
+    function openSourceRowTab(view, row, tabName) {
+        if (view._hscShowPageTab) view._hscShowPageTab('TagCollection');
+        var body = row.querySelector('.tag-body'), icon = row.querySelector('.expand-icon');
+        if (body && body.style.display === 'none') {
+            body.style.display = 'block';
+            if (icon) icon.innerText = 'expand_less';
+        }
+        var tab = row.querySelector('.tag-tab[data-tab="' + tabName + '"]');
+        if (tab) tab.click();
+        setTimeout(function () { try { row.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { row.scrollIntoView(); } }, 50);
+    }
+
+    // A source top-list (Top-Lists tab): its source's Top-List tab; switchOff unticks it there
+    // (removed on Save, like every source change).
+    function openSourceTopListTab(view, tagName, switchOff) {
+        var want = (tagName || '').trim().toLowerCase();
+        var rows = Array.from(view.querySelectorAll('#tagListContainer .tag-row')).filter(function (r) {
+            var tag = ((r.querySelector('.txtTagName') || {}).value || (r.querySelector('.txtEntryLabel') || {}).value || '').trim().toLowerCase();
+            return r.querySelector('.selSourceType') && tag === want;
+        });
+        var row = rows.filter(function (r) { return (r.querySelector('.chkEnableTopList') || {}).checked; })[0] || rows[0];
+        if (!row) { window.Dashboard.alert('No source with the tag "' + tagName + '" was found on this page.'); return; }
+        openSourceRowTab(view, row, 'toplist');
+        if (switchOff) {
+            var chk = row.querySelector('.chkEnableTopList');
+            if (chk && chk.checked) {
+                chk.checked = false;
+                chk.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            showToast('Top-list switched off in its source — press Save to remove it');
+        }
+    }
+
+    function renderSourceTopListSummary(body, d) {
+        function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+        function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        var displayModeLabel = ({ '': 'Always', 'tv': 'TV mode only', 'mobile,desktop': 'Non-TV only' })[d.displayMode || ''] || 'Always';
+        var line = function (k, v) { return '<div style="display:flex;gap:10px;padding:4px 0;font-size:0.9em;"><span style="min-width:120px;opacity:0.7;">' + k + '</span><span>' + v + '</span></div>'; };
+        getHseUsers().catch(function () { return []; }).then(function (users) {
+            var names = (d.userIds || []).map(function (id) {
+                var u = (users || []).find(function (x) { return (x.Id || '').toLowerCase() === (id || '').toLowerCase(); });
+                return u ? u.Name : null;
+            }).filter(Boolean);
+            body.innerHTML =
+                '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
+                '<button type="button" is="emby-button" class="btnCopyTopList raised hsc-btn-ghost hsc-btn-sm" title="Copy this top-list to the clipboard, to paste it on another server"><i class="md-icon" style="font-size:1em;margin-right:4px;">share</i><span>Copy</span></button>' +
+                '</div>' +
+                '<div class="hsc-callout" style="margin-bottom:12px;"><i class="md-icon">info</i><span>Set in the <strong>Top-List</strong> tab of the source <strong>' + escHtml(d.sourceName || d.tagName) + '</strong>: users, title and position in its Home Screen tab.</span></div>' +
+                (d.noLibrary ? '<div class="hsc-callout warning" style="margin-bottom:12px;"><i class="md-icon">schedule</i><span>Not made yet: the next run of the source (or a full sync) makes its library and rows.</span></div>' : '') +
+                line('Content', d.contentType === 'Shows' ? 'TV Shows' : 'Movies') +
+                line('Max items', d.maxItems && d.maxItems !== '0' ? escHtml(d.maxItems) : 'All') +
+                line('Users', names.length ? escHtml(names.join(', ')) : '<em style="opacity:0.6;">none</em>') +
+                line('Show', displayModeLabel) +
+                '<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:16px;border-top:1px solid var(--line-color);padding-top:10px;flex-wrap:wrap;">' +
+                '<button type="button" is="emby-button" class="raised btnTlOpenSource hsc-btn-secondary" data-name="' + escAttr(d.tagName) + '"><i class="md-icon" style="margin-right:5px;">open_in_new</i>Open source</button>' +
+                '<button type="button" is="emby-button" class="raised button-submit btnRunEntry btnTlRun hsc-btn-activity" data-name="' + escAttr(d.tagName) + '"><i class="md-icon" style="margin-right:5px;">play_arrow</i><span class="btnRunEntryLabel">Run Group</span></button>' +
+                '<button type="button" is="emby-button" class="raised btnTlSourceOff hsc-btn-danger" data-name="' + escAttr(d.tagName) + '" title="Switches Top-List off in the source; Save removes the list"><i class="md-icon" style="margin-right:5px;">delete</i>Delete top-list</button>' +
+                '</div>';
+        });
+    }
+
     function loadInlineEditForm(row, body, onSuccess) {
         var editJson;
         try { editJson = JSON.parse(row.dataset.editjson || '{}'); } catch (e) { editJson = {}; }
+        if (editJson.fromSource) { renderSourceTopListSummary(body, editJson); return; }
 
         var tagName     = editJson.tagName     || '';
         var isManual    = !!editJson.isManual;
@@ -9397,8 +9708,8 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</button>' +
                 '<button type="button" class="btnChooseByTag" style="flex:1;cursor:pointer;background:var(--plugin-input-bg,rgba(255,255,255,0.05));border:1px solid var(--plugin-input-border,rgba(255,255,255,0.12));border-radius:8px;padding:20px 16px;text-align:left;color:inherit;">' +
                 '<div style="font-size:1.4em;margin-bottom:10px;color:var(--hsc-primary-text);"><i class="md-icon">label</i></div>' +
-                '<div style="font-weight:600;font-size:0.95em;margin-bottom:6px;">By tag</div>' +
-                '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Create from an existing tag in your library</div>' +
+                '<div style="font-weight:600;font-size:0.95em;margin-bottom:6px;">From a source</div>' +
+                '<div style="font-size:0.82em;color:var(--theme-text-secondary);line-height:1.5;">Rank a source\'s titles: set in the source\'s Top-List tab</div>' +
                 '</button>' +
                 '</div>' +
                 // A top-list is a library of its own, and every user it is shown to gets access to it.
@@ -9428,8 +9739,52 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 showManualTopListModal(onSuccess, null, contentType);
             });
 
-            btnByTagCard.addEventListener('click', function () { renderStep2(); });
+            btnByTagCard.addEventListener('click', function () { renderSourceStep(); });
 
+        }
+
+        // From a source: pick the source; its Top-List tab opens (the list is set there and made on Save).
+        function renderSourceStep() {
+            var view = activeView();
+            var rows = view ? Array.from(view.querySelectorAll('#tagListContainer .tag-row')).filter(function (r) { return r.querySelector('.selSourceType'); }) : [];
+            var listHtml = rows.length === 0
+                ? '<p style="padding:12px 4px;color:var(--theme-text-secondary);font-size:0.88em;font-style:italic;">No sources yet. Add one in the Tag &amp; Collection tab.</p>'
+                : rows.map(function (r, i) {
+                    var label = ((r.querySelector('.txtEntryLabel') || {}).value || '').trim();
+                    var tag = ((r.querySelector('.txtTagName') || {}).value || '').trim() || label;
+                    var on = !!(r.querySelector('.chkEnableTopList') || {}).checked;
+                    return '<button type="button" class="btnSelectSource" data-idx="' + i + '" ' +
+                        'style="width:100%;cursor:pointer;background:transparent;border:none;border-bottom:1px solid var(--line-color);' +
+                        'padding:10px 4px;display:flex;align-items:center;color:inherit;text-align:left;">' +
+                        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(label || tag || 'New source') +
+                        (on ? '<span class="tag-indicator toplist" style="margin-left:6px;font-size:0.72em;">top-list</span>' : '') + '</span>' +
+                        (tag && tag !== label ? '<span style="margin-left:12px;white-space:nowrap;font-size:0.85em;color:var(--theme-text-secondary);">' + escHtml(tag) + '</span>' : '') +
+                        '</button>';
+                }).join('');
+            modal.innerHTML =
+                '<div style="' + innerStyle + 'max-width:520px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+                '<div style="display:flex;align-items:center;gap:10px;">' +
+                '<button type="button" class="btnChooserBack" style="background:transparent;border:none;color:var(--theme-text-secondary);cursor:pointer;padding:2px;line-height:1;opacity:0.7;"><i class="md-icon">arrow_back</i></button>' +
+                '<h3 style="margin:0;font-size:1.05em;font-weight:600;">Select Source</h3>' +
+                '</div>' +
+                '<button type="button" class="btnChooserClose hsc-x" aria-label="Close" title="Close" style="background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;opacity:0.6;line-height:1;border-radius:8px;"><i class="md-icon">close</i></button>' +
+                '</div>' +
+                '<p style="margin:0 0 12px;font-size:0.88em;color:var(--theme-text-secondary);line-height:1.5;">The source opens on its <strong>Top-List</strong> tab. Tick <em>Show as a top-list</em> there and press Save: the next run makes the list.</p>' +
+                '<div style="max-height:50vh;overflow-y:auto;">' + listHtml + '</div>' +
+                '</div>';
+            modal.querySelector('.btnChooserClose').addEventListener('click', function () { modal.remove(); document.removeEventListener('keydown', onEsc); });
+            modal.querySelector('.btnChooserBack').addEventListener('click', function () { renderStep1(); });
+            modal.querySelectorAll('.btnSelectSource').forEach(function (btn) {
+                btn.addEventListener('mouseover', function () { this.style.background = 'rgba(82,181,75,0.08)'; });
+                btn.addEventListener('mouseout',  function () { this.style.background = 'transparent'; });
+                btn.addEventListener('click', function () {
+                    var r = rows[parseInt(this.dataset.idx, 10)];
+                    modal.remove();
+                    document.removeEventListener('keydown', onEsc);
+                    if (r) openSourceRowTab(view, r, 'toplist');
+                });
+            });
         }
 
         function renderStep2() {
@@ -10438,8 +10793,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
             var realTagNamesLower = new Set((tagsData.Tags || []).map(function (t) { return (t.Name || '').toLowerCase(); }));
 
+            // The source that sets each source top-list (its Top-List tab).
+            var sourceNameByTag = {};
+            (pluginConfig.Tags || []).forEach(function (t) {
+                var k = (t.Tag || '').trim().toLowerCase();
+                if (t.EnableTopList && k && !sourceNameByTag[k]) sourceNameByTag[k] = (t.Name || '').trim() || (t.Tag || '').trim();
+            });
             var allExistingTopLists = (pluginConfig.TopLists || []).filter(function (tl) {
-                return tl.TagName && existingTopLists.has(sanitizeTlName(tl.TagName).toLowerCase());
+                return tl.TagName && (tl.FromSource || existingTopLists.has(sanitizeTlName(tl.TagName).toLowerCase()));
             }).map(function (tl) {
                 var key = sanitizeTlName(tl.TagName || '').toLowerCase();
                 var settings = {};
@@ -10447,7 +10808,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 return {
                     tagName:     tl.TagName || '',
                     displayName: settings.CustomName || tl.TagName || '',
-                    isManual:    !realTagNamesLower.has((tl.TagName || '').toLowerCase()),
+                    fromSource:  !!tl.FromSource,
+                    sourceName:  sourceNameByTag[(tl.TagName || '').trim().toLowerCase()] || '',
+                    noLibrary:   !tl.HomeSectionLibraryId || tl.HomeSectionLibraryId === 'auto',
+                    isManual:    !tl.FromSource && !realTagNamesLower.has((tl.TagName || '').toLowerCase()),
                     contentType: tl.ContentType === 'Shows' ? 'Shows' : 'Movies',
                     count:       (results[3].MovieCounts || {})[key] || 0,
                     userIds:     tl.HomeSectionUserIds || [],
@@ -10480,9 +10844,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     var displayModeLabel = ({'': 'Always', 'tv': 'TV mode only', 'mobile,desktop': 'Non-TV only'})[item.displayMode] || 'Always';
                     var imageTypeLabel = item.imageType || 'Auto';
                     var maxItemsLabel  = item.maxItems ? String(item.maxItems) : '0 (all)';
+                    if (item.fromSource)
+                        typeBadge = '<span class="tag-indicator tag" style="flex-shrink:0;" title="Set in the source\'s Top-List tab"><i class="md-icon" style="font-size:1.1em;">label</i> ' + escHtml(item.sourceName || item.tagName) + '</span>';
                     var editJson = escAttr(JSON.stringify({
                         tagName:     item.tagName,
                         displayName: item.displayName,
+                        fromSource:  item.fromSource,
+                        sourceName:  item.sourceName,
+                        noLibrary:   item.noLibrary,
                         isManual:    item.isManual,
                         contentType: item.contentType,
                         userIds:     item.userIds,
@@ -10525,14 +10894,14 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                 '</button>' +
                 '</div>' +
                 '<div style="margin-bottom:16px;font-size:0.9em;color:var(--theme-text-secondary);line-height:1.5;">' +
-                'Create a top-list home section from a tag managed by the plugin, or from movies or TV shows you pick yourself. Each list gets its own hidden library with numbered posters.' +
+                'All top-lists. A list from a source is set in that source\'s <strong>Top-List</strong> tab (Tag &amp; Collection); a manual list, with movies or TV shows you pick yourself, is made and edited here. Each list gets its own hidden library with numbered posters.' +
                 '</div>' +
                 '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">' +
                 '<input type="text" id="tlSearch" placeholder="Search…" style="' + searchInputStyle + '" />' +
                 '<select is="emby-select" id="tlFilter" style="color:var(--plugin-popup-color);background:var(--plugin-input-bg);border:1px solid var(--plugin-input-border);padding:5px;border-radius:6px;font-size:0.9em;cursor:pointer;">' +
                 '<option value="all">All</option>' +
                 '<option value="manual">Manual</option>' +
-                '<option value="bytag">By tag</option>' +
+                '<option value="bytag">From a source</option>' +
                 '<option value="movies">Movies</option>' +
                 '<option value="shows">TV shows</option>' +
                 '</select>' +
@@ -10641,6 +11010,11 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
 
                 if (btn.classList.contains('btnCopyTopList')) {
                     copyTopListToClipboard(btn.closest('.tag-row'), btn);
+                    return;
+                }
+
+                if (btn.classList.contains('btnTlOpenSource') || btn.classList.contains('btnTlSourceOff')) {
+                    openSourceTopListTab(view, btn.dataset.name, btn.classList.contains('btnTlSourceOff'));
                     return;
                 }
 
@@ -11792,6 +12166,10 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                             hseTab.dataset.hseSettings = encodeURIComponent(tc.HomeSectionSettings || '{}');
                             hseTab.dataset.hseUserids = encodeURIComponent(JSON.stringify(tc.HomeSectionUserIds || []));
                         }
+                        // What the server now has for the Top-List tab (its notes compare with it).
+                        row.dataset.tlSaved = tc.EnableTopList ? '1' : '0';
+                        row.dataset.tlSavedTag = (tc.Tag || '').trim().toLowerCase();
+                        updateTopListTab(row);
                     }
                 });
 
@@ -11819,6 +12197,22 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
                     }).then(function(r) { return r.json(); }).then(function(res) {
                         console.log('[HSC] ApplyTagHomeSections', tc.Name || tc.Tag, res);
                     }).catch(function(e) { console.warn('[HSC] ApplyTagHomeSections failed', tc.Name || tc.Tag, e); });
+                });
+                // Top-lists of sources: a changed title, position or look reaches their rows now
+                // (fire-and-forget; a list without a library yet gets its rows from the next run).
+                var tlDone = {};
+                configObj.Tags.forEach(function (tc) {
+                    var tag = (tc.Tag || '').trim();
+                    if (!tc.EnableTopList || !tc.EnableTag || !tag || tlDone[tag.toLowerCase()]) return;
+                    tlDone[tag.toLowerCase()] = 1;
+                    var tok = window.ApiClient.accessToken ? window.ApiClient.accessToken() : '';
+                    fetch(window.ApiClient.getUrl('HomeScreenCompanion/TopList/SyncHomeSections'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Emby-Token': tok },
+                        body: JSON.stringify({ TagName: tag })
+                    }).then(function (r) { return r.json(); }).then(function (res) {
+                        console.log('[HSC] Top-list rows', tag, res);
+                    }).catch(function (e) { console.warn('[HSC] Top-list rows failed', tag, e); });
                 });
             });
             } // end doSave
@@ -12026,6 +12420,7 @@ define(['emby-input', 'emby-button', 'emby-select', 'emby-checkbox'], function (
         }
 
         // Shows a top page tab (and runs its lazy loader), without the unsaved-changes question.
+        view._hscShowPageTab = function (target) { showPageTab(target); };
         function showPageTab(target) {
                 var tabBtn = view.querySelector('.page-tab-btn[data-page-tab="' + target + '"]');
                 var tabEl = view.querySelector('#tab' + target);
