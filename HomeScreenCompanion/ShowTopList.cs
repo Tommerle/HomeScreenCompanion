@@ -86,26 +86,30 @@ namespace HomeScreenCompanion
                 IsVirtualItem = false
             }).Where(s => !IsCopy(s)).ToList();
 
-        // The series behind a tag, in the tag's source order (tag_ranks/<tag>.json holds the IMDb
-        // ids the tag sync matched, in list order), then by name. A tag on seasons or episodes
-        // counts for their series.
+        // The series of a source's top-list, in list order (TopListMembers). Before the source's
+        // first run since 4.5: the series behind its tag, in the tag's source order (tag_ranks/<tag>.json
+        // holds the IMDb ids the tag sync matched, in list order), then by name. A season or episode
+        // counts for its series.
         internal static List<BaseItem> SeriesForTag(ILibraryManager libraryManager, IJsonSerializer jsonSerializer, string tag)
         {
             var series = new List<BaseItem>();
             var seen = new HashSet<long>();
-            foreach (var item in libraryManager.GetItemList(new InternalItemsQuery
-            {
-                Tags = new[] { tag },
-                IncludeItemTypes = new[] { "Series", "Season", "Episode" },
-                Recursive = true,
-                IsVirtualItem = false
-            }))
+            var members = TopListMembers.Load(tag, libraryManager, jsonSerializer);
+            foreach (var item in members?.Where(i => !i.IsVirtualItem && (i is Series || i is Season || i is Episode))
+                ?? libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    Tags = new[] { tag },
+                    IncludeItemTypes = new[] { "Series", "Season", "Episode" },
+                    Recursive = true,
+                    IsVirtualItem = false
+                }))
             {
                 if (IsCopy(item)) continue;
                 var s = item as Series ?? (item as Season)?.Series ?? (item as Episode)?.Series;
                 if (s == null || IsCopy(s) || !seen.Add(s.InternalId)) continue;
                 series.Add(s);
             }
+            if (members != null) return series;
 
             var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             try

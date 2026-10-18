@@ -2603,22 +2603,15 @@ public class HomeScreenCompanionService : IService
                 foreach (var f in Directory.GetFiles(folderPath, "*.jpg"))
                     File.Delete(f);
 
-                // Write one .strm file per movie that carries this tag. Top-list copies are skipped:
+                // Write one .strm file per movie of the source's list (TopListMembers), or before its
+                // first run since 4.5 per movie that carries this tag. Top-list copies are skipped:
                 // one carrying the tag would otherwise become a .strm pointing at a .strm.
                 var topListsFolder = Path.Combine(dataPath, "toplists") + Path.DirectorySeparatorChar;
-                var items = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    Tags = new[] { request.TagName },
-                    IncludeItemTypes = new[] { "Movie" },
-                    Recursive = true,
-                    IsVirtualItem = false
-                }).Where(i => string.IsNullOrEmpty(i.Path)
-                           || !i.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase))
-                  .ToList();
+                var (items, fromList) = TopListMembers.MoviesFor(request.TagName, _libraryManager, _jsonSerializer, topListsFolder);
 
-                // Sort by saved rank order from the last task run (preserves external list order)
+                // Without a saved list: sort by saved rank order from the last task run (preserves external list order)
                 var rankFile = Path.Combine(Plugin.Instance.DataFolderPath, "tag_ranks", sanitized + ".json");
-                if (File.Exists(rankFile))
+                if (!fromList && File.Exists(rankFile))
                 {
                     try
                     {
@@ -3522,11 +3515,17 @@ public class HomeScreenCompanionService : IService
                             catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                         }
                         config.TopLists.Remove(tl);
-                        // Made in a source's Top-List tab: switched off there too (else the next
+                        // Made with a source's Create as top-list: switched off there too (else the next
                         // settings save would make it again).
+                        // A source with nothing else to show (Apply Tag went off with the top-list) gets
+                        // no plain row instead: it would have nothing in it.
                         if (tl.FromSource)
                             foreach (var tc in (config.Tags ?? new List<TagConfig>()).Where(t => string.Equals((t.Tag ?? "").Trim(), (tl.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase)))
+                            {
                                 tc.EnableTopList = false;
+                                if (!tc.EnableTag && !tc.EnableCollection && !tc.EnablePlaylist) tc.EnableHomeSection = false;
+                            }
+                        TopListMembers.Delete(tl.TagName);
                         Plugin.Instance!.SaveConfiguration();
                     }
                 }
@@ -3955,6 +3954,10 @@ public class HomeScreenCompanionService : IService
                 if (plugin == null)
                     return Fail(response, "Plugin not initialized.");
                 var config = plugin.Configuration;
+                // The sources as they were before the restore (they may be replaced first): the source
+                // a list that leaves with the restore came from (SourceTopLists.QueueVanished).
+                var tagsBefore = (config.Tags ?? new List<TagConfig>()).ToList();
+                var listsBefore = (config.TopLists ?? new List<TopListHomeSection>()).ToList();
 
                 var backup = ParseBackup(request.BackupJson);
                 if (backup == null)
@@ -4140,6 +4143,10 @@ public class HomeScreenCompanionService : IService
                         restored.Add(tl);
                     }
 
+                    // Manual lists this server has that the backup does not: removed by the next run (rows,
+                    // library, folder) instead of being left behind with nothing tracking them. Source
+                    // lists follow their sources below.
+                    SourceTopLists.QueueVanished(listsBefore.Where(t => !t.FromSource), restored, tagsBefore, "not in the restored backup", onlyFromSource: false);
                     config.TopLists = restored;
                     response.Applied.Add($"Top lists ({restored.Count})");
                 }
@@ -4147,6 +4154,10 @@ public class HomeScreenCompanionService : IService
                 if (response.Applied.Count == 0)
                     return Fail(response, "Nothing selected to restore, or the selected sections are not present in the file.");
 
+                // As a settings save does: each source with Top-List on has its list (one the backup
+                // lacks gets the library and rows it has here), and a list whose source is gone or
+                // switched off is queued for removal.
+                SourceTopLists.Derive(new PluginConfiguration { Tags = tagsBefore, TopLists = listsBefore }, config);
                 plugin.SaveConfiguration();
                 if (mirrorChanged) TopListCollectionMirror.QueueFullSync();
                 response.Success = true;

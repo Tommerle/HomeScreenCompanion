@@ -262,6 +262,10 @@ namespace HomeScreenCompanion
                 // "Your Next Watch": one list per user, written to that user's own playlist.
                 var nextWatchByGroup = new Dictionary<string, (TagConfig Owner, Dictionary<string, List<BaseItem>> PerUser)>(StringComparer.OrdinalIgnoreCase);
                 var rankIdsByTag = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                // Each group's matched titles in list order, per tag, for the source's top-list (TopListMembers),
+                // and the groups that failed with their titles kept (their part is kept too).
+                var memberItemsByGroup = new Dictionary<string, Dictionary<string, List<BaseItem>>>(StringComparer.OrdinalIgnoreCase);
+                var failedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 // Groups where a source failed / returned nothing — their playlists are left untouched
                 var playlistGroupsToSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -576,7 +580,7 @@ namespace HomeScreenCompanion
                     if (tagConfig.EnableTag && !tagConfig.OnlyCollection) ruleFeatures.Add("Tag");
                     if (tagConfig.EnableCollection) ruleFeatures.Add("Collection");
                     if (SourceTopLists.PlainRow(tagConfig)) ruleFeatures.Add("HS");
-                    if (tagConfig.EnableTopList) ruleFeatures.Add("Top-list");
+                    if (SourceTopLists.IsOn(tagConfig)) ruleFeatures.Add("Top-list");
                     string featureStr = ruleFeatures.Count > 0 ? $"  ({string.Join(", ", ruleFeatures)})" : "";
 
                     activeGroupIdx++;
@@ -620,6 +624,7 @@ namespace HomeScreenCompanion
                         gs.SkipReason = $"AI refresh not due until {_nextAiRun:yyyy-MM-dd}";
                         // Not asked this time: the last answer stays — its tags, collection and playlist are kept.
                         failedFetches.Add(tagName);
+                        failedGroups.Add(GroupKey(tagConfig));
                         if (tagConfig.EnableCollection)
                         {
                             string _aiCName = string.IsNullOrWhiteSpace(tagConfig.CollectionName) ? tagName : tagConfig.CollectionName.Trim();
@@ -668,6 +673,7 @@ namespace HomeScreenCompanion
                     if (HasNoSourceYet(tagConfig))
                     {
                         failedFetches.Add(tagName);
+                        failedGroups.Add(GroupKey(tagConfig));
                         if (tagConfig.EnableCollection) failedFetches.Add(cName);
                         playlistGroupsToSkip.Add(GroupKey(tagConfig));
                         gs.Skipped = true;
@@ -1111,6 +1117,10 @@ namespace HomeScreenCompanion
                         var rankSeen = new HashSet<string>(rankIds, StringComparer.OrdinalIgnoreCase);
                         foreach (var rankId in matchedLocalItems.Select(RankKey).Where(id => !string.IsNullOrEmpty(id)))
                             if (rankSeen.Add(rankId)) rankIds.Add(rankId);
+                        if (!memberItemsByGroup.TryGetValue(tagName, out var memberGroups))
+                            memberItemsByGroup[tagName] = memberGroups = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
+                        if (!memberGroups.TryGetValue(GroupKey(tagConfig), out var memberItems)) memberGroups[GroupKey(tagConfig)] = memberItems = new List<BaseItem>();
+                        memberItems.AddRange(matchedLocalItems);
 
                         // If this is a priority-override entry but produced zero results,
                         // remove it from the override sets so other entries for the same tag are not suppressed.
@@ -1144,9 +1154,10 @@ namespace HomeScreenCompanion
                         else if (isRemoteSource && gs.ListCount == 0 && config.PreserveTagsOnEmptyResult)
                         {
                             emptyList.Add(emptySrc + (tagConfig.SourceType == "AI"
-                                ? $"The AI returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the prompt and the API key in Settings."
-                                : $"The list returned 0 items{Why(fetchError)} — existing tags, collection and playlist were kept. Check the list URL and the API key in Settings."));
+                                ? $"The AI returned 0 items{Why(fetchError)} — existing tags, collection, playlist and top-list were kept. Check the prompt and the API key in Settings."
+                                : $"The list returned 0 items{Why(fetchError)} — existing tags, collection, playlist and top-list were kept. Check the list URL and the API key in Settings."));
                             failedFetches.Add(tagName);
+                            failedGroups.Add(GroupKey(tagConfig));
                             if (tagConfig.EnableCollection) failedFetches.Add(cName);
                             playlistGroupsToSkip.Add(GroupKey(tagConfig));
                             gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
@@ -1235,6 +1246,7 @@ namespace HomeScreenCompanion
                         gs.ErrorMessage = ex.Message;
                         WriteExceptionDebug(ex);
                         failedFetches.Add(tagName);
+                        failedGroups.Add(GroupKey(tagConfig));
                         if (tagConfig.EnableCollection) failedFetches.Add(cName);
                         playlistGroupsToSkip.Add(GroupKey(tagConfig));
                     }
@@ -1283,6 +1295,7 @@ namespace HomeScreenCompanion
                 {
                     foreach (var kvp in rankIdsByTag)
                         WriteRankFile(kvp.Key, kvp.Value);
+                    SaveTopListMembers(config, memberItemsByGroup, failedGroups);
                     TagCacheManager.Instance.Save();
                     LastGoodLists.Prune(config.Tags.Where(t => string.IsNullOrEmpty(t.SourceType) || t.SourceType == "External").Select(t => t.Url ?? ""));
                 }
@@ -2655,7 +2668,7 @@ namespace HomeScreenCompanion
             {
                 gs.ListCount = _listCount;
                 (_failedSources.Count > 0 ? gs.Errors : gs.Warnings).Add((tagConfig.SourceType == "AI" ? "The AI returned 0 items" : $"{(_emptySources.Count == 1 ? "A list" : $"{_emptySources.Count} lists")} returned 0 items")
-                    + $" ({string.Join(", ", _emptySources)}) — existing tags, collection and playlist were kept (\"Preserve tags and collections on empty result\" is on in Settings).");
+                    + $" ({string.Join(", ", _emptySources)}) — existing tags, collection, playlist and top-list were kept (\"Preserve tags and collections on empty result\" is on in Settings).");
                 gs.ElapsedMs = groupTimer.ElapsedMilliseconds;
                 WriteFetchLine(gs);
                 WriteSingleRunFooter(gs, startTime, dryRun, logMissing);
@@ -2698,6 +2711,8 @@ namespace HomeScreenCompanion
                 var _kept = new List<BaseItem>();
                 if (tagConfig.EnableTag && !tagConfig.OnlyCollection)
                     _kept.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { Tags = new[] { tagName }, IncludeItemTypes = new[] { "Movie", "Series" }, Recursive = true, IsVirtualItem = false }));
+                else if (SourceTopLists.IsOn(tagConfig))
+                    _kept.AddRange(TopListMembers.Load(tagName, _libraryManager, _jsonSerializer) ?? new List<BaseItem>());
                 if (tagConfig.EnableCollection
                     && _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "BoxSet" }, Name = cName, Recursive = true }).FirstOrDefault() is BaseItem _keptColl)
                     _kept.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { CollectionIds = new[] { _keptColl.InternalId }, Recursive = true, IsVirtualItem = false }));
@@ -2764,6 +2779,7 @@ namespace HomeScreenCompanion
                     .Select(RankKey)
                     .Where(id => !string.IsNullOrEmpty(id))
                     .ToList());
+                SaveTopListPart(config, tagConfig, tagName, matchedLocalItems);
             }
 
             // Apply tags (scoped to this entry's tag only)
@@ -3202,8 +3218,8 @@ namespace HomeScreenCompanion
             CleanupDisabledPlaylists(config, dryRun);
             // Only this group's own top-list (other lists are not fed by this tag).
             SyncTopListFolders(config, dryRun, tagName);
-            // Made in the group's Top-List tab: its rows too (the group has no other row).
-            if (!dryRun && tagConfig.EnableTopList && (config.TopLists ?? new List<TopListHomeSection>()).Any(t => t.FromSource && string.Equals(t.TagName, tagName, StringComparison.OrdinalIgnoreCase)))
+            // Made with the group's Create as top-list: its rows too (the group has no other row).
+            if (!dryRun && SourceTopLists.IsOn(tagConfig) && (config.TopLists ?? new List<TopListHomeSection>()).Any(t => t.FromSource && string.Equals(t.TagName, tagName, StringComparison.OrdinalIgnoreCase)))
             {
                 _log.Blank();
                 _log.Info("» Top-list");
@@ -3308,6 +3324,15 @@ namespace HomeScreenCompanion
                 _log.Info("» Playlists");
             }
             CleanupDisabledPlaylists(config, dryRun);
+
+            // A top-list built from the tag loses this group's titles, as the tag does.
+            if (!dryRun && TopListMembers.Wanted(config, tagName))
+            {
+                _log.Blank();
+                _log.Info("» Top-list");
+                SaveTopListPart(config, tagConfig, tagName, new List<BaseItem>());
+                SyncTopListFolders(config, false, tagName);
+            }
 
             if (tagConfig.EnableHomeSection)
             {
@@ -4060,6 +4085,40 @@ namespace HomeScreenCompanion
             catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
+        // Full sync: the titles of each source top-list, one part per group that writes its tag
+        // (TopListMembers). A group that ran writes its titles (with the old ones kept when one of its
+        // sources failed with "Preserve…" on); a group that failed altogether keeps its part; a group
+        // switched off or out of its schedule gets an empty one, as its tag is taken off the titles.
+        private void SaveTopListMembers(PluginConfiguration config, Dictionary<string, Dictionary<string, List<BaseItem>>> memberItemsByGroup, HashSet<string> failedGroups)
+        {
+            foreach (var tag in (config.TopLists ?? new List<TopListHomeSection>())
+                .Where(t => t.FromSource && !string.IsNullOrWhiteSpace(t.TagName)).Select(t => t.TagName.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var groups = TopListMembers.GroupsOf(config, tag);
+                memberItemsByGroup.TryGetValue(tag, out var ran);
+                foreach (var g in groups)
+                {
+                    if (ran != null && ran.TryGetValue(g, out var items))
+                        TopListMembers.SavePart(tag, g, items, _jsonSerializer, keepOld: failedGroups.Contains(g));
+                    else if (!failedGroups.Contains(g) && (config.Tags ?? new List<TagConfig>())
+                        .Where(t => string.Equals(GroupKey(t), g, StringComparison.OrdinalIgnoreCase))
+                        .All(t => !t.Active || !IsScheduleActive(t.ActiveIntervals)))
+                        TopListMembers.SavePart(tag, g, new List<BaseItem>(), _jsonSerializer);
+                }
+                TopListMembers.Combine(tag, groups, _jsonSerializer);
+            }
+        }
+
+        // Run Group: this group's part of each source top-list built from its tag (the other groups'
+        // parts stay as the last run left them). empty: the group is switched off or out of schedule.
+        private void SaveTopListPart(PluginConfiguration config, TagConfig tagConfig, string tagName, IEnumerable<BaseItem> items)
+        {
+            if (!TopListMembers.Wanted(config, tagName)) return;
+            TopListMembers.SavePart(tagName, GroupKey(tagConfig), items, _jsonSerializer);
+            TopListMembers.Combine(tagName, TopListMembers.GroupsOf(config, tagName), _jsonSerializer);
+        }
+
         // Playlist sync for a single group — one individual playlist per user in PlaylistUserIds.
         // Shared by both the full sync (Execute) and the single-group run (RunSingleEntryInternalAsync)
         // so both paths create/update playlists identically. collectionOutputItems must be the union
@@ -4430,7 +4489,7 @@ namespace HomeScreenCompanion
                             {
                                 var _gsR = statsList?.FirstOrDefault(s => s.TagName != null && string.Equals(s.TagName, _hsTagName, StringComparison.OrdinalIgnoreCase));
                                 if (_gsR != null) _gsR.HomeSectionRemoved = true;
-                                _log.Skip($"{_hsDisplayName}: home section removed for {RunLog.Plural(_removedHs, "user")} (group is {(plainRow ? "inactive or not in schedule" : tc.EnableTopList ? "now shown as its top-list" : "no longer set to show a home section")})");
+                                _log.Skip($"{_hsDisplayName}: home section removed for {RunLog.Plural(_removedHs, "user")} (group is {(plainRow ? "inactive or not in schedule" : SourceTopLists.IsOn(tc) ? "now shown as its top-list" : "no longer set to show a home section")})");
                             }
                         }
                         // Always clear tracking (including duplicate flat entries) so this
@@ -6657,7 +6716,7 @@ namespace HomeScreenCompanion
             if (tc.EnableCollection) features.Add("collection");
             if (tc.EnablePlaylist) features.Add("playlist");
             if (SourceTopLists.PlainRow(tc)) features.Add("home section");
-            if (tc.EnableTopList) features.Add("top-list");
+            if (SourceTopLists.IsOn(tc)) features.Add("top-list");
             if (features.Count > 0) parts.Add("creates: " + string.Join(", ", features));
             return string.Join("  ·  ", parts);
         }
@@ -7512,19 +7571,13 @@ namespace HomeScreenCompanion
                     catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 }
 
-                // Top-list copies are skipped — see PrepareTopListFolderRequest handler.
-                var items = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    Tags = new[] { tl.TagName },
-                    IncludeItemTypes = new[] { "Movie" },
-                    Recursive = true,
-                    IsVirtualItem = false
-                }).Where(i => string.IsNullOrEmpty(i.Path)
-                           || !i.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase))
-                  .ToList();
+                // The source's titles in list order (TopListMembers); before its first run since 4.5,
+                // the titles with its tag sorted by the rank file. Top-list copies are skipped — see
+                // PrepareTopListFolderRequest handler.
+                var (items, fromList) = TopListMembers.MoviesFor(tl.TagName, _libraryManager, _jsonSerializer, topListsFolder);
 
                 var rankFile = Path.Combine(dataPath, "tag_ranks", sanitized + ".json");
-                if (File.Exists(rankFile))
+                if (!fromList && File.Exists(rankFile))
                 {
                     try
                     {

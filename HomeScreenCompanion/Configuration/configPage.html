@@ -10,6 +10,7 @@
             --hsc-primary-hover: #5fc458;
             --hsc-primary-pressed: #3a8c34;
             --hsc-primary-text: #52B54B;
+            --hsc-info-text: #5aa9e6;
             --hsc-activity: #00a4dc;
             --hsc-activity-hover: #22b4e6;
             --hsc-activity-text: #00a4dc;
@@ -39,6 +40,7 @@
         }
         html[data-plugin-theme="light"] {
             --hsc-primary-text: #3a8c34;
+            --hsc-info-text: #2b6cb0;
             --hsc-activity-text: #007ba8;
             --hsc-warning-text: #9a7a12;
             --hsc-danger-text: #cc3333;
@@ -734,6 +736,15 @@
         mark.help-hit.current { background: var(--hsc-warning); color: #1a1a1a; }
 
         /* Setup Guide: long detail lists fold away under a "Show details" line */
+        /* "Customize tag images" in a source's Tag tab: styled like the Premade filters / Holiday presets buttons. */
+        details.tag-art-more { margin-top: 15px; }
+        details.tag-art-more > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--line-color); border-radius: 4px; color: var(--theme-text-secondary); font-size: 0.9em; user-select: none; }
+        details.tag-art-more > summary::-webkit-details-marker { display: none; }
+        details.tag-art-more > summary > span { display: flex; align-items: center; }
+        details.tag-art-more .tag-art-chevron { font-size: 1.2em; transition: transform 0.2s; }
+        details.tag-art-more[open] .tag-art-chevron { transform: rotate(180deg); }
+        details.tag-art-more .tag-art-custom-chip { display: none; margin-left: 8px; font-size: 0.75em; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line-color); opacity: 0.8; }
+        details.tag-art-more[data-custom="1"] .tag-art-custom-chip { display: inline-block; }
         details.help-more { margin-top: 4px; }
         details.help-more > summary {
             cursor: pointer;
@@ -779,8 +790,9 @@
         .hsc-callout.warning > .md-icon { color: var(--hsc-warning-text); }
         .hsc-callout.danger { background: rgba(229,115,115,0.08); border-color: rgba(229,115,115,0.3); }
         /* Source shown as a top-list (Top-List tab): the Home Screen tab hides what the top-list sets. */
-        .homescreen-tab:not(.tl-mode) .hse-tl-note { display: none !important; }
         .homescreen-tab.tl-mode .hse-tl-hide { display: none !important; }
+        .homescreen-tab .hse-st-single { display: none !important; }
+        .homescreen-tab.hse-empty .hse-details > :not(.toplist-tab) { display: none !important; }
         .hsc-callout.danger > .md-icon { color: var(--hsc-danger-text); }
         .hsc-callout.success { background: rgba(82,181,75,0.08); border-color: rgba(82,181,75,0.3); }
         .hsc-callout.success > .md-icon { color: var(--hsc-primary-text); }

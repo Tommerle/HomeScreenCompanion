@@ -536,6 +536,15 @@ namespace HomeScreenCompanion
                 if (userStatus.SummaryLine() is string disabledOne) _log.Skip(disabledOne);
                 // Run Group on one top-list: the sweep over every other row below belongs to the full sync.
                 GrantTopListLibraryAccess(topLists.Where(t => string.Equals(t.TagName, onlyTag, StringComparison.OrdinalIgnoreCase)).ToList(), userManager, libraryManager, logger);
+                // A source's list got a new library from this Run Group (SourceTopLists.EnsureLibraries):
+                // hidden from My Media and Latest now, not only at the next full sync.
+                if (SourceTopLists.LibraryAdded)
+                {
+                    SourceTopLists.LibraryAdded = false;
+                    var hiddenForOne = HideLibraries(config, userManager, libraryManager, logger, m => _log.Warn(m));
+                    if (hiddenForOne > 0)
+                        _log.Info($"    HSC libraries {(config.HideTopListLibraries ? "hidden from" : "shown again in")} My Media and Latest for {RunLog.Plural(hiddenForOne, "user")}");
+                }
                 Plugin.Instance?.SaveConfiguration();
                 return (totalUpdated, $"Updated {totalUpdated} section(s){(totalAdded > 0 ? $", added {totalAdded}" : "")} of top-list '{onlyTag}'.");
             }

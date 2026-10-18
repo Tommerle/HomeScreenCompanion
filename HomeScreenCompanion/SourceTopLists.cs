@@ -12,12 +12,14 @@ using System.Threading;
 namespace HomeScreenCompanion
 {
     /// <summary>
-    /// A source's Top-List tab (TagConfig.EnableTopList): the source's home row is a ranked top-list
+    /// A source's "Create as top-list" (TagConfig.EnableTopList, in its Home Screen tab): the source's home row is a ranked top-list
     /// instead of a plain row. The source is the only place it is edited; its TopLists entry (what
     /// the top-list engine works on: SyncTopListFolders, TopListSyncTask) is derived from it on every
     /// settings save (<see cref="Derive"/>), marked FromSource. Users, title, position, display mode,
     /// image type, card size and scroll direction come from the source's Home Screen tab; content
-    /// type, max items and badges from its Top-List tab.
+    /// type, max items and badges from the top-list fields above them.
+    /// The list's titles come from the source's last run (TopListMembers), not from its tag, so
+    /// Apply Tag can be off; the tag name is the list's key.
     /// A list switched off, renamed (its tag) or switched between movies and shows is queued
     /// (removed_toplists.xml) and its rows, library and folder are removed by the next run
     /// (<see cref="RemoveQueued"/>); a list made again before that run gets its library back.
@@ -35,8 +37,14 @@ namespace HomeScreenCompanion
         private static readonly object _queueLock = new object();
         private static string QueueFile => Path.Combine(Plugin.Instance!.DataFolderPath, "removed_toplists.xml");
 
+        /// <summary>Set when a run made a list's library (EnsureLibraries): a Run Group then hides it at once.</summary>
+        internal static volatile bool LibraryAdded;
+
         /// <summary>The source has its own plain home row (not when its row is a top-list).</summary>
-        internal static bool PlainRow(TagConfig tc) => tc.EnableHomeSection && !tc.EnableTopList;
+        internal static bool PlainRow(TagConfig tc) => tc.EnableHomeSection && !IsOn(tc);
+
+        /// <summary>Create as top-list is on (never for Your Next Watch: its row is each user's own playlist).</summary>
+        internal static bool IsOn(TagConfig tc) => tc.EnableTopList && !string.Equals(tc.SourceType, "NextWatch", StringComparison.OrdinalIgnoreCase);
 
         internal static bool IsShows(TagConfig tc) => string.Equals(tc.TopListContentType, Shows, StringComparison.OrdinalIgnoreCase);
 
@@ -50,13 +58,15 @@ namespace HomeScreenCompanion
         private static string TagOf(TagConfig tc) => (tc.Tag ?? "").Trim();
 
         // The source that owns each tag's top-list: the first one (in list order) with Top-List on.
+        // Apply Tag is not needed: the list is the source's matched titles (TopListMembers), and the
+        // tag name (or Display Name when it is empty) is only the list's key.
         private static Dictionary<string, TagConfig> Owners(PluginConfiguration cfg)
         {
             var owners = new Dictionary<string, TagConfig>(StringComparer.OrdinalIgnoreCase);
             foreach (var tc in cfg.Tags ?? new List<TagConfig>())
             {
                 var tag = TagOf(tc);
-                if (!tc.EnableTopList || !tc.EnableTag || tag.Length == 0 || owners.ContainsKey(tag)) continue;
+                if (!IsOn(tc) || tag.Length == 0 || owners.ContainsKey(tag)) continue;
                 owners[tag] = tc;
             }
             return owners;
@@ -84,6 +94,12 @@ namespace HomeScreenCompanion
                 Migrate(cfg);
                 cfg.TopLists ??= new List<TopListHomeSection>();
                 var owners = Owners(cfg);
+                // Source lists the saved settings left out altogether (written without them, e.g. over
+                // the API; the page always sends the server's lists): queued like a list switched off —
+                // unless their source still has Top-List on (same content type): made again below
+                // with the old entry's library and rows.
+                QueueVanished(old?.TopLists, cfg.TopLists, old?.Tags, "left out of the saved settings", onlyFromSource: true,
+                    keep: t => owners.TryGetValue((t.TagName ?? "").Trim(), out var o) && string.Equals(ContentTypeOf(t), IsShows(o) ? Shows : Movies, StringComparison.OrdinalIgnoreCase));
 
                 // Lists whose source no longer has one (Top-List off, source deleted, tag renamed) or
                 // whose content type changed: queued for the next run, which removes what they made.
@@ -95,7 +111,7 @@ namespace HomeScreenCompanion
                     cfg.TopLists.Remove(tl);
                     // The source it came from (also when its tag was renamed): its Run Group removes it.
                     var source = hasOwner ? owner!.Name : (old?.Tags ?? new List<TagConfig>())
-                        .FirstOrDefault(t => t.EnableTopList && string.Equals(TagOf(t), (tl.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Name;
+                        .FirstOrDefault(t => IsOn(t) && string.Equals(TagOf(t), (tl.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Name;
                     gone.Add((tl, hasOwner ? $"made again as {(IsShows(owner!) ? "TV shows" : "movies")} in its source"
                                            : "switched off, renamed or deleted in its source", source ?? ""));
                 }
@@ -107,9 +123,21 @@ namespace HomeScreenCompanion
                     if (tl == null)
                     {
                         tl = new TopListHomeSection { TagName = kv.Key, FromSource = true, HomeSectionLibraryId = "auto" };
+                        var type = IsShows(kv.Value) ? Shows : Movies;
+                        // Left out of the saved settings while its source still has it: the old entry's
+                        // library and rows.
+                        var prev = (old?.TopLists ?? new List<TopListHomeSection>()).FirstOrDefault(t => t.FromSource
+                            && string.Equals((t.TagName ?? "").Trim(), kv.Key, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ContentTypeOf(t), type, StringComparison.OrdinalIgnoreCase));
                         // Made again before the run removed it: it keeps its library and rows.
-                        var back = Unqueue(kv.Key, IsShows(kv.Value) ? Shows : Movies);
-                        if (back != null)
+                        var back = prev == null ? Unqueue(kv.Key, type) : null;
+                        if (prev != null)
+                        {
+                            tl.HomeSectionLibraryId = string.IsNullOrEmpty(prev.HomeSectionLibraryId) ? "auto" : prev.HomeSectionLibraryId;
+                            tl.HomeSectionTracked = (prev.HomeSectionTracked ?? new List<HomeSectionTracking>()).ToList();
+                            tl.HomeSectionSettings = prev.HomeSectionSettings ?? "{}";
+                        }
+                        else if (back != null)
                         {
                             tl.HomeSectionLibraryId = string.IsNullOrEmpty(back.LibraryId) ? "auto" : back.LibraryId;
                             tl.HomeSectionTracked = back.Rows ?? new List<HomeSectionTracking>();
@@ -188,8 +216,8 @@ namespace HomeScreenCompanion
                 var first = group[0];
                 var key = GroupIssues.Key(first.Name, first.Tag);
                 var entries = group.Where(t => GroupIssues.Key(t.Name, t.Tag) == key).ToList();
-                // Another source with this tag already owns a list made in its Top-List tab.
-                if ((cfg.Tags ?? new List<TagConfig>()).Any(t => t.EnableTopList && string.Equals(TagOf(t), tag, StringComparison.OrdinalIgnoreCase)
+                // Another source with this tag already owns a list made with Create as top-list.
+                if ((cfg.Tags ?? new List<TagConfig>()).Any(t => IsOn(t) && string.Equals(TagOf(t), tag, StringComparison.OrdinalIgnoreCase)
                     && GroupIssues.Key(t.Name, t.Tag) != key)) continue;
 
                 var ls = Parse(tl.HomeSectionSettings);
@@ -215,7 +243,7 @@ namespace HomeScreenCompanion
                 }
                 tl.FromSource = true;
                 changed = true;
-                PluginLog.Write("INF", "Settings", $"Top-list '{tag}' is now set in its source's Top-List tab (source '{(string.IsNullOrWhiteSpace(first.Name) ? tag : first.Name)}')");
+                PluginLog.Write("INF", "Settings", $"Top-list '{tag}' is now set in its source's Home Screen tab, Create as top-list (source '{(string.IsNullOrWhiteSpace(first.Name) ? tag : first.Name)}')");
             }
             return changed;
         }
@@ -265,6 +293,41 @@ namespace HomeScreenCompanion
                 }
                 SaveQueue(q);
             }
+        }
+
+        /// <summary>
+        /// Lists in <paramref name="before"/> that <paramref name="after"/> no longer has (by name and
+        /// content type) are queued, so the next run removes their rows, library and folder — without
+        /// it nothing would know they ever existed. Used by a settings save (source lists only) and by
+        /// a backup restore, which replaces the lists (manual lists too). oldTags: the settings the
+        /// lists came from, for the source name a Run Group removes them by.
+        /// </summary>
+        internal static void QueueVanished(IEnumerable<TopListHomeSection>? before, IEnumerable<TopListHomeSection>? after,
+            IEnumerable<TagConfig>? oldTags, string reason, bool onlyFromSource, Func<TopListHomeSection, bool>? keep = null)
+        {
+            try
+            {
+                var kept = new HashSet<string>((after ?? Enumerable.Empty<TopListHomeSection>())
+                    .Where(t => !string.IsNullOrWhiteSpace(t.TagName))
+                    .Select(t => (t.TagName ?? "").Trim() + "\u001F" + ContentTypeOf(t)), StringComparer.OrdinalIgnoreCase);
+                var gone = new List<(TopListHomeSection List, string Reason, string Source)>();
+                foreach (var tl in before ?? Enumerable.Empty<TopListHomeSection>())
+                {
+                    if (string.IsNullOrWhiteSpace(tl.TagName) || (onlyFromSource && !tl.FromSource)) continue;
+                    if (kept.Contains((tl.TagName ?? "").Trim() + "\u001F" + ContentTypeOf(tl)) || (keep != null && keep(tl))) continue;
+                    // Nothing made yet (no library, no rows): nothing to remove.
+                    bool hasLibrary = !string.IsNullOrEmpty(tl.HomeSectionLibraryId) && tl.HomeSectionLibraryId != "auto";
+                    if (!hasLibrary && (tl.HomeSectionTracked ?? new List<HomeSectionTracking>()).Count == 0
+                        && !Directory.Exists(Path.Combine(Plugin.Instance!.DataFolderPath, "toplists", Sanitize(tl.TagName)))) continue;
+                    var source = tl.FromSource
+                        ? (oldTags ?? Enumerable.Empty<TagConfig>()).FirstOrDefault(t => IsOn(t)
+                            && string.Equals(TagOf(t), (tl.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Name ?? ""
+                        : "";
+                    gone.Add((tl, reason, source));
+                }
+                if (gone.Count > 0) Queue(gone);
+            }
+            catch (Exception ex) { PluginLog.Write("WRN", "Settings", "Removed top-lists could not be queued for removal — " + PluginLog.Describe(ex)); }
         }
 
         private static RemovedTopList? Unqueue(string tag, string contentType)
@@ -347,6 +410,10 @@ namespace HomeScreenCompanion
                     try { Directory.Delete(folder, true); }
                     catch (Exception ex) { failed = true; log.Warn($"Top-list '{r.TagName}': folder could not be removed: {ex.Message}"); }
                 }
+                // Its saved titles, unless a list with the same name is still there (made again as the
+                // other content type: the run has just written its titles).
+                if (!(config.TopLists ?? new List<TopListHomeSection>()).Any(t => string.Equals((t.TagName ?? "").Trim(), (r.TagName ?? "").Trim(), StringComparison.OrdinalIgnoreCase)))
+                    TopListMembers.Delete(r.TagName);
 
                 var what = new List<string>();
                 if (rows > 0) what.Add($"home row for {RunLog.Plural(rows, "user")}");
@@ -395,13 +462,14 @@ namespace HomeScreenCompanion
                 if (lib == null)
                 {
                     bool hasFiles = Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.strm", SearchOption.AllDirectories).Any();
-                    if (!hasFiles) { log.Skip($"Top-list '{tl.TagName}': no library yet — no titles carry the tag"); continue; }
+                    if (!hasFiles) { log.Skip($"Top-list '{tl.TagName}': no library yet — the source has no titles in the library"); continue; }
                     bool shows = ShowTopList.IsShows(tl);
                     var name = TitleOf(tl);
                     lib = RankedCollections.CreateLibrary(name, folder, shows ? "tvshows" : "movies", LibraryOptionsFor(folder, shows),
                         "Top-list library", libraryManager, userManager, log);
                     if (lib == null) continue;
                     created = true;
+                    LibraryAdded = true;
                 }
                 tl.HomeSectionLibraryId = lib.ItemId;
                 changed = true;
