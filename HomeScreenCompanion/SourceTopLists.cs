@@ -200,8 +200,8 @@ namespace HomeScreenCompanion
         /// <summary>
         /// Once per old tag top-list (made in the Top-Lists tab before 4.5): the source with its tag
         /// gets Top-List on, with the list's users, title, position and look (the list's settings
-        /// win over the source's own row, which the next run removes). The list keeps its library
-        /// and rows. True when something changed.
+        /// win over the source's own row, which the next run removes), and Apply Tag off. The list
+        /// keeps its library and rows. True when something changed.
         /// </summary>
         internal static bool Migrate(PluginConfiguration cfg)
         {
@@ -210,7 +210,9 @@ namespace HomeScreenCompanion
             foreach (var tl in (cfg.TopLists ?? new List<TopListHomeSection>()).Where(t => !t.FromSource && !string.IsNullOrWhiteSpace(t.TagName)))
             {
                 var tag = tl.TagName.Trim();
-                var group = (cfg.Tags ?? new List<TagConfig>()).Where(t => t.EnableTag && string.Equals(TagOf(t), tag, StringComparison.OrdinalIgnoreCase)).ToList();
+                // Your Next Watch never has a top-list (IsOn): a list on its tag stays a tag list.
+                var group = (cfg.Tags ?? new List<TagConfig>()).Where(t => t.EnableTag && string.Equals(TagOf(t), tag, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(t.SourceType, "NextWatch", StringComparison.OrdinalIgnoreCase)).ToList();
                 if (group.Count == 0) continue;   // a manual list, or a tag no source writes
                 // All flat entries of the first such source (one per URL / local source).
                 var first = group[0];
@@ -234,6 +236,9 @@ namespace HomeScreenCompanion
                     e.EnableHomeSection = true;
                     e.HomeSectionUserIds = (tl.HomeSectionUserIds ?? new List<string>()).ToList();
                     e.EnableTopList = true;
+                    // The list no longer needs the tag (TopListMembers): switched off as when
+                    // Create as top-list is ticked; the next run takes it off the titles.
+                    e.EnableTag = false;
                     e.TopListContentType = ContentTypeOf(tl);
                     e.TopListMaxItems = max;
                     var badge = Get(ls, "BadgeStyle");
@@ -243,7 +248,7 @@ namespace HomeScreenCompanion
                 }
                 tl.FromSource = true;
                 changed = true;
-                PluginLog.Write("INF", "Settings", $"Top-list '{tag}' is now set in its source's Home Screen tab, Create as top-list (source '{(string.IsNullOrWhiteSpace(first.Name) ? tag : first.Name)}')");
+                PluginLog.Write("INF", "Settings", $"Top-list '{tag}' is now set in its source's Home Screen tab, Create as top-list (source '{(string.IsNullOrWhiteSpace(first.Name) ? tag : first.Name)}'); Apply Tag switched off, the list no longer needs the tag");
             }
             return changed;
         }
