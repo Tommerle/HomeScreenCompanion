@@ -1,6 +1,7 @@
 using MediaBrowser.Model.Logging;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace HomeScreenCompanion
 {
@@ -12,6 +13,10 @@ namespace HomeScreenCompanion
     /// Emby server log. Status lines carry a leading symbol that the config page colours on:
     ///   ✔ ok · ⚠ warning · ✖ error · – skipped / informational
     /// Debug lines are written only when Extended log is enabled and never go to the server log.
+    ///
+    /// Every line, Debug lines included whatever Extended log is set to, also goes to the plugin's
+    /// own log file (<see cref="PluginLog"/>), tagged with the run ("[Sync #a1b2]"). A RunLog with
+    /// no file source (a preview) writes no file lines.
     /// </summary>
     internal sealed class RunLog
     {
@@ -20,21 +25,52 @@ namespace HomeScreenCompanion
         private readonly List<string> _sink;
         private readonly ILogger? _logger;
         private readonly string _serverPrefix;
+        private readonly string? _fileSource;
 
         public bool Extended { get; }
 
-        public RunLog(List<string> sink, ILogger? logger, string serverLogPrefix, bool extended)
+        private readonly RunProgress? _progress;
+
+        /// <param name="progress">The running task's live step (shown next to "Running" on the page);
+        /// null for logs that are not a real run (previews, restore).</param>
+        /// <param name="fileSource">The run's name in the plugin's log file; by default the logger's,
+        /// none without a logger.</param>
+        public RunLog(List<string> sink, PluginLogger? logger, string serverLogPrefix, bool extended, RunProgress? progress = null, string? fileSource = null)
         {
             _sink = sink;
-            _logger = logger;
+            // Lines reach the plugin's log file from here; the logger only takes them to Emby's log.
+            _logger = logger?.Emby;
+            var source = fileSource ?? logger?.Source;
+            _fileSource = source == null ? null : $"{source} #{Guid.NewGuid().ToString("N").Substring(0, 4)}";
             _serverPrefix = string.IsNullOrEmpty(serverLogPrefix) ? "" : serverLogPrefix + " ";
             Extended = extended;
+            _progress = progress;
+            _progress?.Clear();
         }
+
+        // ── Live step (what the page shows while a run is busy) ─────────────────────
+
+        /// <summary>Sets the current step now, e.g. "Collections — IMDB Top 250".</summary>
+        public void Step(string text) => _progress?.Set(text);
+
+        /// <summary>Updates the step from inside a loop, e.g. "Playlists — 34/88 users";
+        /// written at most four times a second (the last item of a loop always shows).</summary>
+        public void Count(string label, int done, int total, string unit = "") => _progress?.Count(label, done, total, unit);
 
         // ── Status lines (always written) ────────────────────────────────────────
 
-        /// <summary>Neutral line, no symbol. Used for headers, step lines and plain facts.</summary>
-        public void Info(string message) => Write(message, LogSeverity.Info);
+        /// <summary>Neutral line, no symbol. Used for headers, step lines and plain facts.
+        /// A phase header ("» Playlists  ·  …") also becomes the live step ("Playlists").</summary>
+        public void Info(string message)
+        {
+            if (_progress != null && message.StartsWith("» ", StringComparison.Ordinal))
+            {
+                var phase = message.Substring(2);
+                int dot = phase.IndexOf("  ·  ", StringComparison.Ordinal);
+                _progress.Set((dot >= 0 ? phase.Substring(0, dot) : phase).Trim());
+            }
+            Write(message, LogSeverity.Info);
+        }
 
         /// <summary>Something completed successfully.</summary>
         public void Ok(string message) => Write("  ✔ " + message, LogSeverity.Info);
@@ -59,6 +95,7 @@ namespace HomeScreenCompanion
 
         public void Debug(string message)
         {
+            ToFile("DBG", message);
             if (!Extended) return;
             Add($"[{DateTime.Now:HH:mm:ss}] [DEBUG] {message}");
         }
@@ -66,7 +103,6 @@ namespace HomeScreenCompanion
         /// <summary>Debug section divider, e.g. "── Tags ────────".</summary>
         public void Section(string title)
         {
-            if (!Extended) return;
             const int width = 50;
             var head = "── " + title + " ";
             Debug(head.Length >= width ? head : head + new string('─', width - head.Length));
@@ -79,6 +115,8 @@ namespace HomeScreenCompanion
         private void Write(string line, LogSeverity severity)
         {
             Add($"[{DateTime.Now:HH:mm:ss}] {line}");
+            if (severity != LogSeverity.None)
+                ToFile(severity == LogSeverity.Error ? "ERR" : severity == LogSeverity.Warn ? "WRN" : "INF", line);
             if (_logger == null || severity == LogSeverity.None) return;
             var server = _serverPrefix + line.Trim();
             switch (severity)
@@ -94,6 +132,11 @@ namespace HomeScreenCompanion
             lock (_sink) { _sink.Add(formatted); }
         }
 
+        private void ToFile(string level, string line)
+        {
+            if (_fileSource != null) PluginLog.Write(level, _fileSource, line.TrimEnd());
+        }
+
         // ── Small formatting helpers shared by the tasks ─────────────────────────
 
         public static string Plural(int count, string singular, string? plural = null)
@@ -104,6 +147,31 @@ namespace HomeScreenCompanion
             if (span.TotalMinutes >= 1) return $"{(int)span.TotalMinutes}m {span.Seconds}s";
             if (span.TotalSeconds >= 10) return $"{(int)span.TotalSeconds}s";
             return $"{span.TotalSeconds:0.0}s";
+        }
+    }
+
+    /// <summary>
+    /// The step a running task is on, read by the Status endpoints while a run is busy. One per
+    /// task (see each task's static <c>Progress</c>). Set from the run's <see cref="RunLog"/>:
+    /// phase headers set it, long loops update the count. Cleared when the run's log is saved.
+    /// </summary>
+    internal sealed class RunProgress
+    {
+        private volatile string _step = "";
+        private long _lastCountTicks;
+
+        public string Step => _step;
+
+        public void Set(string text) { _step = text ?? ""; Interlocked.Exchange(ref _lastCountTicks, DateTime.UtcNow.Ticks); }
+
+        public void Clear() => _step = "";
+
+        public void Count(string label, int done, int total, string unit = "")
+        {
+            long now = DateTime.UtcNow.Ticks;
+            if (done < total && now - Interlocked.Read(ref _lastCountTicks) < TimeSpan.TicksPerMillisecond * 250) return;
+            Interlocked.Exchange(ref _lastCountTicks, now);
+            _step = $"{label} {done}/{total}{(unit.Length > 0 ? " " + unit : "")}";
         }
     }
 }

@@ -25,36 +25,141 @@ namespace HomeScreenCompanion
             _jsonSerializer = jsonSerializer;
         }
 
-        public async Task<List<ExternalItemDto>> FetchItems(string url, int limit, string traktClientId, string mdbApiKey, string tmdbApiKey, CancellationToken cancellationToken)
+        // At most this many list entries are read from a list.
+        internal const int MaxScan = 1000;
+
+        /// <summary>Why the last fetch returned nothing (e.g. "HTTP 403 Forbidden"); null when it did not fail.</summary>
+        public string? LastError { get; private set; }
+
+        // A failed request as the log should show it: the HTTP status when there is one.
+        private static string Describe(Exception ex)
+        {
+            try
+            {
+                var code = ex.GetType().GetProperty("StatusCode")?.GetValue(ex);
+                if (code != null) return $"HTTP {Convert.ToInt32(code)} {code}";
+            }
+            catch { }
+            var msg = ex.GetBaseException().Message ?? ex.Message;
+            return msg.Length > 200 ? msg.Substring(0, 200) + "…" : msg;
+        }
+
+        // LastError of an AI that answered without titles: an empty result, not a failure.
+        internal const string EmptyAnswer = "the answer held no titles";
+
+        /// <summary>True when LastError says the source could not be read (HTTP or network error,
+        /// missing API key, unreadable URL, AI error), rather than that it was empty.</summary>
+        internal static bool IsFailure(string? lastError) =>
+            !string.IsNullOrEmpty(lastError) && lastError != EmptyAnswer;
+
+        /// <summary>True when the list does not exist (HTTP 404 / 410): not a passing hiccup, so in a
+        /// group with other URLs it is left out instead of keeping the whole group as it was.</summary>
+        internal static bool IsGone(string? lastError) =>
+            !string.IsNullOrEmpty(lastError) && (lastError!.Contains("HTTP 404") || lastError.Contains("HTTP 410"));
+
+        // A list read part-way (a later page failed) is not used: it would drop every title after
+        // that page. It counts as a failed fetch, so "Preserve tags on empty result" keeps them.
+        private List<ExternalItemDto> PageFailed(List<ExternalItemDto> all, int pageNumber, Exception ex, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastError = pageNumber > 1 ? $"page {pageNumber} could not be read: {Describe(ex)}" : Describe(ex);
+            all.Clear();
+            return all;
+        }
+
+        // With countsTowardLimit, limit is a number of hits instead of list entries: the list is read
+        // (in order, up to MaxScan entries) until that many distinct IMDb ids count, and the entries up
+        // to and including the last hit are returned. Without it the first limit entries are returned.
+        public async Task<List<ExternalItemDto>> FetchItems(string url, int limit, string traktClientId, string mdbApiKey, string tmdbApiKey, CancellationToken cancellationToken,
+            Func<ExternalItemDto, bool>? countsTowardLimit = null)
         {
             // Set a global maximum of 1000 items to prevent massive fetches, unless a specific smaller limit is requested
-            if (limit <= 0 || limit > 1000)
+            if (limit <= 0 || limit > MaxScan)
             {
-                limit = 1000;
+                limit = MaxScan;
             }
 
+            LastError = null;
             if (string.IsNullOrWhiteSpace(url)) return new List<ExternalItemDto>();
 
+            var hits = countsTowardLimit != null && limit < MaxScan ? new HitCounter(limit, countsTowardLimit) : null;
+            int fetchLimit = hits != null ? MaxScan : limit;
+
+            List<ExternalItemDto> all;
             if (url.Contains("mdblist.com"))
             {
-                return await FetchMdblist(url, mdbApiKey, limit, cancellationToken);
+                all = await FetchMdblist(url, mdbApiKey, fetchLimit, hits, cancellationToken);
             }
             else if (url.Contains("themoviedb.org"))
             {
-                return await FetchTmdb(url, tmdbApiKey, limit, cancellationToken);
+                all = await FetchTmdb(url, tmdbApiKey, fetchLimit, hits, cancellationToken);
+            }
+            else if (url.IndexOf("trakt.tv", StringComparison.OrdinalIgnoreCase) >= 0
+                || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var other) || (other.Scheme != "http" && other.Scheme != "https"))
+            {
+                // A trakt.tv URL, or a bare Trakt API path ("users/x/lists/y").
+                all = await FetchTrakt(url, traktClientId, fetchLimit, cancellationToken);
             }
             else
             {
-                return await FetchTrakt(url, traktClientId, limit, cancellationToken);
+                LastError = "not a Trakt, MDBList or TMDb list URL";
+                return new List<ExternalItemDto>();
+            }
+            all = Distinct(all);
+            return hits != null ? hits.Cut(all) : all;
+        }
+
+        // The same title twice in one list (TMDb's pages overlap when the list changes while it is
+        // read): only its first entry counts.
+        private static List<ExternalItemDto> Distinct(List<ExternalItemDto> all)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return all.Where(i =>
+            {
+                var key = !string.IsNullOrEmpty(i?.Imdb) ? "imdb:" + i!.Imdb : !string.IsNullOrEmpty(i?.Tmdb) ? "tmdb:" + i!.Tmdb : null;
+                return key == null || seen.Add(key);
+            }).ToList();
+        }
+
+        // Counts the distinct IMDb ids that count toward the limit, as the entries are read.
+        internal class HitCounter
+        {
+            private readonly int _limit;
+            private readonly Func<ExternalItemDto, bool> _counts;
+            private readonly HashSet<string> _hits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            private readonly HashSet<string> _misses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            internal HitCounter(int limit, Func<ExternalItemDto, bool> counts) { _limit = limit; _counts = counts; }
+
+            internal bool Full => _hits.Count >= _limit;
+
+            // Reads one entry; true once the limit is reached.
+            internal bool See(ExternalItemDto item)
+            {
+                if (Full) return true;
+                var id = item?.Imdb;
+                if (string.IsNullOrEmpty(id) || _hits.Contains(id!) || _misses.Contains(id!)) return false;
+                if (_counts(item!)) _hits.Add(id!); else _misses.Add(id!);
+                return Full;
+            }
+
+            // The entries up to and including the one that reached the limit.
+            internal List<ExternalItemDto> Cut(List<ExternalItemDto> all)
+            {
+                // Entries not seen yet (a last page read without stopping) are checked here.
+                var seen = new HitCounter(_limit, i => _hits.Contains(i.Imdb) || (!_misses.Contains(i.Imdb) && _counts(i)));
+                for (int i = 0; i < all.Count; i++)
+                    if (seen.See(all[i])) return all.Take(i + 1).ToList();
+                return all;
             }
         }
 
-        private async Task<List<ExternalItemDto>> FetchMdblist(string listUrl, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblist(string listUrl, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             if (IsMdblistOfficialList(listUrl) || string.IsNullOrWhiteSpace(apiKey))
-                return await FetchMdblistLegacy(listUrl, limit, cancellationToken);
+                return await FetchMdblistLegacy(listUrl, limit, hits, cancellationToken);
             else
-                return await FetchMdblistApi(listUrl, apiKey, limit, cancellationToken);
+                return await FetchMdblistApi(listUrl, apiKey, limit, hits, cancellationToken);
         }
 
         // Official lists (mdblist.com/lists/official/...) have no api.mdblist.com endpoint, only the public /json one
@@ -62,7 +167,7 @@ namespace HomeScreenCompanion
             url.IndexOf("/lists/official/", StringComparison.OrdinalIgnoreCase) >= 0;
 
         // Uses api.mdblist.com — works for both public and private lists
-        private async Task<List<ExternalItemDto>> FetchMdblistApi(string listUrl, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblistApi(string listUrl, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             var apiBaseUrl = BuildMdblistApiUrl(listUrl);
             const int pageSize = 1000;
@@ -86,22 +191,23 @@ namespace HomeScreenCompanion
 
                         var page = movies.Concat(shows)
                             .Where(x => !string.IsNullOrEmpty(x.imdb_id))
-                            .Select(x => new ExternalItemDto { Name = x.title, Imdb = x.imdb_id, Tmdb = null });
+                            .Select(x => new ExternalItemDto { Name = x.title!, Imdb = x.imdb_id!, Tmdb = null });
                         all.AddRange(page);
 
                         if (pageCount < pageSize) break;
                         if (limit < 10000 && all.Count >= limit) break;
+                        if (hits != null && all.Any(hits.See)) break;
                         offset += pageSize;
                     }
                 }
-                catch { break; }
+                catch (Exception ex) { return PageFailed(all, offset / pageSize + 1, ex, cancellationToken); }
             }
 
             return all;
         }
 
         // Legacy fallback: mdblist.com/slug/json — public lists only, no API key needed
-        private async Task<List<ExternalItemDto>> FetchMdblistLegacy(string listUrl, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchMdblistLegacy(string listUrl, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
             var cleanUrl = listUrl.Trim();
             int queryIndex = cleanUrl.IndexOfAny(new[] { '?', '#' });
@@ -125,15 +231,16 @@ namespace HomeScreenCompanion
 
                         var page = result
                             .Where(x => !string.IsNullOrEmpty(x.imdb_id))
-                            .Select(x => new ExternalItemDto { Name = x.title, Imdb = x.imdb_id, Tmdb = null });
+                            .Select(x => new ExternalItemDto { Name = x.title!, Imdb = x.imdb_id!, Tmdb = null });
                         all.AddRange(page);
 
                         if (result.Count < pageSize) break;
                         if (limit < 10000 && all.Count >= limit) break;
+                        if (hits != null && all.Any(hits.See)) break;
                         offset += pageSize;
                     }
                 }
-                catch { break; }
+                catch (Exception ex) { return PageFailed(all, offset / pageSize + 1, ex, cancellationToken); }
             }
 
             return all;
@@ -166,13 +273,13 @@ namespace HomeScreenCompanion
 
         private class TmdbApiTarget
         {
-            public string ListId { get; set; }
-            public string Endpoint { get; set; }
-            public string MediaType { get; set; }
-            public string FullUrl { get; set; }
+            public string? ListId { get; set; }
+            public string? Endpoint { get; set; }
+            public string? MediaType { get; set; }
+            public string FullUrl { get; set; } = null!;
         }
 
-        private TmdbApiTarget ExtractTmdbApiTarget(string url)
+        private TmdbApiTarget? ExtractTmdbApiTarget(string url)
         {
             try
             {
@@ -180,9 +287,10 @@ namespace HomeScreenCompanion
 
                 if (uri.Host.Equals("api.themoviedb.org", StringComparison.OrdinalIgnoreCase))
                 {
-                    string mediaType = null;
+                    string? mediaType = null;
                     if (uri.AbsolutePath.Contains("/movie/")) mediaType = "movie";
                     else if (uri.AbsolutePath.Contains("/tv/")) mediaType = "tv";
+                    else if (uri.AbsolutePath.Contains("/collection/")) mediaType = "movie";   // a collection's parts are films
                     return new TmdbApiTarget { FullUrl = url, MediaType = mediaType };
                 }
 
@@ -191,6 +299,14 @@ namespace HomeScreenCompanion
                 if (segments.Count >= 2 && segments[0] == "list")
                 {
                     return new TmdbApiTarget { ListId = segments[1] };
+                }
+
+                // A collection page (themoviedb.org/collection/10-star-wars-collection): its films, in TMDb's order.
+                if (segments.Count >= 2 && segments[0] == "collection")
+                {
+                    var id = new string(segments[1].TakeWhile(char.IsDigit).ToArray());
+                    if (id.Length > 0)
+                        return new TmdbApiTarget { FullUrl = $"https://api.themoviedb.org/3/collection/{id}", MediaType = "movie" };
                 }
 
                 if (segments.Count >= 1 && (segments[0] == "movie" || segments[0] == "tv"))
@@ -205,16 +321,16 @@ namespace HomeScreenCompanion
                     }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return null;
         }
 
-        private async Task<List<ExternalItemDto>> FetchTmdb(string url, string apiKey, int limit, CancellationToken cancellationToken)
+        private async Task<List<ExternalItemDto>> FetchTmdb(string url, string apiKey, int limit, HitCounter? hits, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(apiKey)) return new List<ExternalItemDto>();
+            if (string.IsNullOrWhiteSpace(apiKey)) { LastError = "no TMDb API key in Settings"; return new List<ExternalItemDto>(); }
 
             var target = ExtractTmdbApiTarget(url);
-            if (target == null) return new List<ExternalItemDto>();
+            if (target == null) { LastError = "this TMDb URL is not a list or category HSC can read"; return new List<ExternalItemDto>(); }
 
             var all = new List<ExternalItemDto>();
             int page = 1;
@@ -224,7 +340,7 @@ namespace HomeScreenCompanion
 
             while (true)
             {
-                TmdbListResponse result = null;
+                TmdbListResponse? result = null;
 
                 if (useV4 && !string.IsNullOrEmpty(target.ListId))
                 {
@@ -279,50 +395,34 @@ namespace HomeScreenCompanion
                             result = _jsonSerializer.DeserializeFromStream<TmdbListResponse>(stream);
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        break;
+                        return PageFailed(all, page, ex, cancellationToken);
                     }
                 }
 
                 if (result == null) break;
 
-                var items = (result.items != null && result.items.Count > 0) ? result.items : result.results;
+                var items = (result.items != null && result.items.Count > 0) ? result.items
+                    : (result.results != null && result.results.Count > 0) ? result.results
+                    : result.parts;
                 if (items == null || items.Count == 0) break;
 
-                foreach (var item in items)
+                // A page's IMDb ids are looked up side by side (one request per title), then read in list order.
+                var imdbIds = await Task.WhenAll(items.Select(item => TmdbImdbId(item, target, apiKey, isToken, cancellationToken)));
+                for (int k = 0; k < items.Count; k++)
                 {
+                    var item = items[k];
                     var dto = new ExternalItemDto
                     {
-                        Name = item.title ?? item.name,
-                        Tmdb = item.id.ToString()
+                        Name = (item.title ?? item.name)!,
+                        Tmdb = item.id.ToString(),
+                        Imdb = imdbIds[k]!
                     };
-
-                    try
-                    {
-                        var type = target.MediaType ?? (item.media_type == "tv" ? "tv" : "movie");
-                        var extUrl = $"https://api.themoviedb.org/3/{type}/{item.id}/external_ids";
-                        if (!isToken) extUrl += $"?api_key={apiKey}";
-                        
-                        var extOptions = new HttpRequestOptions { Url = extUrl, CancellationToken = cancellationToken };
-                        if (isToken)
-                        {
-                            extOptions.RequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-                        }
-
-                        using (var extStream = await _httpClient.Get(extOptions))
-                        {
-                            var extIds = _jsonSerializer.DeserializeFromStream<TmdbExternalIds>(extStream);
-                            if (extIds != null && !string.IsNullOrEmpty(extIds.imdb_id))
-                            {
-                                dto.Imdb = extIds.imdb_id;
-                            }
-                        }
-                    }
-                    catch { }
 
                     all.Add(dto);
                     if (limit > 0 && all.Count >= limit) return all.Take(limit).ToList();
+                    if (hits != null && hits.See(dto)) return all;
                 }
 
                 if (page >= result.total_pages) break;
@@ -330,6 +430,29 @@ namespace HomeScreenCompanion
             }
 
             return all;
+        }
+
+        private async Task<string?> TmdbImdbId(TmdbListItem item, TmdbApiTarget target, string apiKey, bool isToken, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var type = target.MediaType ?? (item.media_type == "tv" ? "tv" : "movie");
+                var extUrl = $"https://api.themoviedb.org/3/{type}/{item.id}/external_ids";
+                if (!isToken) extUrl += $"?api_key={apiKey}";
+
+                var extOptions = new HttpRequestOptions { Url = extUrl, CancellationToken = cancellationToken };
+                if (isToken)
+                {
+                    extOptions.RequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                }
+
+                using (var extStream = await _httpClient.Get(extOptions))
+                {
+                    var extIds = _jsonSerializer.DeserializeFromStream<TmdbExternalIds>(extStream);
+                    return extIds != null && !string.IsNullOrEmpty(extIds.imdb_id) ? extIds.imdb_id : null;
+                }
+            }
+            catch { return null; }
         }
 
         private async Task<List<ExternalItemDto>> FetchTrakt(string rawUrl, string clientId, int limit, CancellationToken cancellationToken)
@@ -390,12 +513,12 @@ namespace HomeScreenCompanion
                                 string? imdb = item.movie?.ids?.imdb ?? item.show?.ids?.imdb;
 
                                 if (!string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(imdb))
-                                    list.Add(new ExternalItemDto { Name = title, Imdb = imdb, Tmdb = null });
+                                    list.Add(new ExternalItemDto { Name = title!, Imdb = imdb!, Tmdb = null });
                             }
                             if (list.Count > 0) return list;
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                     try
                     {
@@ -405,17 +528,21 @@ namespace HomeScreenCompanion
                             foreach (var item in flatList)
                             {
                                 if (!string.IsNullOrEmpty(item.title) && !string.IsNullOrEmpty(item.ids?.imdb))
-                                    list.Add(new ExternalItemDto { Name = item.title, Imdb = item.ids?.imdb, Tmdb = null });
+                                    list.Add(new ExternalItemDto { Name = item.title!, Imdb = item.ids?.imdb!, Tmdb = null });
                             }
                             if (list.Count > 0) return list;
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
                     return list;
                 }
             }
-            catch { return new List<ExternalItemDto>(); }
+            catch (Exception ex)
+            {
+                LastError = Describe(ex);
+                return new List<ExternalItemDto>();
+            }
         }
 
         public async Task<List<AiListItem>> FetchAiList(
@@ -434,8 +561,12 @@ namespace HomeScreenCompanion
             int limit,
             CancellationToken cancellationToken)
         {
+            LastError = null;
             if (string.IsNullOrWhiteSpace(prompt))
+            {
+                LastError = "the prompt is empty";
                 return new List<AiListItem>();
+            }
 
             var userMessage = string.IsNullOrWhiteSpace(recentlyWatchedContext)
                 ? $"{prompt}\n\nReturn up to {limit} items."
@@ -454,7 +585,7 @@ namespace HomeScreenCompanion
                 {
                     if (string.IsNullOrWhiteSpace(claudeApiKey))
                         throw new InvalidOperationException("Claude API key is not configured.");
-                    rawJson = await CallClaude(claudeApiKey, claudeModel ?? "claude-haiku-4-5-20251001", systemPrompt, userMessage, cancellationToken);
+                    rawJson = await CallClaude(claudeApiKey, claudeModel ?? "claude-haiku-4-5-20251001", systemPrompt, userMessage, limit, cancellationToken);
                 }
                 else if (string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase))
                 {
@@ -473,10 +604,13 @@ namespace HomeScreenCompanion
 
                 var cleaned = CleanAiJsonOutput(rawJson);
                 var items = _jsonSerializer.DeserializeFromString<List<AiListItem>>(cleaned);
+                if (items == null || items.Count == 0) LastError = EmptyAnswer;
                 return items ?? new List<AiListItem>();
             }
-            catch
+            catch (Exception ex)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                LastError = Describe(ex);
                 return new List<AiListItem>();
             }
         }
@@ -531,11 +665,13 @@ namespace HomeScreenCompanion
             return parsed?.candidates?.FirstOrDefault()?.content?.parts?.FirstOrDefault()?.text ?? "";
         }
 
-        private async Task<string> CallClaude(string apiKey, string model, string systemPrompt, string userMessage, CancellationToken cancellationToken)
+        private async Task<string> CallClaude(string apiKey, string model, string systemPrompt, string userMessage, int count, CancellationToken cancellationToken)
         {
+            // About 30 tokens per title in the JSON answer; a cut-off answer cannot be read at all.
+            int maxTokens = Math.Min(16000, 1024 + Math.Max(0, count) * 60);
             var requestBody = $"{{" +
                 $"\"model\":{EscapeJsonString(model)}," +
-                $"\"max_tokens\":1024," +
+                $"\"max_tokens\":{maxTokens}," +
                 $"\"system\":{EscapeJsonString(systemPrompt)}," +
                 $"\"messages\":[{{\"role\":\"user\",\"content\":{EscapeJsonString(userMessage)}}}]" +
                 $"}}";
@@ -611,7 +747,10 @@ namespace HomeScreenCompanion
                     case '\n': sb.Append("\\n"); break;
                     case '\r': sb.Append("\\r"); break;
                     case '\t': sb.Append("\\t"); break;
-                    default: sb.Append(c); break;
+                    default:
+                        if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else sb.Append(c);
+                        break;
                 }
             }
             sb.Append('"');

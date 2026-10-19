@@ -86,26 +86,30 @@ namespace HomeScreenCompanion
                 IsVirtualItem = false
             }).Where(s => !IsCopy(s)).ToList();
 
-        // The series behind a tag, in the tag's source order (tag_ranks/<tag>.json holds the IMDb
-        // ids the tag sync matched, in list order), then by name. A tag on seasons or episodes
-        // counts for their series.
+        // The series of a source's top-list, in list order (TopListMembers). Before the source's
+        // first run since 4.5: the series behind its tag, in the tag's source order (tag_ranks/<tag>.json
+        // holds the IMDb ids the tag sync matched, in list order), then by name. A season or episode
+        // counts for its series.
         internal static List<BaseItem> SeriesForTag(ILibraryManager libraryManager, IJsonSerializer jsonSerializer, string tag)
         {
             var series = new List<BaseItem>();
             var seen = new HashSet<long>();
-            foreach (var item in libraryManager.GetItemList(new InternalItemsQuery
-            {
-                Tags = new[] { tag },
-                IncludeItemTypes = new[] { "Series", "Season", "Episode" },
-                Recursive = true,
-                IsVirtualItem = false
-            }))
+            var members = TopListMembers.Load(tag, libraryManager, jsonSerializer);
+            foreach (var item in members?.Where(i => !i.IsVirtualItem && (i is Series || i is Season || i is Episode))
+                ?? libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    Tags = new[] { tag },
+                    IncludeItemTypes = new[] { "Series", "Season", "Episode" },
+                    Recursive = true,
+                    IsVirtualItem = false
+                }))
             {
                 if (IsCopy(item)) continue;
                 var s = item as Series ?? (item as Season)?.Series ?? (item as Episode)?.Series;
                 if (s == null || IsCopy(s) || !seen.Add(s.InternalId)) continue;
                 series.Add(s);
             }
+            if (members != null) return series;
 
             var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             try
@@ -118,7 +122,7 @@ namespace HomeScreenCompanion
                         if (!string.IsNullOrEmpty(ids[i]) && !rank.ContainsKey(ids[i])) rank[ids[i]] = i;
                 }
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
 
             return series
                 .OrderBy(s => rank.TryGetValue(s.GetProviderId("Imdb") ?? "", out var r) ? r : int.MaxValue)
@@ -153,11 +157,13 @@ namespace HomeScreenCompanion
         // ── Writing the list folder ─────────────────────────────────────────────────────────
 
         // Makes the list folder match rankedSeries (in rank order). Returns the number of series
-        // written; series without any episode file are skipped.
+        // written; series without any episode file are skipped. badgeStyle is the list's look
+        // (BadgeLook); rankExtras, when given, works out the badge extras for the final ranking.
         internal static int WriteFolder(
             string folderPath, IList<BaseItem> rankedSeries, string badgeStyle,
             ILibraryManager libraryManager, IJsonSerializer jsonSerializer, IHttpClient httpClient,
-            IProviderManager providerManager, IFileSystem fileSystem, Action<string>? log = null)
+            IProviderManager providerManager, IFileSystem fileSystem, Action<string>? log = null,
+            Func<IList<BaseItem>, Dictionary<Guid, RankExtras>>? rankExtras = null)
         {
             Directory.CreateDirectory(folderPath);
 
@@ -174,6 +180,7 @@ namespace HomeScreenCompanion
                 log?.Invoke($"Top-list: '{skipped.Name}' has no episode files — left out");
 
             int digits = Math.Max(2, withEpisodes.Count.ToString().Length);
+            var extras = rankExtras?.Invoke(withEpisodes.Select(x => x.Series).ToList()) ?? new Dictionary<Guid, RankExtras>();
             var manifest = new List<ManifestEntry>();
             var usedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var tempDir = Path.Combine(Path.GetTempPath(), "hsc_showlist_" + Guid.NewGuid().ToString("N"));
@@ -193,7 +200,8 @@ namespace HomeScreenCompanion
 
                     var renderBase = Path.Combine(tempDir, "rank" + rank);
                     HomeScreenCompanionService.WriteRankedImages(series, rank, renderBase, badgeStyle, tempDir,
-                        httpClient, providerManager, libraryManager, fileSystem, log);
+                        httpClient, providerManager, libraryManager, fileSystem, log,
+                        extras.TryGetValue(series.Id, out var rx) ? rx : null);
                     CopyIfChanged(renderBase + ".jpg", Path.Combine(seriesDir, PosterFileName));
                     CopyIfChanged(renderBase + "-thumb.jpg", Path.Combine(seriesDir, ThumbFileName));
 
@@ -274,7 +282,7 @@ namespace HomeScreenCompanion
                 foreach (var f in Directory.GetFiles(seasonDir))
                     if (!wanted.Contains(f)) TryDelete(f);
                 if (Directory.GetFileSystemEntries(seasonDir).Length == 0)
-                    try { Directory.Delete(seasonDir); } catch { }
+                    try { Directory.Delete(seasonDir); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
         }
 
@@ -343,7 +351,7 @@ namespace HomeScreenCompanion
         {
             if (!IsShowFolder(folderPath)) return;
             foreach (var dir in Directory.GetDirectories(folderPath))
-                try { Directory.Delete(dir, true); } catch { }
+                try { Directory.Delete(dir, true); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             TryDelete(Path.Combine(folderPath, ManifestFileName));
         }
 
@@ -356,7 +364,7 @@ namespace HomeScreenCompanion
                     return (jsonSerializer.DeserializeFromFile<List<ManifestEntry>>(file) ?? new List<ManifestEntry>())
                         .OrderBy(e => e.Rank).ToList();
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             return new List<ManifestEntry>();
         }
 
@@ -389,7 +397,7 @@ namespace HomeScreenCompanion
             }).Where(i => !string.IsNullOrEmpty(i.Path) && i.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
             foreach (var copy in copies)
-                try { Refresh(copy, libraryManager, jsonSerializer, p => originalsByPath.TryGetValue(p, out var o) ? o : null); } catch { }
+                try { Refresh(copy, libraryManager, jsonSerializer, p => originalsByPath.TryGetValue(p, out var o) ? o : null); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         // Brings one copy (series, season or episode) up to date with its original: rank, images
@@ -431,7 +439,7 @@ namespace HomeScreenCompanion
             else if (copy is Episode)
             {
                 string? target = null;
-                try { target = File.ReadAllText(copy.Path).Trim(); } catch { }
+                try { target = File.ReadAllText(copy.Path).Trim(); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
                 if (string.IsNullOrEmpty(target)) return false;
                 var original = findOriginalEpisode != null ? findOriginalEpisode(target!) : libraryManager.FindByPath(target, false);
                 if (original == null || IsCopy(original)) return false;
@@ -584,32 +592,35 @@ namespace HomeScreenCompanion
             return string.IsNullOrWhiteSpace(safe) ? "unknown" : safe;
         }
 
-        private static void WriteIfChanged(string path, string content)
+        // Both return true when they wrote the file (it was missing or different).
+        internal static bool WriteIfChanged(string path, string content)
         {
             try
             {
-                if (File.Exists(path) && File.ReadAllText(path) == content) return;
+                if (File.Exists(path) && File.ReadAllText(path) == content) return false;
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             File.WriteAllText(path, content);
+            return true;
         }
 
-        private static void CopyIfChanged(string source, string target)
+        internal static bool CopyIfChanged(string source, string target)
         {
-            if (!File.Exists(source)) return;
+            if (!File.Exists(source)) return false;
             try
             {
                 if (File.Exists(target) && new FileInfo(target).Length == new FileInfo(source).Length
                     && File.ReadAllBytes(target).SequenceEqual(File.ReadAllBytes(source)))
-                    return;
+                    return false;
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             File.Copy(source, target, overwrite: true);
+            return true;
         }
 
         private static void TryDelete(string path)
         {
-            try { File.Delete(path); } catch { }
+            try { File.Delete(path); } catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
     }
 }

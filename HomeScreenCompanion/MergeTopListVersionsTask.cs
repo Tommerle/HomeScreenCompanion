@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace HomeScreenCompanion
 {
-    public class MergeTopListVersionsTask : IScheduledTask
+    public class MergeTopListVersionsTask : IScheduledTask, IConfigurableScheduledTask
     {
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
@@ -26,14 +26,14 @@ namespace HomeScreenCompanion
         private static RunLog _log = new RunLog(ExecutionLog, null, "", false);
         public static string LastRunStatus { get; private set; } = "Never";
 
-        private readonly ILogger _logger;
+        private readonly PluginLogger _logger;
 
         public MergeTopListVersionsTask(ILibraryManager libraryManager, IProviderManager providerManager, IFileSystem fileSystem, ILogManager logManager)
         {
             _libraryManager = libraryManager;
             _providerManager = providerManager;
             _fileSystem = fileSystem;
-            _logger = logManager.GetLogger("HomeScreenCompanion_TopListMerge");
+            _logger = PluginLog.Wrap(logManager.GetLogger("HomeScreenCompanion_TopListMerge"), "Top-list merge");
         }
 
         // Forces Emby to ffprobe a top-list .strm item so it gets a real RunTimeTicks and
@@ -59,13 +59,18 @@ namespace HomeScreenCompanion
                 };
                 providerManager.QueueRefresh(li.InternalId, opts, RefreshPriority.High);
             }
-            catch { }
+            catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
         }
 
         public string Key => "MergeTopListVersionsTask";
         public string Name => "Merge top-list versions with library";
         public string Description => "Links each top-list .strm item to its corresponding library movie as an alternate version (like 1080p/4K) to prevent UI duplicates, and syncs their collection memberships when that option is on. Run this after a library scan has indexed newly added top-list entries.";
         public string Category => "Home Screen Companion";
+
+        // Not listed in Emby's Scheduled Tasks (copies are merged as Emby adds them; this repair run is in the Run menu). It still runs on its triggers.
+        public bool IsHidden => true;
+        public bool IsEnabled => true;
+        public bool IsLogged => true;
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
@@ -118,6 +123,7 @@ namespace HomeScreenCompanion
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrEmpty(m.Path)) continue;
                 if (m.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase)) continue;
+                if (RankedCollections.IsRankedPath(m.Path)) continue;
                 var imdb = m.GetProviderId("Imdb");
                 if (!string.IsNullOrEmpty(imdb) && !origLookup.ContainsKey(imdb))
                     origLookup[imdb] = m;
@@ -194,6 +200,7 @@ namespace HomeScreenCompanion
             {
                 if (string.IsNullOrEmpty(m.Path)) continue;
                 if (topListsFolder != null && m.Path.StartsWith(topListsFolder, StringComparison.OrdinalIgnoreCase)) continue;
+                if (RankedCollections.IsRankedPath(m.Path)) continue;
                 var imdb = m.GetProviderId("Imdb");
                 if (!string.IsNullOrEmpty(imdb) && !origLookup.ContainsKey(imdb))
                     origLookup[imdb] = m;
@@ -218,7 +225,7 @@ namespace HomeScreenCompanion
                     QueueStrmProbe(providerManager, fileSystem, li);
                     merged++;
                 }
-                catch { }
+                catch (Exception swallowed) { PluginLog.Swallowed(swallowed); }
             }
 
             return (strmItems.Count, merged);

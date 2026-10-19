@@ -10,10 +10,17 @@
 		<AssemblyName>HomeScreenCompanion</AssemblyName>
 		<RootNamespace>HomeScreenCompanion</RootNamespace>
 		
-		<Version>4.3.0.0</Version>
+		<Version>4.4.2.0</Version>
+		<!-- "beta" shows "vX.X.X.X beta" in the settings page footer; leave empty for a release. -->
+		<ReleaseChannel></ReleaseChannel>
+		<InformationalVersion Condition="'$(ReleaseChannel)' != ''">$(Version)-$(ReleaseChannel)</InformationalVersion>
 
 		<Product>Home Screen Companion</Product>
-		
+
+		<!-- MSB3277: the Emby DLLs reference newer System.* versions; Emby supplies them at runtime.
+		     NU1903: SkiaSharp is compile-only (not shipped); the plugin runs on Emby's own SkiaSharp. -->
+		<NoWarn>$(NoWarn);MSB3277;NU1903</NoWarn>
+
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -21,6 +28,7 @@
 	  <None Remove="Configuration\configPage.js" />
 	  <None Remove="thumb.png" />
 	  <None Remove="LemonMilk.otf" />
+	  <None Remove="Fonts\*.ttf" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -28,10 +36,11 @@
 	  <EmbeddedResource Include="Configuration\configPage.js" />
 	  <EmbeddedResource Include="thumb.png" />
 	  <EmbeddedResource Include="LemonMilk.otf" />
+	  <EmbeddedResource Include="Fonts\*.ttf" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="SkiaSharp" Version="2.88.9" />
+	  <PackageReference Include="SkiaSharp" Version="2.88.3" />
 	  <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
 	  <PackageReference Include="System.Memory" Version="4.6.0" />
 	</ItemGroup>
